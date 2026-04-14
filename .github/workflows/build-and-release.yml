@@ -1,0 +1,339 @@
+# DevNexus - macOS 应用自动构建与发布
+#
+# 触发方式：
+#   1. 推送到 main 分支：自动构建，更新滚动 Pre-release（dev）
+#   2. Git Tag：git tag v1.0.0 && git push origin v1.0.0 → 正式 Release
+#   3. 手动触发：GitHub Actions 页面点击 "Run workflow"
+#
+# 发布产物：
+#   - 滚动 Pre-release：DevNexus-{时间戳}.dmg
+#   - 正式 Release：DevNexus-{version}.dmg
+
+name: Build and Release
+
+on:
+  # 推送到 main 分支触发（滚动 Pre-release）
+  # Tag 推送触发（正式发布）
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+    # 排除只修改文档的提交
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+
+  # 手动触发（灵活：测试/临时发布）
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（如 1.0.0，不带 v 前缀）'
+        required: true
+        default: '1.0.0'
+        type: string
+      create_release:
+        description: '是否创建 Release'
+        required: true
+        default: true
+        type: boolean
+
+# 确保同一时间只有一个构建任务运行
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+# 授予创建 Release 的权限
+permissions:
+  contents: write
+
+env:
+  SCHEME: DevNexus
+  CONFIGURATION: Release
+
+jobs:
+  build:
+    name: Build & Package
+    # 使用 GitHub 托管的 macOS 26 runner（支持 Xcode 26）
+    runs-on: macos-26
+
+    steps:
+      # ─────────────────────────────────────────────
+      # 1. 环境准备
+      # ─────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine version and release type
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            # Tag 触发：正式发布，从 tag 名提取版本号
+            VERSION="${GITHUB_REF_NAME#v}"
+            RELEASE_TYPE="release"
+            DMG_NAME="DevNexus-${VERSION}.dmg"
+            echo "📦 正式发布版本: ${VERSION}"
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            # main 分支触发：滚动 Pre-release，使用时间戳
+            TIMESTAMP=$(date -u +"%Y%m%d%H%M")
+            VERSION="dev-${TIMESTAMP}"
+            RELEASE_TYPE="prerelease"
+            DMG_NAME="DevNexus-${TIMESTAMP}.dmg"
+            echo "🔧 滚动 Pre-release: ${VERSION}"
+          else
+            # 手动触发：使用输入的版本号
+            VERSION="${{ github.event.inputs.version }}"
+            RELEASE_TYPE="release"
+            DMG_NAME="DevNexus-${VERSION}.dmg"
+            echo "📦 手动构建版本: ${VERSION}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "release_type=${RELEASE_TYPE}" >> $GITHUB_OUTPUT
+          echo "dmg_name=${DMG_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Select Xcode version
+        run: |
+          # 使用最新稳定版 Xcode
+          sudo xcode-select -p
+          xcodebuild -version
+
+      # ─────────────────────────────────────────────
+      # 2. 导入证书
+      # ─────────────────────────────────────────────
+      - name: Install Apple Certificate
+        env:
+          CERTIFICATES_P12: ${{ secrets.CERTIFICATES_P12 }}
+          CERTIFICATES_PASSWORD: ${{ secrets.CERTIFICATES_PASSWORD }}
+        run: |
+          # 创建临时钥匙串
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+
+          # 解码证书
+          echo "$CERTIFICATES_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+
+          # 创建钥匙串
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # 导入证书（-T 授权 codesign 访问私钥）
+          security import "$RUNNER_TEMP/certificate.p12" \
+            -P "$CERTIFICATES_PASSWORD" \
+            -A \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH" \
+            -T /usr/bin/codesign
+
+          # 允许 codesign 访问钥匙串
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # 设为默认钥匙串 + 加入搜索列表（xcodebuild 会从这里找证书）
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+
+          # 验证证书（输出到日志方便排查）
+          echo "✅ 证书已导入，当前可用签名身份："
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+          # 确认搜索路径里包含临时钥匙串
+          echo "📋 当前钥匙串搜索路径："
+          security list-keychains -d user
+
+      # ─────────────────────────────────────────────
+      # 3. 构建应用
+      # ─────────────────────────────────────────────
+      - name: Build DevNexus.app
+        run: |
+          set -e  # 遇到错误立即退出
+
+          # 从钥匙串里取证书的 SHA-1 哈希，作为 CODE_SIGN_IDENTITY 直接匹配
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          SIGN_IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Apple Development" | head -1 | awk '{print $2}')
+          echo "🔑 使用签名身份: $SIGN_IDENTITY"
+
+          xcodebuild build \
+            -project "DevNexus.xcodeproj" \
+            -scheme "${{ env.SCHEME }}" \
+            -configuration "${{ env.CONFIGURATION }}" \
+            -derivedDataPath "./build" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="$SIGN_IDENTITY" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            2>&1 | tee build.log
+
+          # 检查构建结果
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ 构建失败，查看上方日志"
+            exit 1
+          fi
+
+      - name: Verify build output
+        run: |
+          APP_PATH="./build/Build/Products/${{ env.CONFIGURATION }}/DevNexus.app"
+          if [[ ! -d "$APP_PATH" ]]; then
+            echo "❌ 构建失败：未找到 DevNexus.app"
+            exit 1
+          fi
+          echo "✅ 构建成功"
+          ls -la "$APP_PATH"
+
+          # 验证签名
+          echo ""
+          echo "=== 验证代码签名 ==="
+          codesign -dvv "$APP_PATH" 2>&1 | grep -E "Identifier|Authority|TeamIdentifier" || echo "签名信息获取失败"
+
+      # ─────────────────────────────────────────────
+      # 4. 打包 DMG
+      # ─────────────────────────────────────────────
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create DMG
+        id: dmg
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_NAME="${{ steps.version.outputs.dmg_name }}"
+          APP_PATH="./build/Build/Products/${{ env.CONFIGURATION }}/DevNexus.app"
+          DMG_PATH="./dist/${DMG_NAME}"
+
+          mkdir -p ./dist
+          mkdir -p ./dmg_contents
+
+          # 复制 App 到 DMG 内容目录
+          cp -R "$APP_PATH" ./dmg_contents/
+
+          # 创建 DMG（简洁布局：只有 App 和 Applications 链接）
+          create-dmg \
+            --volname "DevNexus ${VERSION}" \
+            --volicon "${APP_PATH}/Contents/Resources/AppIcon.icns" \
+            --window-pos 200 120 \
+            --window-size 540 380 \
+            --icon-size 100 \
+            --icon "DevNexus.app" 140 180 \
+            --hide-extension "DevNexus.app" \
+            --app-drop-link 400 180 \
+            --no-internet-enable \
+            "${DMG_PATH}" \
+            "./dmg_contents" \
+            || true  # create-dmg 返回非零状态码但 DMG 可能已创建成功
+
+          # 验证 DMG
+          if [[ -f "${DMG_PATH}" ]]; then
+            echo "✅ DMG 创建成功: ${DMG_NAME}"
+            ls -lh "${DMG_PATH}"
+            echo "dmg_path=${DMG_PATH}" >> $GITHUB_OUTPUT
+            echo "dmg_name=${DMG_NAME}" >> $GITHUB_OUTPUT
+          else
+            echo "❌ DMG 创建失败"
+            exit 1
+          fi
+
+      # ─────────────────────────────────────────────
+      # 5. 上传构建产物
+      # ─────────────────────────────────────────────
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DevNexus-${{ steps.version.outputs.version }}
+          path: ${{ steps.dmg.outputs.dmg_path }}
+          retention-days: 30
+
+      # ─────────────────────────────────────────────
+      # 6. 创建 GitHub Release
+      # ─────────────────────────────────────────────
+
+      # 滚动 Pre-release：先删除旧的 dev release 和 tag
+      - name: Delete old dev release
+        if: steps.version.outputs.release_type == 'prerelease'
+        run: |
+          echo "🗑️ 清理旧的 dev release..."
+          # 删除旧的 release（如果存在）
+          gh release delete dev --yes 2>/dev/null || echo "没有旧的 dev release"
+          # 删除旧的 tag（如果存在）
+          git push origin :refs/tags/dev 2>/dev/null || echo "没有旧的 dev tag"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 滚动 Pre-release
+      - name: Create Pre-release
+        if: steps.version.outputs.release_type == 'prerelease'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: DevNexus Dev (滚动更新)
+          tag_name: dev
+          draft: false
+          prerelease: true
+          files: ${{ steps.dmg.outputs.dmg_path }}
+          body: |
+            ## 🔧 开发版本（滚动更新）
+
+            此版本用于测试验证，始终保持最新。
+
+            **文件名**: `${{ steps.dmg.outputs.dmg_name }}`
+
+            ### 安装说明
+
+            1. 下载 `${{ steps.dmg.outputs.dmg_name }}`
+            2. 双击挂载 DMG
+            3. 拖动 **DevNexus.app** 到 Applications 文件夹
+            4. 终端执行（移除隔离属性）：
+               ```bash
+               sudo xattr -rd com.apple.quarantine /Applications/DevNexus.app
+               ```
+            5. 打开 DevNexus 即可使用
+
+            ---
+
+            > 构建时间: ${{ steps.version.outputs.version }}
+            > 构建编号: #${{ github.run_number }}
+            > 提交: ${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 正式 Release
+      - name: Create Release
+        if: steps.version.outputs.release_type == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: DevNexus v${{ steps.version.outputs.version }}
+          tag_name: ${{ github.ref_name || format('v{0}', steps.version.outputs.version) }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: ${{ steps.dmg.outputs.dmg_path }}
+          body: |
+            ## DevNexus v${{ steps.version.outputs.version }}
+
+            ### 安装说明
+
+            1. 下载 `${{ steps.dmg.outputs.dmg_name }}`
+            2. 双击挂载 DMG
+            3. 拖动 **DevNexus.app** 到 Applications 文件夹
+            4. 终端执行（移除隔离属性）：
+               ```bash
+               sudo xattr -rd com.apple.quarantine /Applications/DevNexus.app
+               ```
+            5. 打开 DevNexus 即可使用
+
+            ---
+
+            > 构建编号: #${{ github.run_number }}
+            > 提交: ${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ─────────────────────────────────────────────
+      # 7. 清理
+      # ─────────────────────────────────────────────
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          if [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+          rm -f "$RUNNER_TEMP/certificate.p12" || true
