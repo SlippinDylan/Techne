@@ -13,11 +13,22 @@ struct DevNexusApp: App {
     
     // 注入全局自启设置
     @State private var launchSettings = LaunchSettings.shared
+    @State private var commandConfigService: CommandConfigService
+    @State private var projectService: ProjectService
+
+    init() {
+        let commandConfigService = CommandConfigService()
+        _commandConfigService = State(wrappedValue: commandConfigService)
+        _projectService = State(wrappedValue: ProjectService(commandConfigService: commandConfigService))
+    }
 
     var body: some Scene {
         // 主窗口
         WindowGroup(id: "main") {
-            ContentView()
+            ContentView(
+                commandConfigService: commandConfigService,
+                projectService: projectService
+            )
                 .frame(minWidth: 1080, minHeight: 720)
         }
         .defaultSize(width: 1080, height: 720)
@@ -29,7 +40,10 @@ struct DevNexusApp: App {
 
         // 原生设置场景 (Cmd + ,)
         Settings {
-            SettingsView()
+            SettingsView(
+                projectService: projectService,
+                commandConfigService: commandConfigService
+            )
                 .environment(launchSettings)
         }
 
@@ -43,18 +57,15 @@ struct DevNexusApp: App {
 
 /// 设置视图
 struct SettingsView: View {
-    @Environment(LaunchSettings.self) private var launchSettings
+    let projectService: ProjectService
+    let commandConfigService: CommandConfigService
     
     var body: some View {
-        Form {
-            Section("系统设置") {
-                @Bindable var settings = launchSettings
-                Toggle("登录时隐式启动", isOn: $settings.isLaunchAtLoginEnabled)
-                    .help("开启后，应用将在系统启动时自动运行，且不会弹出主窗口")
-            }
-        }
-        .formStyle(.grouped)
-        .frame(width: 400, height: 150)
+        SettingsContentView(
+            projectService: projectService,
+            commandConfigService: commandConfigService
+        )
+        .frame(width: 560, height: 320)
         .navigationTitle("设置")
     }
 }

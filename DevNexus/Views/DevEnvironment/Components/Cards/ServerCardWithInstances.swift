@@ -21,17 +21,17 @@ struct ServerCardWithInstances: View {
     private let browserLaunchService = BrowserLaunchService()
 
     var body: some View {
-        VStack(spacing: 0) {
-            serverInfoSection
+        AppPanelCard {
+            VStack(spacing: 0) {
+                serverInfoSection
 
-            if !relatedInstances.isEmpty {
-                Divider()
-                    .padding(.horizontal, AppConfig.UI.largePadding)
-                relatedInstancesList
+                if !relatedInstances.isEmpty {
+                    Divider()
+                        .padding(.horizontal, AppConfig.UI.largePadding)
+                    relatedInstancesList
+                }
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
         .sheet(isPresented: $showingBrowserSelector) {
             BrowserSelectorSheet(
                 url: "http://localhost:\(server.port)",

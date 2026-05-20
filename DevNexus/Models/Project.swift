@@ -192,3 +192,58 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         try container.encode(addedDate, forKey: .addedDate)
     }
 }
+
+extension Project {
+    init(
+        name: String,
+        path: String,
+        type: ProjectType,
+        commandConfigId: UUID?,
+        commandConfig: CommandConfig?
+    ) {
+        self.init(
+            name: name,
+            path: path,
+            type: type,
+            startCommand: commandConfig?.startCommand ?? type.defaultStartCommand,
+            buildCommand: commandConfig?.buildCommand ?? "",
+            cleanCommand: commandConfig?.cleanCommand ?? "",
+            installCommand: commandConfig?.installCommand ?? "",
+            stopCommand: commandConfig?.stopCommand ?? "",
+            discardChangesCommand: commandConfig?.discardChangesCommand ?? "",
+            commandProfileName: commandConfig?.name,
+            installStrategy: .ifMissing,
+            commandConfigId: commandConfigId
+        )
+    }
+
+    func backfillingMissingCommandSnapshot(from commandConfig: CommandConfig?) -> Project {
+        guard let commandConfig else { return self }
+
+        var updated = self
+
+        if updated.startCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            updated.startCommand = commandConfig.startCommand
+        }
+        if updated.buildCommand.isEmpty {
+            updated.buildCommand = commandConfig.buildCommand
+        }
+        if updated.cleanCommand.isEmpty {
+            updated.cleanCommand = commandConfig.cleanCommand
+        }
+        if updated.installCommand.isEmpty {
+            updated.installCommand = commandConfig.installCommand
+        }
+        if updated.stopCommand.isEmpty {
+            updated.stopCommand = commandConfig.stopCommand
+        }
+        if updated.discardChangesCommand.isEmpty {
+            updated.discardChangesCommand = commandConfig.discardChangesCommand
+        }
+        if updated.commandProfileName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+            updated.commandProfileName = commandConfig.name
+        }
+
+        return updated
+    }
+}

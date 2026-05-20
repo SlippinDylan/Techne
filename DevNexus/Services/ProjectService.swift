@@ -123,8 +123,14 @@ final class ProjectService {
             return .failure(.projectAlreadyExists(path))
         }
         let projectName = URL(fileURLWithPath: path).lastPathComponent
-        let startCommand = (configId != nil ? commandConfigService.getConfig(by: configId!)?.startCommand : nil) ?? type.defaultStartCommand
-        let project = Project(name: projectName, path: path, type: type, startCommand: startCommand, commandConfigId: configId)
+        let commandConfig = configId.flatMap(commandConfigService.getConfig(by:))
+        let project = Project(
+            name: projectName,
+            path: path,
+            type: type,
+            commandConfigId: configId,
+            commandConfig: commandConfig
+        )
         projects.append(project)
         saveProjects()
         
@@ -164,6 +170,23 @@ final class ProjectService {
         }
     }
 
+    @MainActor
+    func replaceProjectsForImport(_ projects: [Project]) {
+        self.projects = normalizedProjectsWithCommandSnapshots(projects)
+        saveProjects()
+        synchronizeMonitorsWithProjects()
+        refreshAll()
+    }
+
+    @MainActor
+    func mergeImportedProjects(_ imported: [Project]) {
+        let mergedProjects = BackupService.mergeProjects(existing: projects, incoming: imported)
+        projects = normalizedProjectsWithCommandSnapshots(mergedProjects)
+        saveProjects()
+        synchronizeMonitorsWithProjects()
+        refreshAll()
+    }
+
     // MARK: - Monitor Management
 
     private func setupMonitorsForAllProjects() {
@@ -172,6 +195,19 @@ final class ProjectService {
                 await setupMonitor(for: project)
             }
         }
+    }
+
+    @MainActor
+    private func synchronizeMonitorsWithProjects() {
+        let activePaths = Set(projects.map(\.path))
+        let stalePaths = gitMonitors.keys.filter { !activePaths.contains($0) }
+
+        for stalePath in stalePaths {
+            gitMonitors[stalePath]?.stop()
+            gitMonitors.removeValue(forKey: stalePath)
+        }
+
+        setupMonitorsForAllProjects()
     }
 
     private func setupMonitor(for project: Project) async {
@@ -424,13 +460,40 @@ final class ProjectService {
 
     @MainActor
     private func loadProjects() {
-        projects = persistenceService.load()
-        setupMonitorsForAllProjects()
+        let loadedProjects = persistenceService.load()
+        let normalizedProjects = normalizedProjectsWithCommandSnapshots(loadedProjects)
+        projects = normalizedProjects
+        if commandSnapshotNormalizationChanged(from: loadedProjects, to: normalizedProjects) {
+            saveProjects()
+        }
+        synchronizeMonitorsWithProjects()
         refreshAll()
     }
 
     @MainActor
     private func saveProjects() { _ = persistenceService.save(projects) }
+
+    @MainActor
+    private func normalizedProjectsWithCommandSnapshots(_ projects: [Project]) -> [Project] {
+        projects.map { project in
+            let commandConfig = project.commandConfigId.flatMap(commandConfigService.getConfig(by:))
+            return project.backfillingMissingCommandSnapshot(from: commandConfig)
+        }
+    }
+
+    private func commandSnapshotNormalizationChanged(from original: [Project], to normalized: [Project]) -> Bool {
+        guard original.count == normalized.count else { return true }
+
+        return zip(original, normalized).contains { lhs, rhs in
+            lhs.startCommand != rhs.startCommand ||
+            lhs.buildCommand != rhs.buildCommand ||
+            lhs.cleanCommand != rhs.cleanCommand ||
+            lhs.installCommand != rhs.installCommand ||
+            lhs.stopCommand != rhs.stopCommand ||
+            lhs.discardChangesCommand != rhs.discardChangesCommand ||
+            lhs.commandProfileName != rhs.commandProfileName
+        }
+    }
 
     private func normalizedPath(for path: String) -> String {
         URL(fileURLWithPath: path).resolvingSymlinksInPath().path

@@ -114,6 +114,16 @@ final class CommandConfigService {
         configs.first { $0.id == id }
     }
 
+    func replaceConfigsForImport(_ configs: [CommandConfig]) {
+        self.configs = configs
+        saveConfigs()
+    }
+
+    func mergeImportedConfigs(_ configs: [CommandConfig]) {
+        self.configs = BackupService.mergeConfigs(existing: self.configs, incoming: configs)
+        saveConfigs()
+    }
+
     // MARK: - Persistence
 
     private func loadConfigs() {

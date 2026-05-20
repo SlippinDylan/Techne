@@ -6,13 +6,15 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ContentView: View {
+    let commandConfigService: CommandConfigService
+    let projectService: ProjectService
+
     @State private var selectedItem: SidebarItem? = .devEnvironment
     @State private var chromeDetectionService = ChromeDetectionService()
     @State private var devServerDetectionService = DevServerDetectionService()
-    @State private var commandConfigService: CommandConfigService
-    @State private var projectService: ProjectService
     @State private var adbDeployViewModel = ADBDeployViewModel()
     @State private var launchSettings = LaunchSettings.shared
 
@@ -28,12 +30,6 @@ struct ContentView: View {
     }
 
     @State private var selectedContent: ContentType = .sidebarItem(.devEnvironment)
-
-    init() {
-        let commandConfig = CommandConfigService()
-        _commandConfigService = State(wrappedValue: commandConfig)
-        _projectService = State(wrappedValue: ProjectService(commandConfigService: commandConfig))
-    }
 
     var body: some View {
         NavigationSplitView {
@@ -85,7 +81,10 @@ struct ContentView: View {
                         .environment(commandConfigService)
                         .environment(logService)
                 case .settings:
-                    MainSettingsView()
+                    MainSettingsView(
+                        projectService: projectService,
+                        commandConfigService: commandConfigService
+                    )
                         .environment(launchSettings)
                 case .log:
                     LogView()
@@ -223,26 +222,98 @@ struct ContentView: View {
 // MARK: - Main Settings View
 
 struct MainSettingsView: View {
+    let projectService: ProjectService
+    let commandConfigService: CommandConfigService
+
+    var body: some View {
+        SettingsContentView(
+            projectService: projectService,
+            commandConfigService: commandConfigService
+        )
+    }
+}
+
+struct SettingsContentView: View {
     @Environment(LaunchSettings.self) private var launchSettings
-    
+    let projectService: ProjectService
+    let commandConfigService: CommandConfigService
+
+    @State private var exportingBackup = false
+    @State private var importingBackup = false
+    @State private var backupDocument = DevNexusBackupDocument(
+        payload: .init(schemaVersion: 1, exportedAt: .now, appVersion: "1.0.0", projects: [], commandConfigs: [])
+    )
+    @State private var backupAlert: BackupAlertContext?
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("偏好设置")
-                    .font(.system(size: 28, weight: .bold))
-                    .padding(.bottom, 8)
-                
-                GroupBox(label: Label("基础设置", systemImage: "cpu")) {
-                    HStack {
-                        Label("开机自动启动", systemImage: "power.circle")
-                            .font(.headline)
-                        Spacer()
-                        @Bindable var settings = launchSettings
-                        Toggle("", isOn: $settings.isLaunchAtLoginEnabled)
-                            .toggleStyle(.switch)
+                VStack(alignment: .leading, spacing: 12) {
+                    settingsSectionHeader("基础设置", systemImage: "cpu")
+
+                    GroupBox {
+                        HStack {
+                            Label("开机自动启动", systemImage: "power.circle")
+                                .font(.headline)
+                            Spacer()
+                            @Bindable var settings = launchSettings
+                            Toggle("", isOn: $settings.isLaunchAtLoginEnabled)
+                                .toggleStyle(.switch)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    settingsSectionHeader("数据与备份", systemImage: "externaldrive")
+
+                    GroupBox {
+                        HStack(alignment: .center, spacing: 16) {
+                            Text("导出当前项目与命令配置，或从备份文件恢复本地数据。")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                            HStack(spacing: 10) {
+                                CleanMyMacButton(
+                                    title: "导出备份",
+                                    icon: nil,
+                                    action: {
+                                        backupDocument = BackupService.makeDocument(
+                                            projects: projectService.projects,
+                                            commandConfigs: commandConfigService.configs
+                                        )
+                                        exportingBackup = true
+                                    },
+                                    style: .primary,
+                                    isDestructive: false
+                                )
+
+                                CleanMyMacButton(
+                                    title: "导入备份",
+                                    icon: nil,
+                                    action: {
+                                        importingBackup = true
+                                    },
+                                    style: .primary,
+                                    isDestructive: false
+                                )
+
+                                CleanMyMacButton(
+                                    title: "打开数据目录",
+                                    icon: nil,
+                                    action: {
+                                        BackupService.revealAppSupportDirectory()
+                                    },
+                                    style: .primary,
+                                    isDestructive: false
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
                 }
                 
                 Text("应用状态数据存放在 ~/Library/Application Support/studio.slippindylan.DevNexus/ 目录下。")
@@ -250,10 +321,60 @@ struct MainSettingsView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
             }
-            .padding(32)
-            .frame(maxWidth: 800)
+            .padding(AppConfig.UI.extraLargePadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .fileExporter(
+            isPresented: $exportingBackup,
+            document: backupDocument,
+            contentType: .json,
+            defaultFilename: BackupService.defaultFilename
+        ) { result in
+            if case .failure(let error) = result {
+                backupAlert = .init(title: "备份导出失败", message: error.localizedDescription)
+            }
+        }
+        .fileImporter(
+            isPresented: $importingBackup,
+            allowedContentTypes: DevNexusBackupDocument.readableContentTypes,
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+
+                do {
+                    try BackupService.mergeImport(
+                        from: url,
+                        projectService: projectService,
+                        commandConfigService: commandConfigService
+                    )
+                } catch {
+                    backupAlert = .init(title: "备份导入失败", message: error.localizedDescription)
+                }
+            case .failure(let error):
+                backupAlert = .init(title: "备份导入失败", message: error.localizedDescription)
+            }
+        }
+        .alert(item: $backupAlert) { context in
+            Alert(
+                title: Text(context.title),
+                message: Text(context.message),
+                dismissButton: .default(Text("知道了"))
+            )
         }
     }
+
+    private func settingsSectionHeader(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.headline)
+    }
+}
+
+private struct BackupAlertContext: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
 }
 
 // MARK: - Sidebar Item Enum
@@ -285,5 +406,9 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 }
 
 #Preview {
-    ContentView()
+    let commandConfigService = CommandConfigService()
+    ContentView(
+        commandConfigService: commandConfigService,
+        projectService: ProjectService(commandConfigService: commandConfigService)
+    )
 }

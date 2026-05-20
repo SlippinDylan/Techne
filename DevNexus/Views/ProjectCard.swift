@@ -36,31 +36,31 @@ struct ProjectCard: View {
     private let browserLaunchService = BrowserLaunchService()
 
     var body: some View {
-        VStack(spacing: 0) {
-            projectInfoSection
+        AppPanelCard {
+            VStack(spacing: 0) {
+                projectInfoSection
 
-            if project.uncommittedFileCount > 0 {
-                Divider()
-                    .padding(.horizontal, AppConfig.UI.largePadding)
-                workingDirectoryWarning
-            }
+                if project.uncommittedFileCount > 0 {
+                    Divider()
+                        .padding(.horizontal, AppConfig.UI.largePadding)
+                    workingDirectoryWarning
+                }
 
-            // 开发服务：显示浏览器实例
-            if project.type == .devServer && !relatedInstances.isEmpty {
-                Divider()
-                    .padding(.horizontal, AppConfig.UI.largePadding)
-                relatedInstancesList
-            }
+                // 开发服务：显示浏览器实例
+                if project.type == .devServer && !relatedInstances.isEmpty {
+                    Divider()
+                        .padding(.horizontal, AppConfig.UI.largePadding)
+                    relatedInstancesList
+                }
 
-            // 小程序：显示终端输出
-            if project.type == .miniApp {
-                Divider()
-                    .padding(.horizontal, AppConfig.UI.largePadding)
-                terminalOutputView
+                // 小程序：显示终端输出
+                if project.type == .miniApp {
+                    Divider()
+                        .padding(.horizontal, AppConfig.UI.largePadding)
+                    terminalOutputView
+                }
             }
         }
-        .background(Color.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
         .sheet(isPresented: $showingBranchSelector) {
             BranchSelectorSheet(
                 currentBranch: project.currentBranch,
