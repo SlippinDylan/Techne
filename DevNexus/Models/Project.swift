@@ -13,6 +13,12 @@ enum ProjectTransitionState: String, Sendable {
     case stopping
 }
 
+enum InstallStrategy: String, Codable, Sendable {
+    case never
+    case ifMissing
+    case always
+}
+
 // MARK: - ProjectType Extension
 
 extension ProjectType {
@@ -38,6 +44,13 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
     var type: ProjectType
     var currentBranch: String
     var startCommand: String
+    var buildCommand: String
+    var cleanCommand: String
+    var installCommand: String
+    var stopCommand: String
+    var discardChangesCommand: String
+    var commandProfileName: String?
+    var installStrategy: InstallStrategy
     var commandConfigId: UUID?
     let addedDate: Date
 
@@ -58,6 +71,13 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         type: ProjectType,
         currentBranch: String = "",
         startCommand: String? = nil,
+        buildCommand: String = "",
+        cleanCommand: String = "",
+        installCommand: String = "",
+        stopCommand: String = "",
+        discardChangesCommand: String = "",
+        commandProfileName: String? = nil,
+        installStrategy: InstallStrategy = .ifMissing,
         commandConfigId: UUID? = nil
     ) {
         self.id = id
@@ -66,6 +86,13 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         self.type = type
         self.currentBranch = currentBranch
         self.startCommand = startCommand ?? type.defaultStartCommand
+        self.buildCommand = buildCommand
+        self.cleanCommand = cleanCommand
+        self.installCommand = installCommand
+        self.stopCommand = stopCommand
+        self.discardChangesCommand = discardChangesCommand
+        self.commandProfileName = commandProfileName
+        self.installStrategy = installStrategy
         self.commandConfigId = commandConfigId
         self.addedDate = Date()
 
@@ -107,6 +134,13 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         case type
         case currentBranch
         case startCommand
+        case buildCommand
+        case cleanCommand
+        case installCommand
+        case stopCommand
+        case discardChangesCommand
+        case commandProfileName
+        case installStrategy
         case commandConfigId
         case addedDate
     }
@@ -120,6 +154,13 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         self.type = try container.decode(ProjectType.self, forKey: .type)
         self.currentBranch = try container.decode(String.self, forKey: .currentBranch)
         self.startCommand = try container.decode(String.self, forKey: .startCommand)
+        self.buildCommand = try container.decodeIfPresent(String.self, forKey: .buildCommand) ?? ""
+        self.cleanCommand = try container.decodeIfPresent(String.self, forKey: .cleanCommand) ?? ""
+        self.installCommand = try container.decodeIfPresent(String.self, forKey: .installCommand) ?? ""
+        self.stopCommand = try container.decodeIfPresent(String.self, forKey: .stopCommand) ?? ""
+        self.discardChangesCommand = try container.decodeIfPresent(String.self, forKey: .discardChangesCommand) ?? ""
+        self.commandProfileName = try container.decodeIfPresent(String.self, forKey: .commandProfileName)
+        self.installStrategy = try container.decodeIfPresent(InstallStrategy.self, forKey: .installStrategy) ?? .ifMissing
         self.commandConfigId = try container.decodeIfPresent(UUID.self, forKey: .commandConfigId)
         self.addedDate = try container.decode(Date.self, forKey: .addedDate)
         
@@ -140,6 +181,13 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         try container.encode(type, forKey: .type)
         try container.encode(currentBranch, forKey: .currentBranch)
         try container.encode(startCommand, forKey: .startCommand)
+        try container.encode(buildCommand, forKey: .buildCommand)
+        try container.encode(cleanCommand, forKey: .cleanCommand)
+        try container.encode(installCommand, forKey: .installCommand)
+        try container.encode(stopCommand, forKey: .stopCommand)
+        try container.encode(discardChangesCommand, forKey: .discardChangesCommand)
+        try container.encodeIfPresent(commandProfileName, forKey: .commandProfileName)
+        try container.encode(installStrategy, forKey: .installStrategy)
         try container.encodeIfPresent(commandConfigId, forKey: .commandConfigId)
         try container.encode(addedDate, forKey: .addedDate)
     }
