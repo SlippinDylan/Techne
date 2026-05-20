@@ -40,9 +40,12 @@ final class ProjectService {
     // MARK: - Initialization
 
     @MainActor
-    init(commandConfigService: CommandConfigService) {
+    init(
+        commandConfigService: CommandConfigService,
+        persistenceService: PersistenceService<Project> = PersistenceService(filename: "projects.json")
+    ) {
         self.commandConfigService = commandConfigService
-        persistenceService = PersistenceService(filename: "projects.json")
+        self.persistenceService = persistenceService
         loadProjects()
     }
 

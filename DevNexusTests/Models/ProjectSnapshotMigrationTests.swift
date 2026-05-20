@@ -60,7 +60,21 @@ struct ProjectSnapshotMigrationTests {
     @Test
     @MainActor
     func addProjectCopiesSelectedConfigIntoProjectSnapshot() throws {
-        let configService = CommandConfigService()
+        let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: isolatedPersistenceRoot)
+        }
+
+        let configPersistence = PersistenceService<CommandConfig>(
+            filename: "commandconfigs.json",
+            directoryURL: isolatedPersistenceRoot
+        )
+        let projectPersistence = PersistenceService<Project>(
+            filename: "projects.json",
+            directoryURL: isolatedPersistenceRoot
+        )
+        let configService = CommandConfigService(persistenceService: configPersistence)
         let config = CommandConfig(
             name: "Snapshot Config \(UUID().uuidString)",
             projectType: .devServer,
@@ -73,7 +87,10 @@ struct ProjectSnapshotMigrationTests {
         )
         _ = configService.addConfig(config)
 
-        let service = ProjectService(commandConfigService: configService)
+        let service = ProjectService(
+            commandConfigService: configService,
+            persistenceService: projectPersistence
+        )
         let projectURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: projectURL, withIntermediateDirectories: true)
         defer {
@@ -95,6 +112,8 @@ struct ProjectSnapshotMigrationTests {
         #expect(project.stopCommand == "pkill -f vite")
         #expect(project.discardChangesCommand == "git restore . && git clean -fd")
         #expect(project.commandProfileName == config.name)
+        #expect(configPersistence.storageURL.deletingLastPathComponent().path == isolatedPersistenceRoot.path)
+        #expect(projectPersistence.storageURL.deletingLastPathComponent().path == isolatedPersistenceRoot.path)
     }
 
     @Test

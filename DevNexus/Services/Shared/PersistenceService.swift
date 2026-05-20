@@ -12,15 +12,20 @@ import Foundation
 final class PersistenceService<T: Codable & Sendable>: Sendable {
     let storageURL: URL
 
-    init(filename: String) {
+    init(filename: String, directoryURL: URL? = nil) {
         let fileManager = FileManager.default
-        let bundleID = Bundle.main.bundleIdentifier ?? "studio.slippindylan.DevNexus"
+        let baseDirectoryURL: URL
 
-        let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(bundleID, isDirectory: true)
-        try? fileManager.createDirectory(at: appSupportURL, withIntermediateDirectories: true)
+        if let directoryURL {
+            baseDirectoryURL = directoryURL
+        } else {
+            let bundleID = Bundle.main.bundleIdentifier ?? "studio.slippindylan.DevNexus"
+            baseDirectoryURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent(bundleID, isDirectory: true)
+        }
 
-        self.storageURL = appSupportURL.appendingPathComponent(filename)
+        try? fileManager.createDirectory(at: baseDirectoryURL, withIntermediateDirectories: true)
+        self.storageURL = baseDirectoryURL.appendingPathComponent(filename)
     }
 
     func load() -> [T] {

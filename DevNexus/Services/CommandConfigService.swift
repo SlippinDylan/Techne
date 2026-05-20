@@ -16,8 +16,10 @@ final class CommandConfigService {
 
     private let persistenceService: PersistenceService<CommandConfig>
 
-    init() {
-        persistenceService = PersistenceService(filename: "commandconfigs.json")
+    init(
+        persistenceService: PersistenceService<CommandConfig> = PersistenceService(filename: "commandconfigs.json")
+    ) {
+        self.persistenceService = persistenceService
         loadConfigs()
     }
 
