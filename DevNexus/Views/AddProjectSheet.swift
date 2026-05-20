@@ -132,7 +132,7 @@ struct AddProjectSheet: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
 
-            Text("请先在命令配置页面创建配置")
+            Text("可以先直接添加项目，后续在项目卡片中查看命令详情")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         }

@@ -31,6 +31,7 @@ struct ProjectCard: View {
     @State private var showingRemoveAlert = false
     @State private var showingDiscardAlert = false
     @State private var showingBrowserSelector = false
+    @State private var showingCommandDetails = false
     @State private var browsers: [Browser] = []
     private let browserDetectionService = BrowserDetectionService()
     private let browserLaunchService = BrowserLaunchService()
@@ -179,6 +180,20 @@ struct ProjectCard: View {
         HStack(spacing: AppConfig.UI.mediumSpacing) {
             Text(project.name)
                 .font(.system(size: AppConfig.UI.mediumFontSize + 2, weight: .semibold))
+
+            Button(commandDetails.profileDisplayName) {
+                showingCommandDetails = true
+            }
+            .font(.system(size: AppConfig.UI.smallFontSize))
+            .padding(.horizontal, AppConfig.UI.mediumSpacing)
+            .padding(.vertical, 2)
+            .background(.secondary.opacity(0.12))
+            .foregroundStyle(.secondary)
+            .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.smallCornerRadius))
+            .buttonStyle(.plain)
+            .popover(isPresented: $showingCommandDetails, arrowEdge: .top) {
+                ProjectCommandDetailsPopover(project: project)
+            }
 
             if let statusLabel = transitionStatusLabel {
                 Text(statusLabel)
@@ -371,6 +386,10 @@ struct ProjectCard: View {
 
     private var isTransitioning: Bool {
         project.transitionState != .idle
+    }
+
+    private var commandDetails: ProjectCommandDetails {
+        ProjectCommandDetails(project: project)
     }
 
     private var transitionStatusLabel: String? {

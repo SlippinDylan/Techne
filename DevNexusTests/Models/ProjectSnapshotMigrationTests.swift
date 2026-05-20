@@ -58,6 +58,46 @@ struct ProjectSnapshotMigrationTests {
     }
 
     @Test
+    @MainActor
+    func addProjectCopiesSelectedConfigIntoProjectSnapshot() throws {
+        let configService = CommandConfigService()
+        let config = CommandConfig(
+            name: "Snapshot Config \(UUID().uuidString)",
+            projectType: .devServer,
+            startCommand: "pnpm dev --host",
+            buildCommand: "pnpm build",
+            cleanCommand: "rm -rf dist .vite",
+            discardChangesCommand: "git restore . && git clean -fd",
+            installCommand: "pnpm install --frozen-lockfile",
+            stopCommand: "pkill -f vite"
+        )
+        _ = configService.addConfig(config)
+
+        let service = ProjectService(commandConfigService: configService)
+        let projectURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: projectURL, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: projectURL)
+        }
+
+        let result = service.addProject(path: projectURL.path, type: .devServer, configId: config.id)
+
+        guard case .success(let project) = result else {
+            Issue.record("expected project creation success")
+            return
+        }
+
+        #expect(project.commandConfigId == config.id)
+        #expect(project.startCommand == "pnpm dev --host")
+        #expect(project.buildCommand == "pnpm build")
+        #expect(project.cleanCommand == "rm -rf dist .vite")
+        #expect(project.installCommand == "pnpm install --frozen-lockfile")
+        #expect(project.stopCommand == "pkill -f vite")
+        #expect(project.discardChangesCommand == "git restore . && git clean -fd")
+        #expect(project.commandProfileName == config.name)
+    }
+
+    @Test
     func backfillMissingCommandSnapshotOnlyFillsEmptyFields() {
         let config = CommandConfig(
             name: "Mini App + pnpm",
@@ -93,5 +133,29 @@ struct ProjectSnapshotMigrationTests {
         #expect(updated.stopCommand == "pkill -f weixin")
         #expect(updated.discardChangesCommand == "git restore . && git clean -fd")
         #expect(updated.commandProfileName == "Mini App + pnpm")
+    }
+
+    @Test
+    func commandDetailsPresentationUsesProjectSnapshotWithoutTemplateLookup() {
+        let project = Project(
+            name: "custom-app",
+            path: "/tmp/custom-app",
+            type: .miniApp,
+            startCommand: "pnpm dev:mp-weixin",
+            buildCommand: "",
+            cleanCommand: "rm -rf dist",
+            installCommand: "",
+            stopCommand: "pkill -f weixin",
+            discardChangesCommand: "",
+            commandProfileName: nil,
+            installStrategy: .always,
+            commandConfigId: UUID()
+        )
+
+        let details = ProjectCommandDetails(project: project)
+
+        #expect(details.profileDisplayName == "自定义命令")
+        #expect(details.sections.map(\.title) == ["启动命令", "安装依赖命令", "构建命令", "清理命令", "停止命令", "丢弃更改命令", "安装策略"])
+        #expect(details.sections.map(\.value) == ["pnpm dev:mp-weixin", "", "", "rm -rf dist", "pkill -f weixin", "", "总是安装"])
     }
 }

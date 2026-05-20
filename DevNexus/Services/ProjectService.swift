@@ -235,7 +235,7 @@ final class ProjectService {
     func switchBranch(at path: String, to branch: String, autoStart: Bool = true) async -> Result<Void, ProjectServiceError> {
         guard let projectIndex = projects.firstIndex(where: { $0.path == path }) else { return .failure(.pathNotFound(path)) }
         let project = projects[projectIndex]
-        let cleanCommand = getCommandConfig(for: project)?.cleanCommand ?? AppConfig.Git.cacheCleanCommand
+        let cleanCommand = cleanCommand(for: project)
         
         let result = await operationsManager.switchBranch(
             at: path, 
@@ -288,7 +288,7 @@ final class ProjectService {
 
     @MainActor
     private func startDevServerWithoutOutput(for project: Project, category: String) -> Result<Void, ProjectServiceError> {
-        let cleanCommand = getCommandConfig(for: project)?.cleanCommand ?? AppConfig.Git.cacheCleanCommand
+        let cleanCommand = cleanCommand(for: project)
         let escapedPath = ShellEscape.escape(project.path)
         let command = "source ~/.zshrc 2>/dev/null || source ~/.bash_profile 2>/dev/null || source ~/.bashrc 2>/dev/null\ncd \(escapedPath)\n\(cleanCommand)\n\(project.startCommand)"
         Task {
@@ -367,7 +367,7 @@ final class ProjectService {
 
     @MainActor
     private func startDevServerWithOutput(for project: Project, category: String) -> Result<Void, ProjectServiceError> {
-        let cleanCommand = getCommandConfig(for: project)?.cleanCommand ?? AppConfig.Git.cacheCleanCommand
+        let cleanCommand = cleanCommand(for: project)
         return processManager.startDevServer(for: project, category: category, cleanCommand: cleanCommand, onStart: { [weak self] pid in
             Task { @MainActor [weak self] in
                 if let idx = self?.projects.firstIndex(where: { $0.id == project.id }) {
@@ -389,7 +389,7 @@ final class ProjectService {
 
     @MainActor
     private func stopDevServerWithOutput(for project: Project, category: String) async -> Result<Void, ProjectServiceError> {
-        let cleanCommand = getCommandConfig(for: project)?.cleanCommand ?? AppConfig.Git.cacheCleanCommand
+        let cleanCommand = cleanCommand(for: project)
         let result = await processManager.stopDevServer(for: project, category: category, cleanCommand: cleanCommand) { [weak self] pid, output in 
             Task { @MainActor [weak self] in 
                 guard let self = self else { return }
@@ -435,16 +435,11 @@ final class ProjectService {
         }
     }
 
-    private func getCommandConfig(for project: Project) -> CommandConfig? {
-        guard let id = project.commandConfigId else { return nil }
-        return commandConfigService.getConfig(by: id)
-    }
-
     @MainActor
     private func cleanCacheAfterStop(for project: Project) {
         Task {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
-            let cmd = getCommandConfig(for: project)?.cleanCommand ?? AppConfig.Git.cacheCleanCommand
+            let cmd = cleanCommand(for: project)
             _ = GitService.shared.cleanCache(at: project.path, command: cmd)
         }
     }
@@ -497,5 +492,10 @@ final class ProjectService {
 
     private func normalizedPath(for path: String) -> String {
         URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+    }
+
+    private func cleanCommand(for project: Project) -> String {
+        let trimmedCommand = project.cleanCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedCommand.isEmpty ? AppConfig.Git.cacheCleanCommand : trimmedCommand
     }
 }
