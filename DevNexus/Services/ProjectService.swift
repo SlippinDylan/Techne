@@ -36,6 +36,7 @@ final class ProjectService {
 
     private var gitMonitors: [String: GitWorkspaceMonitor] = [:]
     private var cachedProcessKeywords: [String]?
+    private var devServerDetectionTriggeredProjectIDs: Set<UUID> = []
 
     // MARK: - Initialization
 
@@ -268,12 +269,11 @@ final class ProjectService {
     @MainActor
     func startServer(for project: Project) -> Result<Void, ProjectServiceError> {
         let category = getCategoryName(for: project.type)
-        if let idx = projects.firstIndex(where: { $0.id == project.id }) {
-            projects[idx].transitionState = .starting
-        }
         switch project.type {
-        case .devServer: return startDevServerWithoutOutput(for: project, category: category)
-        case .miniApp: return startDevServerWithOutput(for: project, category: category)
+        case .devServer:
+            return startProjectThroughCoordinator(for: project, category: category)
+        case .miniApp:
+            return startProjectThroughCoordinator(for: project, category: category)
         }
     }
 
@@ -290,59 +290,63 @@ final class ProjectService {
     }
 
     @MainActor
-    private func startDevServerWithoutOutput(for project: Project, category: String) -> Result<Void, ProjectServiceError> {
-        let cleanCommand = cleanCommand(for: project)
-        let escapedPath = ShellEscape.escape(project.path)
-        let command = "source ~/.zshrc 2>/dev/null || source ~/.bash_profile 2>/dev/null || source ~/.bashrc 2>/dev/null\ncd \(escapedPath)\n\(cleanCommand)\n\(project.startCommand)"
-        Task {
-            do {
-                _ = try await ModernProcessExecutor.execute(
-                    command: command,
-                    in: URL(fileURLWithPath: project.path),
-                    onStart: { [weak self] pid in
-                        Task { @MainActor [weak self] in
-                            if let idx = self?.projects.firstIndex(where: { $0.id == project.id }) {
-                                self?.projects[idx].runningProcessPID = pid
-                                self?.projects[idx].isRunning = true
-                            }
-                            NotificationCenter.default.post(
-                                name: .devServerProcessStarted,
-                                object: nil,
-                                userInfo: ["pid": pid, "path": project.path]
-                            )
-                        }
-                    },
-                    onOutput: { output in
-                        let cleanOutput = self.terminalHandler.stripANSICodes(output)
-                        let keywords = ["error", "warn", "failed", "✓", "✗", "listening", "ready", "started"]
-                        let lowercased = cleanOutput.lowercased()
-                        let shouldLog = keywords.contains { lowercased.contains($0) }
-                        let logMessage = String(cleanOutput.prefix(500))
-                        Task { @MainActor [weak self] in
-                            if shouldLog {
-                                LogService.shared.info(logMessage, category: project.name)
-                            }
-                            if let idx = self?.projects.firstIndex(where: { $0.id == project.id }) {
-                                self?.projects[idx].terminalOutput += output
-                                if let terminalOutput = self?.projects[idx].terminalOutput {
-                                    self?.projects[idx].terminalOutput = self?.terminalHandler.limitOutput(terminalOutput) ?? terminalOutput
-                                }
-                            }
-                        }
-                    }
-                )
-            } catch {
-                await MainActor.run { [weak self] in
-                    if let idx = self?.projects.firstIndex(where: { $0.id == project.id }) {
-                        self?.projects[idx].transitionState = .idle
-                        self?.projects[idx].isRunning = false
-                        self?.projects[idx].runningProcessPID = nil
-                    }
+    private func startProjectThroughCoordinator(
+        for project: Project,
+        category: String
+    ) -> Result<Void, ProjectServiceError> {
+        let plan = ProjectStartupCoordinator.makePlan(
+            for: project,
+            fallbackCleanCommand: cleanCommand(for: project)
+        )
+        applyInitialStartupState(for: project.id, shouldInstallDependencies: plan.shouldInstallDependencies)
+
+        return processManager.startProject(
+            for: project,
+            category: category,
+            plan: plan,
+            onStart: { [weak self] pid in
+                Self.performStartupUpdate(on: self) { service in
+                    service.handleProjectProcessStart(for: project, pid: pid)
                 }
-                AppLogError("执行异常：\(error.localizedDescription)", category: category)
+            },
+            onEvent: { [weak self] event in
+                Self.performStartupUpdate(on: self) { service in
+                    service.handleProjectStartupEvent(event, for: project)
+                }
+            },
+            onCompletion: { [weak self] completion in
+                Self.performStartupUpdate(on: self) { service in
+                    service.handleProjectStartupCompletion(completion, for: project.id)
+                }
+            }
+        ) { [weak self] projectID, output in
+            Self.performStartupUpdate(on: self) { service in
+                service.appendTerminalOutput(output, for: projectID)
+                if ProjectStartupCoordinator.containsStartPhaseMessage(output) {
+                    service.handleProjectStartupEvent(.phaseStarted(.start), for: project)
+                }
             }
         }
-        return .success(())
+    }
+
+    private nonisolated static func performStartupUpdate(
+        on service: ProjectService?,
+        _ update: @escaping @MainActor (ProjectService) -> Void
+    ) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                guard let service else { return }
+                update(service)
+            }
+            return
+        }
+
+        DispatchQueue.main.sync {
+            MainActor.assumeIsolated {
+                guard let service else { return }
+                update(service)
+            }
+        }
     }
 
     @MainActor
@@ -369,28 +373,6 @@ final class ProjectService {
     }
 
     @MainActor
-    private func startDevServerWithOutput(for project: Project, category: String) -> Result<Void, ProjectServiceError> {
-        let cleanCommand = cleanCommand(for: project)
-        return processManager.startDevServer(for: project, category: category, cleanCommand: cleanCommand, onStart: { [weak self] pid in
-            Task { @MainActor [weak self] in
-                if let idx = self?.projects.firstIndex(where: { $0.id == project.id }) {
-                    self?.projects[idx].runningProcessPID = pid
-                    self?.projects[idx].isRunning = true
-                    self?.projects[idx].transitionState = .idle
-                }
-            }
-        }) { [weak self] pid, output in 
-            Task { @MainActor [weak self] in 
-                guard let self = self else { return }
-                if let idx = self.projects.firstIndex(where: { $0.id == pid }) { 
-                    self.projects[idx].terminalOutput += output
-                    self.projects[idx].terminalOutput = self.terminalHandler.limitOutput(self.projects[idx].terminalOutput) 
-                } 
-            } 
-        }
-    }
-
-    @MainActor
     private func stopDevServerWithOutput(for project: Project, category: String) async -> Result<Void, ProjectServiceError> {
         let cleanCommand = cleanCommand(for: project)
         let result = await processManager.stopDevServer(for: project, category: category, cleanCommand: cleanCommand) { [weak self] pid, output in 
@@ -414,6 +396,99 @@ final class ProjectService {
     }
 
     @MainActor
+    private func applyInitialStartupState(for projectID: UUID, shouldInstallDependencies: Bool) {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        devServerDetectionTriggeredProjectIDs.remove(projectID)
+        projects[index].transitionState = shouldInstallDependencies ? .installing : .starting
+    }
+
+    @MainActor
+    private func handleProjectProcessStart(
+        for project: Project,
+        pid: Int32
+    ) {
+        guard let index = projects.firstIndex(where: { $0.id == project.id }) else { return }
+
+        projects[index].runningProcessPID = pid
+        projects[index].isRunning = true
+    }
+
+    @MainActor
+    private func handleProjectStartupEvent(_ event: ProjectStartupEvent, for project: Project) {
+        guard let index = projects.firstIndex(where: { $0.id == project.id }) else { return }
+
+        switch event {
+        case .phaseStarted(.install):
+            projects[index].transitionState = .installing
+        case .phaseStarted(.clean):
+            break
+        case .phaseStarted(.start):
+            switch project.type {
+            case .devServer:
+                projects[index].transitionState = .starting
+            case .miniApp:
+                projects[index].transitionState = .idle
+            }
+        case .startCommandStarted(let pid):
+            projects[index].runningProcessPID = pid
+            projects[index].isRunning = true
+            postDevServerDetectionIfNeeded(for: project.id, path: project.path, pid: pid)
+        }
+    }
+
+    @MainActor
+    private func postDevServerDetectionIfNeeded(for projectID: UUID, path: String, pid: Int32) {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        guard projects[index].type == .devServer else { return }
+        guard devServerDetectionTriggeredProjectIDs.contains(projectID) == false else { return }
+
+        devServerDetectionTriggeredProjectIDs.insert(projectID)
+        NotificationCenter.default.post(
+            name: .devServerProcessStarted,
+            object: nil,
+            userInfo: ["pid": pid, "path": path]
+        )
+    }
+
+    @MainActor
+    private func clearDevServerDetectionTrigger(for projectID: UUID) {
+        devServerDetectionTriggeredProjectIDs.remove(projectID)
+    }
+
+    @MainActor
+    private func resetProjectStartupState(at index: Int) {
+        let projectID = projects[index].id
+        clearDevServerDetectionTrigger(for: projectID)
+        projects[index].runningProcessPID = nil
+        projects[index].isRunning = false
+        projects[index].transitionState = .idle
+    }
+
+    @MainActor
+    private func appendTerminalOutput(_ output: String, for projectID: UUID) {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+
+        projects[index].terminalOutput += output
+        projects[index].terminalOutput = terminalHandler.limitOutput(projects[index].terminalOutput)
+    }
+
+    @MainActor
+    private func handleProjectStartupCompletion(_ completion: ProjectStartupCompletion, for projectID: UUID) {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+
+        switch completion {
+        case .exited(let exitCode):
+            if exitCode != 0 || projects[index].transitionState != .idle {
+                resetProjectStartupState(at: index)
+            } else {
+                clearDevServerDetectionTrigger(for: projectID)
+            }
+        case .executionFailed:
+            resetProjectStartupState(at: index)
+        }
+    }
+
+    @MainActor
     func reconcileDetectedDevServers(_ servers: [DevServer]) {
         let normalizedServers = servers.map { server in
             (server: server, normalizedPath: normalizedPath(for: server.projectPath))
@@ -430,10 +505,12 @@ final class ProjectService {
                 if projects[index].transitionState == .starting {
                     projects[index].transitionState = .idle
                 }
+                clearDevServerDetectionTrigger(for: projects[index].id)
             } else if projects[index].transitionState == .stopping {
                 projects[index].runningProcessPID = nil
                 projects[index].isRunning = false
                 projects[index].transitionState = .idle
+                clearDevServerDetectionTrigger(for: projects[index].id)
             }
         }
     }

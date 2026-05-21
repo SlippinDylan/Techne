@@ -9,6 +9,7 @@ import Foundation
 
 enum ProjectTransitionState: String, Sendable {
     case idle
+    case installing
     case starting
     case stopping
 }

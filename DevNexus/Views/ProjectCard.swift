@@ -396,6 +396,8 @@ struct ProjectCard: View {
         switch project.transitionState {
         case .idle:
             return nil
+        case .installing:
+            return "安装中"
         case .starting:
             return "启动中"
         case .stopping:
