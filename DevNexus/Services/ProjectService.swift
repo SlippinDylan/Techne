@@ -123,17 +123,20 @@ final class ProjectService {
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
             return .failure(.pathNotFound(path))
         }
+        if ProjectPersistenceMigration.isTemporaryProjectPath(path) {
+            return .failure(.invalidConfiguration("临时目录项目不会被持久化，请选择真实项目目录"))
+        }
         if projects.contains(where: { $0.path == path }) {
             return .failure(.projectAlreadyExists(path))
         }
         let projectName = URL(fileURLWithPath: path).lastPathComponent
         let commandConfig = configId.flatMap(commandConfigService.getConfig(by:))
-        let project = Project(
+        let project = ProjectCommandSnapshotResolver.makeProject(
             name: projectName,
             path: path,
             type: type,
             commandConfigId: configId,
-            commandConfig: commandConfig
+            legacyConfig: commandConfig
         )
         projects.append(project)
         saveProjects()
@@ -176,8 +179,7 @@ final class ProjectService {
 
     @MainActor
     func replaceProjectsForImport(_ projects: [Project]) {
-        self.projects = normalizedProjectsWithCommandSnapshots(projects)
-        saveProjects()
+        applyPersistenceMigration(projects: projects)
         synchronizeMonitorsWithProjects()
         refreshAll()
     }
@@ -185,8 +187,7 @@ final class ProjectService {
     @MainActor
     func mergeImportedProjects(_ imported: [Project]) {
         let mergedProjects = BackupService.mergeProjects(existing: projects, incoming: imported)
-        projects = normalizedProjectsWithCommandSnapshots(mergedProjects)
-        saveProjects()
+        applyPersistenceMigration(projects: mergedProjects)
         synchronizeMonitorsWithProjects()
         refreshAll()
     }
@@ -536,11 +537,7 @@ final class ProjectService {
     @MainActor
     private func loadProjects() {
         let loadedProjects = persistenceService.load()
-        let normalizedProjects = normalizedProjectsWithCommandSnapshots(loadedProjects)
-        projects = normalizedProjects
-        if commandSnapshotNormalizationChanged(from: loadedProjects, to: normalizedProjects) {
-            saveProjects()
-        }
+        applyPersistenceMigration(projects: loadedProjects)
         synchronizeMonitorsWithProjects()
         refreshAll()
     }
@@ -549,24 +546,15 @@ final class ProjectService {
     private func saveProjects() { _ = persistenceService.save(projects) }
 
     @MainActor
-    private func normalizedProjectsWithCommandSnapshots(_ projects: [Project]) -> [Project] {
-        projects.map { project in
-            let commandConfig = project.commandConfigId.flatMap(commandConfigService.getConfig(by:))
-            return project.backfillingMissingCommandSnapshot(from: commandConfig)
-        }
-    }
-
-    private func commandSnapshotNormalizationChanged(from original: [Project], to normalized: [Project]) -> Bool {
-        guard original.count == normalized.count else { return true }
-
-        return zip(original, normalized).contains { lhs, rhs in
-            lhs.startCommand != rhs.startCommand ||
-            lhs.buildCommand != rhs.buildCommand ||
-            lhs.cleanCommand != rhs.cleanCommand ||
-            lhs.installCommand != rhs.installCommand ||
-            lhs.stopCommand != rhs.stopCommand ||
-            lhs.discardChangesCommand != rhs.discardChangesCommand ||
-            lhs.commandProfileName != rhs.commandProfileName
+    private func applyPersistenceMigration(projects: [Project]) {
+        let result = ProjectPersistenceMigration.migrate(
+            projects: projects,
+            commandConfigs: commandConfigService.configs
+        )
+        self.projects = result.projects
+        commandConfigService.applyPersistenceMigration(result.commandConfigs)
+        if result.didChange {
+            saveProjects()
         }
     }
 

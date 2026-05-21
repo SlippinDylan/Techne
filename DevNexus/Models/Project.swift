@@ -202,47 +202,39 @@ extension Project {
         commandConfigId: UUID?,
         commandConfig: CommandConfig?
     ) {
-        self.init(
+        self = ProjectCommandSnapshotResolver.makeProject(
             name: name,
             path: path,
             type: type,
-            startCommand: commandConfig?.startCommand ?? type.defaultStartCommand,
-            buildCommand: commandConfig?.buildCommand ?? "",
-            cleanCommand: commandConfig?.cleanCommand ?? "",
-            installCommand: commandConfig?.installCommand ?? "",
-            stopCommand: commandConfig?.stopCommand ?? "",
-            discardChangesCommand: commandConfig?.discardChangesCommand ?? "",
-            commandProfileName: commandConfig?.name,
-            installStrategy: .ifMissing,
-            commandConfigId: commandConfigId
+            commandConfigId: commandConfigId,
+            legacyConfig: commandConfig
         )
     }
 
-    func backfillingMissingCommandSnapshot(from commandConfig: CommandConfig?) -> Project {
-        guard let commandConfig else { return self }
-
+    func backfillingMissingCommandSnapshot(from snapshot: ProjectCommandSnapshot?) -> Project {
+        guard let snapshot else { return self }
         var updated = self
 
         if updated.startCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            updated.startCommand = commandConfig.startCommand
+            updated.startCommand = snapshot.startCommand
         }
         if updated.buildCommand.isEmpty {
-            updated.buildCommand = commandConfig.buildCommand
+            updated.buildCommand = snapshot.buildCommand
         }
         if updated.cleanCommand.isEmpty {
-            updated.cleanCommand = commandConfig.cleanCommand
+            updated.cleanCommand = snapshot.cleanCommand
         }
         if updated.installCommand.isEmpty {
-            updated.installCommand = commandConfig.installCommand
+            updated.installCommand = snapshot.installCommand
         }
         if updated.stopCommand.isEmpty {
-            updated.stopCommand = commandConfig.stopCommand
+            updated.stopCommand = snapshot.stopCommand
         }
         if updated.discardChangesCommand.isEmpty {
-            updated.discardChangesCommand = commandConfig.discardChangesCommand
+            updated.discardChangesCommand = snapshot.discardChangesCommand
         }
         if updated.commandProfileName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
-            updated.commandProfileName = commandConfig.name
+            updated.commandProfileName = snapshot.commandProfileName
         }
 
         return updated

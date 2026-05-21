@@ -4,6 +4,26 @@ import Testing
 
 struct ProjectSnapshotMigrationTests {
     @Test
+    @MainActor
+    func commandConfigServiceLeavesEmptyPersistenceEmpty() throws {
+        let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: isolatedPersistenceRoot)
+        }
+
+        let persistence = PersistenceService<CommandConfig>(
+            filename: "commandconfigs.json",
+            directoryURL: isolatedPersistenceRoot
+        )
+
+        let service = CommandConfigService(persistenceService: persistence)
+
+        #expect(service.configs.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: persistence.storageURL.path) == false)
+    }
+
+    @Test
     func legacyProjectDecodesWithDefaultCommandSnapshot() throws {
         let json = """
         {
@@ -59,79 +79,86 @@ struct ProjectSnapshotMigrationTests {
 
     @Test
     @MainActor
-    func addProjectCopiesSelectedConfigIntoProjectSnapshot() throws {
+    func addProjectUsesResolvedCommandSnapshotWithoutLegacyConfigSelection() throws {
         let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
         defer {
             try? FileManager.default.removeItem(at: isolatedPersistenceRoot)
         }
 
-        let configPersistence = PersistenceService<CommandConfig>(
-            filename: "commandconfigs.json",
-            directoryURL: isolatedPersistenceRoot
-        )
         let projectPersistence = PersistenceService<Project>(
             filename: "projects.json",
             directoryURL: isolatedPersistenceRoot
         )
-        let configService = CommandConfigService(persistenceService: configPersistence)
-        let config = CommandConfig(
-            name: "Snapshot Config \(UUID().uuidString)",
-            projectType: .devServer,
-            startCommand: "pnpm dev --host",
-            buildCommand: "pnpm build",
-            cleanCommand: "rm -rf dist .vite",
-            discardChangesCommand: "git restore . && git clean -fd",
-            installCommand: "pnpm install --frozen-lockfile",
-            stopCommand: "pkill -f vite"
+        let configService = CommandConfigService(
+            persistenceService: PersistenceService<CommandConfig>(
+                filename: "commandconfigs.json",
+                directoryURL: isolatedPersistenceRoot
+            )
         )
-        _ = configService.addConfig(config)
 
         let service = ProjectService(
             commandConfigService: configService,
             persistenceService: projectPersistence
         )
-        let projectURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let projectURL = makeNonTemporaryFixtureDirectory(named: "frontend-app")
         try FileManager.default.createDirectory(at: projectURL, withIntermediateDirectories: true)
+        try """
+        {
+          "name": "frontend-app",
+          "scripts": {
+            "dev": "vite",
+            "build": "vite build"
+          },
+          "devDependencies": {
+            "vite": "^5.0.0"
+          }
+        }
+        """.write(to: projectURL.appendingPathComponent("package.json"), atomically: true, encoding: .utf8)
+        try "".write(to: projectURL.appendingPathComponent("pnpm-lock.yaml"), atomically: true, encoding: .utf8)
         defer {
-            try? FileManager.default.removeItem(at: projectURL)
+            try? FileManager.default.removeItem(at: projectURL.deletingLastPathComponent())
         }
 
-        let result = service.addProject(path: projectURL.path, type: .devServer, configId: config.id)
+        let result = service.addProject(path: projectURL.path, type: .devServer)
 
         guard case .success(let project) = result else {
             Issue.record("expected project creation success")
             return
         }
 
-        #expect(project.commandConfigId == config.id)
-        #expect(project.startCommand == "pnpm dev --host")
+        #expect(project.commandConfigId == nil)
+        #expect(project.startCommand == "pnpm dev")
         #expect(project.buildCommand == "pnpm build")
-        #expect(project.cleanCommand == "rm -rf dist .vite")
-        #expect(project.installCommand == "pnpm install --frozen-lockfile")
-        #expect(project.stopCommand == "pkill -f vite")
+        #expect(project.cleanCommand == "rm -rf dist node_modules/.cache .vite")
+        #expect(project.installCommand == "pnpm install")
+        #expect(project.stopCommand == "由 DevNexus 自动停止关联进程")
         #expect(project.discardChangesCommand == "git restore . && git clean -fd")
-        #expect(project.commandProfileName == config.name)
-        #expect(configPersistence.storageURL.deletingLastPathComponent().path == isolatedPersistenceRoot.path)
+        #expect(project.commandProfileName == "自动识别 · Vite + pnpm")
         #expect(projectPersistence.storageURL.deletingLastPathComponent().path == isolatedPersistenceRoot.path)
     }
 
     @Test
-    func backfillMissingCommandSnapshotOnlyFillsEmptyFields() {
-        let config = CommandConfig(
-            name: "Mini App + pnpm",
-            projectType: .miniApp,
-            startCommand: "pnpm dev:mp-weixin",
-            buildCommand: "pnpm build:mp-weixin",
-            cleanCommand: "rm -rf dist",
-            discardChangesCommand: "git restore . && git clean -fd",
-            installCommand: "pnpm install",
-            stopCommand: "pkill -f weixin"
-        )
+    func backfillMissingCommandSnapshotOnlyFillsEmptyFields() throws {
+        let projectRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: projectRoot)
+        }
+        try """
+        {
+          "name": "mini-program",
+          "scripts": {
+            "dev:mp-weixin": "uni -p mp-weixin",
+            "build:mp-weixin": "uni build -p mp-weixin"
+          }
+        }
+        """.write(to: projectRoot.appendingPathComponent("package.json"), atomically: true, encoding: .utf8)
+        try "".write(to: projectRoot.appendingPathComponent("pnpm-lock.yaml"), atomically: true, encoding: .utf8)
 
         let project = Project(
             name: "mini-program",
-            path: "/tmp/mini-program",
+            path: projectRoot.path,
             type: .miniApp,
             startCommand: "custom start",
             buildCommand: "",
@@ -140,18 +167,169 @@ struct ProjectSnapshotMigrationTests {
             stopCommand: "",
             discardChangesCommand: "",
             commandProfileName: nil,
-            commandConfigId: config.id
+            commandConfigId: UUID()
         )
 
-        let updated = project.backfillingMissingCommandSnapshot(from: config)
+        let updated = ProjectCommandSnapshotResolver.backfillingMissingSnapshot(for: project)
 
         #expect(updated.startCommand == "custom start")
         #expect(updated.buildCommand == "pnpm build:mp-weixin")
         #expect(updated.cleanCommand == "rm -rf dist")
         #expect(updated.installCommand == "custom install")
-        #expect(updated.stopCommand == "pkill -f weixin")
+        #expect(updated.stopCommand == "由 DevNexus 自动停止关联进程")
         #expect(updated.discardChangesCommand == "git restore . && git clean -fd")
-        #expect(updated.commandProfileName == "Mini App + pnpm")
+        #expect(updated.commandProfileName == "自动识别 · 微信小程序 + pnpm")
+    }
+
+    @Test
+    @MainActor
+    func loadProjectsRemovesTemporaryProjectsAndRelatedSnapshotConfigs() throws {
+        let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: isolatedPersistenceRoot)
+        }
+
+        let tempConfig = CommandConfig(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000101")!,
+            name: "Snapshot Config 00000000-0000-0000-0000-000000000101",
+            projectType: .devServer,
+            startCommand: "pnpm dev",
+            buildCommand: "pnpm build",
+            cleanCommand: "rm -rf dist",
+            discardChangesCommand: "git restore . && git clean -fd",
+            installCommand: "pnpm install",
+            stopCommand: ""
+        )
+        let keptConfig = CommandConfig(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000202")!,
+            name: "User Saved Template",
+            projectType: .devServer,
+            startCommand: "npm run dev",
+            buildCommand: "npm run build",
+            cleanCommand: "rm -rf dist",
+            discardChangesCommand: "git restore . && git clean -fd",
+            installCommand: "npm install",
+            stopCommand: ""
+        )
+        let configPersistence = PersistenceService<CommandConfig>(
+            filename: "commandconfigs.json",
+            directoryURL: isolatedPersistenceRoot
+        )
+        let projectPersistence = PersistenceService<Project>(
+            filename: "projects.json",
+            directoryURL: isolatedPersistenceRoot
+        )
+        _ = configPersistence.save([tempConfig, keptConfig])
+        _ = projectPersistence.save([
+            Project(
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000301")!,
+                name: "blog",
+                path: "/Users/test/blog",
+                type: .devServer,
+                startCommand: "pnpm dev",
+                buildCommand: "",
+                cleanCommand: "",
+                installCommand: "",
+                stopCommand: "",
+                discardChangesCommand: "",
+                commandProfileName: nil,
+                installStrategy: .ifMissing
+            ),
+            Project(
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000302")!,
+                name: "snapshot-temp",
+                path: "/var/folders/aa/bb/T/DevNexus-snapshot-temp",
+                type: .devServer,
+                startCommand: "pnpm dev",
+                buildCommand: "",
+                cleanCommand: "",
+                installCommand: "",
+                stopCommand: "",
+                discardChangesCommand: "",
+                commandProfileName: nil,
+                installStrategy: .ifMissing,
+                commandConfigId: tempConfig.id
+            )
+        ])
+
+        let configService = CommandConfigService(persistenceService: configPersistence)
+        let service = ProjectService(
+            commandConfigService: configService,
+            persistenceService: projectPersistence
+        )
+
+        #expect(service.projects.map(\.name) == ["blog"])
+        #expect(configService.configs.map(\.name) == ["User Saved Template"])
+    }
+
+    @Test
+    @MainActor
+    func loadProjectsBackfillsMissingSnapshotWhenLegacyConfigNoLongerExists() throws {
+        let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: isolatedPersistenceRoot)
+        }
+
+        let projectRoot = makeNonTemporaryFixtureDirectory(named: "server-ui")
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+        try """
+        {
+          "name": "server-ui",
+          "scripts": {
+            "dev": "next dev",
+            "build": "next build"
+          },
+          "dependencies": {
+            "next": "^15.0.0"
+          }
+        }
+        """.write(to: projectRoot.appendingPathComponent("package.json"), atomically: true, encoding: .utf8)
+        try "".write(to: projectRoot.appendingPathComponent("package-lock.json"), atomically: true, encoding: .utf8)
+        defer {
+            try? FileManager.default.removeItem(at: projectRoot.deletingLastPathComponent())
+        }
+
+        let projectPersistence = PersistenceService<Project>(
+            filename: "projects.json",
+            directoryURL: isolatedPersistenceRoot
+        )
+        _ = projectPersistence.save([
+            Project(
+                name: "server-ui",
+                path: projectRoot.path,
+                type: .devServer,
+                startCommand: "npm run dev",
+                buildCommand: "",
+                cleanCommand: "",
+                installCommand: "",
+                stopCommand: "",
+                discardChangesCommand: "",
+                commandProfileName: nil,
+                installStrategy: .ifMissing,
+                commandConfigId: UUID()
+            )
+        ])
+
+        let service = ProjectService(
+            commandConfigService: CommandConfigService(
+                persistenceService: PersistenceService<CommandConfig>(
+                    filename: "commandconfigs.json",
+                    directoryURL: isolatedPersistenceRoot
+                )
+            ),
+            persistenceService: projectPersistence
+        )
+
+        let restored = try #require(service.projects.first)
+        #expect(restored.startCommand == "npm run dev")
+        #expect(restored.buildCommand == "npm run build")
+        #expect(restored.cleanCommand == "rm -rf .next")
+        #expect(restored.installCommand == "npm install")
+        #expect(restored.stopCommand == "由 DevNexus 自动停止关联进程")
+        #expect(restored.discardChangesCommand == "git restore . && git clean -fd")
+        #expect(restored.commandProfileName == "自动识别 · Next.js + npm")
     }
 
     @Test
@@ -176,5 +354,12 @@ struct ProjectSnapshotMigrationTests {
         #expect(details.profileDisplayName == "自定义命令")
         #expect(details.sections.map(\.title) == ["启动命令", "安装依赖命令", "构建命令", "清理命令", "停止命令", "丢弃更改命令", "安装策略"])
         #expect(details.sections.map(\.value) == ["pnpm dev:mp-weixin", "", "", "rm -rf dist", "pkill -f weixin", "", "总是安装"])
+    }
+
+    private func makeNonTemporaryFixtureDirectory(named name: String) -> URL {
+        let root = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".devnexus-test-fixtures", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        return root.appendingPathComponent(name, isDirectory: true)
     }
 }

@@ -16,7 +16,6 @@ struct ProjectListView: View {
     @Environment(DevServerDetectionService.self) private var devServerService
     @Environment(ChromeDetectionService.self) private var chromeService
     @Environment(BrowserDetectionService.self) private var browserDetectionService
-    @Environment(CommandConfigService.self) private var commandConfigService
     @Environment(LogService.self) private var logService
 
     @State private var showingAddSheet = false
@@ -42,9 +41,8 @@ struct ProjectListView: View {
             }
         }
         .sheet(isPresented: $showingAddSheet) {
-            // MARK: - 修正 AddProjectSheet 调用，补全 onAdd 参数
-            AddProjectSheet(projectType: projectType) { path, configId in
-                _ = projectService.addProject(path: path, type: projectType, configId: configId)
+            AddProjectSheet(projectType: projectType) { path in
+                _ = projectService.addProject(path: path, type: projectType)
                 showingAddSheet = false
             }
         }
@@ -377,5 +375,4 @@ struct ProjectListView: View {
         .environment(DevServerDetectionService())
         .environment(ChromeDetectionService())
         .environment(BrowserDetectionService())
-        .environment(commandConfigService)
 }

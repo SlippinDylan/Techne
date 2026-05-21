@@ -18,13 +18,13 @@ struct ContentView: View {
     @State private var browserDetectionService = BrowserDetectionService()
     @State private var adbDeployViewModel = ADBDeployViewModel()
     @State private var launchSettings = LaunchSettings.shared
+    @State private var showingManualBrowserLaunch = false
 
     // LogService 是单例，直接引用
     private var logService: LogService { LogService.shared }
 
     enum ContentType {
         case sidebarItem(SidebarItem)
-        case commandConfig
         case settings
         case log
         case about
@@ -47,7 +47,6 @@ struct ContentView: View {
 
                 // 底部按钮区域
                 VStack(spacing: 0) {
-                    bottomSidebarButton(title: "命令配置", icon: "terminal", type: .commandConfig)
                     bottomSidebarButton(title: "设置", icon: "gearshape", type: .settings)
                     bottomSidebarButton(title: "日志", icon: "doc.text", type: .log)
                     bottomSidebarButton(title: "关于", icon: "info.circle", type: .about)
@@ -66,7 +65,6 @@ struct ContentView: View {
                             .environment(chromeDetectionService)
                             .environment(browserDetectionService)
                             .environment(projectService)
-                            .environment(commandConfigService)
                             .environment(logService)
                     case .miniApp:
                         ProjectListView(projectType: .miniApp)
@@ -74,15 +72,10 @@ struct ContentView: View {
                             .environment(devServerDetectionService)
                             .environment(chromeDetectionService)
                             .environment(browserDetectionService)
-                            .environment(commandConfigService)
                             .environment(logService)
                     case .adbDeploy:
                         ADBDeployView(viewModel: adbDeployViewModel)
                     }
-                case .commandConfig:
-                    CommandConfigView()
-                        .environment(commandConfigService)
-                        .environment(logService)
                 case .settings:
                     MainSettingsView(
                         projectService: projectService,
@@ -98,6 +91,17 @@ struct ContentView: View {
             }
             .navigationTitle(navigationTitle)
             .navigationSubtitle(navigationSubtitle)
+            .sheet(isPresented: $showingManualBrowserLaunch) {
+                ManualBrowserLaunchSheet(browsers: browserDetectionService.installedBrowsers) { request in
+                    let result = await BrowserLaunchService().launchBrowser(request)
+                    switch result {
+                    case .success:
+                        return .success(())
+                    case .failure(let error):
+                        return .failure(error)
+                    }
+                }
+            }
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
                     if case .sidebarItem(let item) = selectedContent {
@@ -115,6 +119,14 @@ struct ContentView: View {
                                     .adaptiveGlassButtonStyle()
                                     .help("刷新状态 (Cmd+R)")
                                     .keyboardShortcut("r", modifiers: .command)
+                                }
+
+                                if item == .devEnvironment {
+                                    Button(action: presentManualBrowserLaunch) {
+                                        Image(systemName: "globe.badge.chevron.backward")
+                                    }
+                                    .adaptiveGlassButtonStyle()
+                                    .help("新建浏览器实例")
                                 }
 
                                 Button(action: {
@@ -154,11 +166,6 @@ struct ContentView: View {
             WindowManager.showMainWindow()
             selectedItem = nil
             selectedContent = .log
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToConfig)) { _ in
-            WindowManager.showMainWindow()
-            selectedItem = nil
-            selectedContent = .commandConfig
         }
         .onReceive(NotificationCenter.default.publisher(for: .switchToAbout)) { _ in
             WindowManager.showMainWindow()
@@ -202,10 +209,14 @@ struct ContentView: View {
         }
     }
 
+    private func presentManualBrowserLaunch() {
+        browserDetectionService.refresh()
+        showingManualBrowserLaunch = true
+    }
+
     private var navigationTitle: String {
         switch selectedContent {
         case .sidebarItem(let item): return item.title
-        case .commandConfig: return "命令配置"
         case .settings: return "设置"
         case .log: return "操作日志"
         case .about: return "关于"
@@ -215,7 +226,6 @@ struct ContentView: View {
     private var navigationSubtitle: String {
         switch selectedContent {
         case .sidebarItem(let item): return item.subtitle
-        case .commandConfig: return "管理项目的启动、编译、清理等命令配置"
         case .settings: return "管理应用的启动行为与全局偏好"
         case .log: return "查看应用中的所有操作记录"
         case .about: return "DevNexus 版本 1.0.0"

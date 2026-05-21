@@ -94,4 +94,22 @@ extension BrowserLaunchRequest {
             launchKey: "\(launchTarget.associationKey):\(browser.type.bundleId)"
         )
     }
+
+    static func manual(
+        browser: Browser,
+        url: String?,
+        launchSource: String
+    ) -> BrowserLaunchRequest {
+        BrowserLaunchRequest(
+            browser: browser,
+            url: url,
+            profileDirectoryName: "manual-browser-instance",
+            opensInNewInstance: browser.type.supportsNewApplicationInstance,
+            tracksInstance: browser.type.supportsManagedInstances,
+            requestedDebugPort: browser.type.supportsRemoteDebugging ? AppConfig.Browser.defaultDebugPort : nil,
+            launchSource: launchSource,
+            launchTarget: nil,
+            launchKey: "\(launchSource):manual:\(browser.type.bundleId)"
+        )
+    }
 }

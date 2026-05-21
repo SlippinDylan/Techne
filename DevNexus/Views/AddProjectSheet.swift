@@ -3,23 +3,18 @@
 //  DevNexus
 //
 //  统一的添加项目弹窗
-//  支持开发服务和小程序两种类型
 //
 
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 统一的添加项目弹窗
-/// 根据 projectType 参数显示不同的标题和配置过滤
 struct AddProjectSheet: View {
     let projectType: ProjectType
-    let onAdd: (String, UUID?) -> Void
+    let onAdd: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(CommandConfigService.self) var commandConfigService
 
     @State private var projectPath = ""
-    @State private var selectedConfigId: UUID?
     @State private var showingFilePicker = false
 
     var body: some View {
@@ -34,18 +29,12 @@ struct AddProjectSheet: View {
             allowedContentTypes: [.folder],
             allowsMultipleSelection: false
         ) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first {
-                    projectPath = url.path
-                }
-            case .failure:
-                break
+            guard case .success(let urls) = result, let url = urls.first else {
+                return
             }
+            projectPath = url.path
         }
     }
-
-    // MARK: - Header View
 
     private var headerView: some View {
         HStack {
@@ -59,17 +48,15 @@ struct AddProjectSheet: View {
                     .foregroundStyle(.secondary)
                     .font(.system(size: 18))
             }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(.plain)
         }
         .padding(AppConfig.UI.extraLargePadding)
     }
 
-    // MARK: - Form View
-
     private var formView: some View {
         VStack(alignment: .leading, spacing: AppConfig.UI.extraLargeSpacing) {
             projectPathField
-            commandConfigSection
+            commandSnapshotSection
 
             Spacer()
 
@@ -78,228 +65,114 @@ struct AddProjectSheet: View {
         .padding(AppConfig.UI.extraLargePadding)
     }
 
-    // MARK: - Project Path Field
-
     private var projectPathField: some View {
         VStack(alignment: .leading, spacing: AppConfig.UI.mediumSpacing) {
             Text("项目路径")
                 .font(.system(size: AppConfig.UI.mediumFontSize, weight: .medium))
 
-            HStack(spacing: AppConfig.UI.mediumSpacing) {
-                TextField("请输入项目路径", text: $projectPath)
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, AppConfig.UI.mediumPadding)
-                    .frame(height: 44)
-                    .background(Color(nsColor: .controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius)
-                            .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
-                    )
-                    .overlay(
-                        Button(action: { showingFilePicker = true }) {
-                            Color.clear
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    )
-            }
+            TextField("请输入项目路径", text: $projectPath)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, AppConfig.UI.mediumPadding)
+                .frame(height: 44)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius)
+                        .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                )
+                .overlay(
+                    Button(action: { showingFilePicker = true }) {
+                        Color.clear.contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                )
         }
     }
 
-    // MARK: - Command Config Section
-
-    private var commandConfigSection: some View {
+    private var commandSnapshotSection: some View {
         VStack(alignment: .leading, spacing: AppConfig.UI.mediumSpacing) {
-            Text("命令配置")
+            Text("命令快照")
                 .font(.system(size: AppConfig.UI.mediumFontSize, weight: .medium))
 
-            if filteredConfigs.isEmpty {
-                emptyConfigView
-            } else {
-                configCardsView
-            }
-        }
-    }
+            VStack(alignment: .leading, spacing: AppConfig.UI.mediumSpacing) {
+                Text("添加后会根据项目类型、lockfile 和 package.json scripts 自动生成完整的项目命令快照。")
+                    .font(.system(size: AppConfig.UI.smallFontSize))
+                    .foregroundStyle(.secondary)
 
-    private var emptyConfigView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "terminal.fill")
-                .font(.system(size: 32))
-                .foregroundStyle(.secondary)
+                Text("不会再写入命令模板卡片；项目卡片里展示的就是项目自身命令。")
+                    .font(.system(size: AppConfig.UI.smallFontSize))
+                    .foregroundStyle(.secondary)
 
-            Text("暂无命令配置")
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
-
-            Text("可以先直接添加项目，后续在项目卡片中查看命令详情")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(AppConfig.UI.extraLargePadding)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
-    }
-
-    private var configCardsView: some View {
-        ScrollView {
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: AppConfig.UI.mediumSpacing),
-                GridItem(.flexible(), spacing: AppConfig.UI.mediumSpacing)
-            ], spacing: AppConfig.UI.mediumSpacing) {
-                ForEach(filteredConfigs) { config in
-                    ConfigSelectionCard(
-                        config: config,
-                        isSelected: selectedConfigId == config.id,
-                        onSelect: {
-                            selectedConfigId = config.id
-                        }
-                    )
+                if let snapshot = snapshotPreview {
+                    Divider()
+                    snapshotRows(snapshot)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(AppConfig.UI.largePadding)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
         }
-        .frame(maxHeight: 250)
     }
 
-    // MARK: - Action Buttons
+    private func snapshotRows(_ snapshot: ProjectCommandSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: AppConfig.UI.smallSpacing) {
+            Text(snapshot.commandProfileName)
+                .font(.system(size: AppConfig.UI.mediumFontSize, weight: .semibold))
+
+            previewRow("启动", snapshot.startCommand)
+            previewRow("安装依赖", snapshot.installCommand)
+            previewRow("构建", snapshot.buildCommand)
+            previewRow("清理", snapshot.cleanCommand)
+            previewRow("停止", snapshot.stopCommand)
+            previewRow("丢弃更改", snapshot.discardChangesCommand)
+        }
+    }
+
+    private func previewRow(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: AppConfig.UI.smallFontSize))
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.system(size: AppConfig.UI.smallFontSize, design: .monospaced))
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+        }
+    }
 
     private var actionButtons: some View {
         HStack(spacing: AppConfig.UI.largeSpacing) {
             Spacer()
 
-            Button(action: { dismiss() }) {
-                Text("取消")
+            Button("取消") {
+                dismiss()
             }
             .adaptiveGlassButtonStyle()
             .buttonBorderShape(.capsule)
             .controlSize(.extraLarge)
 
-            Button(action: {
-                onAdd(projectPath, selectedConfigId)
-            }) {
-                Text("添加")
+            Button("添加") {
+                onAdd(projectPath)
             }
             .adaptiveGlassProminentButtonStyle()
             .buttonBorderShape(.capsule)
             .controlSize(.extraLarge)
-            .disabled(projectPath.isEmpty)
+            .disabled(projectPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 
-    // MARK: - Computed Properties
-
-    private var filteredConfigs: [CommandConfig] {
-        let configs = commandConfigService.configs.filter { $0.projectType == projectType }
-        guard projectType == .miniApp else { return configs }
-
-        return configs.enumerated()
-            .sorted { lhs, rhs in
-                let lhsPriority = configPriority(lhs.element)
-                let rhsPriority = configPriority(rhs.element)
-                if lhsPriority != rhsPriority {
-                    return lhsPriority < rhsPriority
-                }
-                return lhs.offset < rhs.offset
-            }
-            .map(\.element)
-    }
-
-    private func configPriority(_ config: CommandConfig) -> Int {
-        let fields = [
-            config.name,
-            config.startCommand,
-            config.buildCommand,
-            config.installCommand
-        ]
-        let containsPnpm = fields.contains { $0.localizedCaseInsensitiveContains("pnpm") }
-        return containsPnpm ? 0 : 1
-    }
-
-}
-
-// MARK: - Config Selection Card
-
-struct ConfigSelectionCard: View {
-    let config: CommandConfig
-    let isSelected: Bool
-    let onSelect: () -> Void
-
-    var body: some View {
-        Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: AppConfig.UI.mediumSpacing) {
-                // 配置图标和名称
-                HStack(spacing: AppConfig.UI.mediumSpacing) {
-                    Image(systemName: "terminal.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.blue)
-                        .frame(width: 36, height: 36)
-                        .background(.blue.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius))
-
-                    Text(config.name)
-                        .font(.system(size: AppConfig.UI.mediumFontSize, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-
-                    Spacer()
-                }
-
-                // 命令列表
-                commandsList
-            }
-            .padding(AppConfig.UI.largePadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isSelected ? Color.blue.opacity(0.1) : Color(nsColor: .controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius)
-                    .stroke(isSelected ? Color.blue : Color(nsColor: .separatorColor), lineWidth: isSelected ? 2 : 1)
-            )
+    private var snapshotPreview: ProjectCommandSnapshot? {
+        let trimmedPath = projectPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPath.isEmpty else {
+            return nil
         }
-        .buttonStyle(.plain)
-    }
 
-    private var commandsList: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if !config.startCommand.isEmpty {
-                commandRow(label: "启动", command: config.startCommand)
-            }
-            if !config.buildCommand.isEmpty {
-                commandRow(label: "编译", command: config.buildCommand)
-            }
-            if !config.cleanCommand.isEmpty {
-                commandRow(label: "清理", command: config.cleanCommand)
-            }
-            if !config.discardChangesCommand.isEmpty {
-                commandRow(label: "丢弃更改", command: config.discardChangesCommand)
-            }
-            if !config.installCommand.isEmpty {
-                commandRow(label: "安装依赖", command: config.installCommand)
-            }
-            if !config.stopCommand.isEmpty {
-                commandRow(label: "停止", command: config.stopCommand)
-            }
-        }
-    }
-
-    private func commandRow(label: String, command: String) -> some View {
-        HStack(spacing: 8) {
-            Text(label + ":")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .frame(width: 50, alignment: .leading)
-
-            Text(command)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-        }
+        return ProjectCommandSnapshotResolver.resolvedSnapshot(for: projectType, path: trimmedPath)
     }
 }
 
 #Preview {
-    AddProjectSheet(projectType: .devServer, onAdd: { _, _ in })
-        .environment(CommandConfigService())
+    AddProjectSheet(projectType: .devServer, onAdd: { _ in })
 }

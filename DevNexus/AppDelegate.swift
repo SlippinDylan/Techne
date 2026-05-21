@@ -213,7 +213,6 @@ extension Notification.Name {
     static let switchToDevEnvironment = Notification.Name("switchToDevEnvironment")
     static let switchToMiniApp = Notification.Name("switchToMiniApp")
     static let switchToLog = Notification.Name("switchToLog")
-    static let switchToConfig = Notification.Name("switchToConfig")
     static let switchToAbout = Notification.Name("switchToAbout")
     static let addDevProject = Notification.Name("addDevProject")
     static let addMiniAppProject = Notification.Name("addMiniAppProject")

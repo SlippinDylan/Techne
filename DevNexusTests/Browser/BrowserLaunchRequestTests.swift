@@ -58,4 +58,31 @@ struct BrowserLaunchRequestTests {
             projectPath: "/Users/test/project"
         ))
     }
+
+    @Test
+    func manualLaunchSupportsBothURLAndStandaloneModes() {
+        let browser = Browser(
+            type: .chrome,
+            appURL: URL(fileURLWithPath: "/Applications/Google Chrome.app"),
+            isDefault: false
+        )
+
+        let standalone = BrowserLaunchRequest.manual(
+            browser: browser,
+            url: nil,
+            launchSource: "dev-environment-manual"
+        )
+        let withURL = BrowserLaunchRequest.manual(
+            browser: browser,
+            url: "localhost:4173",
+            launchSource: "dev-environment-manual"
+        )
+
+        #expect(standalone.url == nil)
+        #expect(standalone.launchTarget == nil)
+        #expect(standalone.profileDirectoryName == "manual-browser-instance")
+        #expect(standalone.requestedDebugPort == AppConfig.Browser.defaultDebugPort)
+        #expect(withURL.normalizedURL == "http://localhost:4173")
+        #expect(withURL.launchSource == "dev-environment-manual")
+    }
 }

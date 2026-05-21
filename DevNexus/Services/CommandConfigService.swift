@@ -126,16 +126,19 @@ final class CommandConfigService {
         saveConfigs()
     }
 
+    func applyPersistenceMigration(_ configs: [CommandConfig]) {
+        guard self.configs != configs else {
+            return
+        }
+
+        self.configs = configs
+        saveConfigs()
+    }
+
     // MARK: - Persistence
 
     private func loadConfigs() {
         configs = persistenceService.load()
-
-        // 如果没有配置，加载默认配置
-        if configs.isEmpty {
-            configs = CommandConfig.defaultConfigs
-            saveConfigs()
-        }
     }
 
     private func saveConfigs() {

@@ -35,13 +35,6 @@ struct MenuBarView: View {
 
             Divider()
 
-            // 基础支撑模块
-            Button("命令配置") {
-                openAndFocusWindow()
-                NotificationCenter.default.post(name: .switchToConfig, object: nil)
-            }
-            .keyboardShortcut("4", modifiers: .command)
-
             Button("设置") {
                 openAndFocusWindow()
                 NotificationCenter.default.post(name: .switchToSettings, object: nil)
