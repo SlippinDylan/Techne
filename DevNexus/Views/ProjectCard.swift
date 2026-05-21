@@ -25,6 +25,7 @@ struct ProjectCard: View {
     let onCardTap: () -> Void
 
     @Environment(ProjectService.self) var projectService
+    @Environment(BrowserDetectionService.self) private var browserDetectionService
     @State private var branches: [String] = []
     @State private var workingDirStatus: (fileCount: Int, hasChanges: Bool) = (0, false)
     @State private var showingBranchSelector = false
@@ -32,8 +33,6 @@ struct ProjectCard: View {
     @State private var showingDiscardAlert = false
     @State private var showingBrowserSelector = false
     @State private var showingCommandDetails = false
-    @State private var browsers: [Browser] = []
-    private let browserDetectionService = BrowserDetectionService()
     private let browserLaunchService = BrowserLaunchService()
 
     var body: some View {
@@ -76,7 +75,7 @@ struct ProjectCard: View {
             if let server = relatedServer {
                 BrowserSelectorSheet(
                     url: "http://localhost:\(server.port)",
-                    browsers: browsers,
+                    browsers: browserDetectionService.installedBrowsers,
                     onSelect: { browser, shouldOpenURL in
                         await launchInBrowser(
                             browser: browser,
@@ -106,9 +105,6 @@ struct ProjectCard: View {
         }
         .task {
             updateStatus()
-            if project.type == .devServer {
-                browsers = browserDetectionService.detectInstalledBrowsers()
-            }
         }
     }
 
@@ -250,7 +246,7 @@ struct ProjectCard: View {
 
         return HStack(spacing: AppConfig.UI.largePadding) {
             if let server = relatedServer {
-                Button(action: { showingBrowserSelector = true }) {
+                Button(action: presentBrowserSelector) {
                     HStack(spacing: AppConfig.UI.smallSpacing) {
                         Image(systemName: "network")
                             .font(.system(size: AppConfig.UI.smallFontSize))
@@ -417,6 +413,11 @@ struct ProjectCard: View {
         try? task.run()
     }
 
+    private func presentBrowserSelector() {
+        browserDetectionService.refresh()
+        showingBrowserSelector = true
+    }
+
     private func launchInBrowser(
         browser: Browser,
         port: Int,
@@ -500,5 +501,6 @@ struct ProjectCard: View {
         onCardTap: {}
     )
     .environment(ProjectService(commandConfigService: CommandConfigService()))
+    .environment(BrowserDetectionService())
     .padding()
 }

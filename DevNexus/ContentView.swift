@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var selectedItem: SidebarItem? = .devEnvironment
     @State private var chromeDetectionService = ChromeDetectionService()
     @State private var devServerDetectionService = DevServerDetectionService()
+    @State private var browserDetectionService = BrowserDetectionService()
     @State private var adbDeployViewModel = ADBDeployViewModel()
     @State private var launchSettings = LaunchSettings.shared
 
@@ -63,6 +64,7 @@ struct ContentView: View {
                         ProjectListView(projectType: .devServer)
                             .environment(devServerDetectionService)
                             .environment(chromeDetectionService)
+                            .environment(browserDetectionService)
                             .environment(projectService)
                             .environment(commandConfigService)
                             .environment(logService)
@@ -71,6 +73,7 @@ struct ContentView: View {
                             .environment(projectService)
                             .environment(devServerDetectionService)
                             .environment(chromeDetectionService)
+                            .environment(browserDetectionService)
                             .environment(commandConfigService)
                             .environment(logService)
                     case .adbDeploy:
@@ -195,6 +198,7 @@ struct ContentView: View {
         if item == .devEnvironment {
             devServerDetectionService.refresh()
             chromeDetectionService.refresh()
+            browserDetectionService.refresh()
         }
     }
 

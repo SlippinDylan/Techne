@@ -14,7 +14,7 @@ enum BrowserEngine: Sendable {
 }
 
 // 浏览器类型
-enum BrowserType: String, CaseIterable, Identifiable, Sendable {
+enum BrowserType: String, Identifiable, Sendable {
     case chrome = "Google Chrome"
     case chromeBeta = "Chrome Beta"
     case chromium = "Chromium"
@@ -24,6 +24,16 @@ enum BrowserType: String, CaseIterable, Identifiable, Sendable {
     case arc = "Arc"
 
     var id: String { rawValue }
+
+    static let detectionCandidates: [BrowserType] = [
+        .safari,
+        .chrome,
+        .chromeBeta,
+        .chromium,
+        .edge,
+        .brave,
+        .arc
+    ]
 
     var icon: String {
         switch self {
@@ -88,35 +98,43 @@ struct Browser: Identifiable, Hashable, Sendable {
     let appURL: URL
     let isDefault: Bool
 
+    private var canonicalAppURL: URL {
+        appURL.resolvingSymlinksInPath().standardizedFileURL
+    }
+
     var appPath: String {
-        appURL.path
+        canonicalAppURL.path
     }
 
     // 使用 bundleId + appURL 作为稳定的标识符
     var id: String {
-        "\(type.bundleId)_\(appURL.path)"
+        "\(type.bundleId)_\(appPath)"
     }
 
     var displayName: String {
-        isDefault ? "\(type.rawValue) (默认)" : type.rawValue
+        type.rawValue
+    }
+
+    var sortName: String {
+        type.rawValue
     }
 
     // 获取应用图标
     var appIcon: NSImage? {
-        guard FileManager.default.fileExists(atPath: appURL.path) else {
+        guard FileManager.default.fileExists(atPath: appPath) else {
             return nil
         }
 
-        return NSWorkspace.shared.icon(forFile: appURL.path)
+        return NSWorkspace.shared.icon(forFile: appPath)
     }
 
     // 实现 Hashable
     func hash(into hasher: inout Hasher) {
         hasher.combine(type.bundleId)
-        hasher.combine(appURL.path)
+        hasher.combine(appPath)
     }
 
     static func == (lhs: Browser, rhs: Browser) -> Bool {
-        lhs.type.bundleId == rhs.type.bundleId && lhs.appURL.path == rhs.appURL.path
+        lhs.type.bundleId == rhs.type.bundleId && lhs.appPath == rhs.appPath
     }
 }

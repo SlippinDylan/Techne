@@ -15,9 +15,8 @@ struct ServerCardWithInstances: View {
     let onKillServer: () -> Void
     let onKillInstance: (ChromeInstance) -> Void
 
+    @Environment(BrowserDetectionService.self) private var browserDetectionService
     @State private var showingBrowserSelector = false
-    @State private var browsers: [Browser] = []
-    private let browserDetectionService = BrowserDetectionService()
     private let browserLaunchService = BrowserLaunchService()
 
     var body: some View {
@@ -35,7 +34,7 @@ struct ServerCardWithInstances: View {
         .sheet(isPresented: $showingBrowserSelector) {
             BrowserSelectorSheet(
                 url: "http://localhost:\(server.port)",
-                browsers: browsers,
+                browsers: browserDetectionService.installedBrowsers,
                 onSelect: { browser, shouldOpenURL in
                     await launchInBrowser(
                         browser: browser,
@@ -43,9 +42,6 @@ struct ServerCardWithInstances: View {
                     )
                 }
             )
-        }
-        .task {
-            browsers = browserDetectionService.detectInstalledBrowsers()
         }
     }
 
@@ -119,7 +115,7 @@ struct ServerCardWithInstances: View {
         HStack(spacing: AppConfig.UI.largeSpacing) {
             ActionButton(
                 icon: "safari",
-                action: { showingBrowserSelector = true },
+                action: presentBrowserSelector,
                 tooltip: "在浏览器中打开"
             )
 
@@ -165,6 +161,11 @@ struct ServerCardWithInstances: View {
         }
     }
 
+    private func presentBrowserSelector() {
+        browserDetectionService.refresh()
+        showingBrowserSelector = true
+    }
+
     private func launchInBrowser(
         browser: Browser,
         shouldOpenURL: Bool
@@ -205,5 +206,6 @@ struct ServerCardWithInstances: View {
         onKillServer: {},
         onKillInstance: { _ in }
     )
+    .environment(BrowserDetectionService())
     .padding()
 }

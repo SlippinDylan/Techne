@@ -15,6 +15,7 @@ struct ProjectListView: View {
     @Environment(ProjectService.self) private var projectService
     @Environment(DevServerDetectionService.self) private var devServerService
     @Environment(ChromeDetectionService.self) private var chromeService
+    @Environment(BrowserDetectionService.self) private var browserDetectionService
     @Environment(CommandConfigService.self) private var commandConfigService
     @Environment(LogService.self) private var logService
 
@@ -113,6 +114,10 @@ struct ProjectListView: View {
         .onChange(of: devServerService.servers.map(\.id)) { _, _ in
             projectService.reconcileDetectedDevServers(devServerService.servers)
             clearResolvedSuppressedPaths()
+        }
+        .task {
+            guard projectType == .devServer else { return }
+            browserDetectionService.refreshIfNeeded()
         }
     }
 
@@ -371,5 +376,6 @@ struct ProjectListView: View {
         .environment(ProjectService(commandConfigService: commandConfigService))
         .environment(DevServerDetectionService())
         .environment(ChromeDetectionService())
+        .environment(BrowserDetectionService())
         .environment(commandConfigService)
 }

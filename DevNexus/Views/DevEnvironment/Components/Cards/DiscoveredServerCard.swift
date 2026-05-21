@@ -16,10 +16,9 @@ struct DiscoveredServerCard: View {
     let onKillServer: () -> Void
     let onKillInstance: (ChromeInstance) -> Void
 
+    @Environment(BrowserDetectionService.self) private var browserDetectionService
     @State private var showingBrowserSelector = false
-    @State private var browsers: [Browser] = []
     @State private var currentBranch: String?
-    private let browserDetectionService = BrowserDetectionService()
     private let browserLaunchService = BrowserLaunchService()
 
     var body: some View {
@@ -37,7 +36,7 @@ struct DiscoveredServerCard: View {
         .sheet(isPresented: $showingBrowserSelector) {
             BrowserSelectorSheet(
                 url: "http://localhost:\(server.port)",
-                browsers: browsers,
+                browsers: browserDetectionService.installedBrowsers,
                 onSelect: { browser, shouldOpenURL in
                     await launchInBrowser(
                         browser: browser,
@@ -47,8 +46,6 @@ struct DiscoveredServerCard: View {
             )
         }
         .task {
-            // 同步加载浏览器列表
-            browsers = browserDetectionService.detectInstalledBrowsers()
             // 异步加载分支信息，避免阻塞主线程
             if !server.projectPath.isEmpty {
                 currentBranch = await Task.detached {
@@ -126,7 +123,7 @@ struct DiscoveredServerCard: View {
 
     private var serverAddressInfo: some View {
         HStack(spacing: AppConfig.UI.largePadding) {
-            Button(action: { showingBrowserSelector = true }) {
+            Button(action: presentBrowserSelector) {
                 HStack(spacing: AppConfig.UI.smallSpacing) {
                     Image(systemName: "network")
                         .font(.system(size: AppConfig.UI.smallFontSize))
@@ -204,6 +201,11 @@ struct DiscoveredServerCard: View {
         }
     }
 
+    private func presentBrowserSelector() {
+        browserDetectionService.refresh()
+        showingBrowserSelector = true
+    }
+
     private func launchInBrowser(
         browser: Browser,
         shouldOpenURL: Bool
@@ -245,5 +247,6 @@ struct DiscoveredServerCard: View {
         onKillServer: {},
         onKillInstance: { _ in }
     )
+    .environment(BrowserDetectionService())
     .padding()
 }

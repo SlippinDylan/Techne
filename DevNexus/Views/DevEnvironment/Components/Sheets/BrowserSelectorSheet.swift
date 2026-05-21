@@ -84,22 +84,30 @@ struct BrowserSelectorSheet: View {
     // MARK: - Empty State View
 
     private var emptyStateView: some View {
-        Text("未检测到已安装的浏览器")
-            .font(.system(size: AppConfig.UI.mediumFontSize))
-            .foregroundStyle(.secondary)
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius))
+        VStack(spacing: AppConfig.UI.mediumSpacing) {
+            Image(systemName: "globe.badge.chevron.backward")
+                .font(.system(size: 28))
+                .foregroundStyle(.secondary)
+
+            Text("当前 Mac 上未检测到可启动的受支持浏览器")
+                .font(.system(size: AppConfig.UI.mediumFontSize))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius))
     }
 
     // MARK: - Browser Grid View
 
     private var browserGridView: some View {
-        let columns = [
-            GridItem(.flexible(), spacing: AppConfig.UI.largeSpacing),
-            GridItem(.flexible(), spacing: AppConfig.UI.largeSpacing)
-        ]
+        let columnCount = browsers.count == 1 ? 1 : 2
+        let columns = Array(
+            repeating: GridItem(.flexible(), spacing: AppConfig.UI.largeSpacing),
+            count: columnCount
+        )
 
         return LazyVGrid(columns: columns, spacing: AppConfig.UI.mediumSpacing) {
             ForEach(browsers) { browser in
@@ -143,11 +151,20 @@ private struct BrowserCardButton: View {
             VStack(spacing: AppConfig.UI.mediumSpacing) {
                 browserIcon
 
-                Text(browser.displayName)
-                    .font(.system(size: AppConfig.UI.mediumFontSize))
-                    .foregroundStyle(.primary)
+                VStack(spacing: 4) {
+                    Text(browser.displayName)
+                        .font(.system(size: AppConfig.UI.mediumFontSize))
+                        .foregroundStyle(.primary)
+
+                    if browser.isDefault {
+                        Text("默认浏览器")
+                            .font(.system(size: AppConfig.UI.smallFontSize))
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .frame(maxWidth: .infinity)
+            .frame(minHeight: 132)
             .padding(AppConfig.UI.largePadding)
             .background(Color(nsColor: .controlBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
