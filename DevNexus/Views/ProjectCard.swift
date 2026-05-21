@@ -77,9 +77,12 @@ struct ProjectCard: View {
                 BrowserSelectorSheet(
                     url: "http://localhost:\(server.port)",
                     browsers: browsers,
-                    onSelect: { browser in
-                        launchInBrowser(browser: browser, port: server.port)
-                        showingBrowserSelector = false
+                    onSelect: { browser, shouldOpenURL in
+                        await launchInBrowser(
+                            browser: browser,
+                            port: server.port,
+                            shouldOpenURL: shouldOpenURL
+                        )
                     }
                 )
             }
@@ -414,37 +417,28 @@ struct ProjectCard: View {
         try? task.run()
     }
 
-    private func launchInBrowser(browser: Browser, port: Int) {
-        let url = "http://localhost:\(port)"
-        let launchService = browserLaunchService
-        let defaultPort = AppConfig.Browser.defaultDebugPort
+    private func launchInBrowser(
+        browser: Browser,
+        port: Int,
+        shouldOpenURL: Bool
+    ) async -> Result<Void, Error> {
+        let request = BrowserLaunchRequest.devServer(
+            browser: browser,
+            port: port,
+            projectPath: project.path,
+            shouldOpenURL: shouldOpenURL,
+            launchSource: "project-card"
+        )
 
-        Task {
-            // 在后台线程查找可用端口，避免阻塞主线程
-            let debugPort = await Task.detached {
-                launchService.findAvailablePort(startingFrom: defaultPort) ?? defaultPort
-            }.value
+        let result = await browserLaunchService.launchBrowser(request)
 
-            // 记录找到的端口
-            await MainActor.run {
-                LogService.shared.info("找到可用调试端口: \(debugPort)", category: "浏览器")
-            }
-
-            let result = await launchService.launchBrowser(
-                browserPath: browser.path,
-                url: url,
-                debugPort: debugPort
-            )
-
-            await MainActor.run {
-                switch result {
-                case .success(let pid):
-                    LogService.shared.success("成功启动浏览器实例 (PID: \(pid))", category: "浏览器")
-                    NotificationCenter.default.post(name: .browserDidOpen, object: nil)
-                case .failure(let error):
-                    LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
-                }
-            }
+        switch result {
+        case .success(let pid):
+            LogService.shared.success("成功启动浏览器实例 (PID: \(pid))", category: "浏览器")
+            return .success(())
+        case .failure(let error):
+            LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
+            return .failure(error)
         }
     }
 

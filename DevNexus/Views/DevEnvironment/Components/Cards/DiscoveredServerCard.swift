@@ -38,9 +38,11 @@ struct DiscoveredServerCard: View {
             BrowserSelectorSheet(
                 url: "http://localhost:\(server.port)",
                 browsers: browsers,
-                onSelect: { browser in
-                    launchInBrowser(browser: browser)
-                    showingBrowserSelector = false
+                onSelect: { browser, shouldOpenURL in
+                    await launchInBrowser(
+                        browser: browser,
+                        shouldOpenURL: shouldOpenURL
+                    )
                 }
             )
         }
@@ -202,24 +204,27 @@ struct DiscoveredServerCard: View {
         }
     }
 
-    private func launchInBrowser(browser: Browser) {
-        let url = "http://localhost:\(server.port)"
-        Task {
-            // 查找可用的调试端口
-            let debugPort = browserLaunchService.findAvailablePort() ?? AppConfig.Browser.defaultDebugPort
+    private func launchInBrowser(
+        browser: Browser,
+        shouldOpenURL: Bool
+    ) async -> Result<Void, Error> {
+        let request = BrowserLaunchRequest.devServer(
+            browser: browser,
+            port: server.port,
+            projectPath: server.projectPath,
+            shouldOpenURL: shouldOpenURL,
+            launchSource: "discovered-server"
+        )
 
-            let result = await browserLaunchService.launchBrowser(
-                browserPath: browser.path,
-                url: url,
-                debugPort: debugPort
-            )
+        let result = await browserLaunchService.launchBrowser(request)
 
-            switch result {
-            case .success(let pid):
-                LogService.shared.success("成功启动浏览器实例 (PID: \(pid))", category: "浏览器")
-            case .failure(let error):
-                LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
-            }
+        switch result {
+        case .success(let pid):
+            LogService.shared.success("成功启动浏览器实例 (PID: \(pid))", category: "浏览器")
+            return .success(())
+        case .failure(let error):
+            LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
+            return .failure(error)
         }
     }
 }

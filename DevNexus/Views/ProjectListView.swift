@@ -108,10 +108,7 @@ struct ProjectListView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .browserDidOpen)) { _ in
             guard projectType == .devServer else { return }
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(1.5))
-                chromeService.refresh()
-            }
+            chromeService.refresh()
         }
         .onChange(of: devServerService.servers.map(\.id)) { _, _ in
             projectService.reconcileDetectedDevServers(devServerService.servers)
@@ -300,8 +297,7 @@ struct ProjectListView: View {
 
     private func getRelatedInstances(for server: DevServer?) -> [ChromeInstance] {
         guard let server = server else { return [] }
-        // 依据：浏览器实例的 URL 通常包含服务器的端口号
-        return chromeService.instances.filter { $0.url.contains(":\(server.port)") }
+        return chromeService.instances.filter { $0.isRelated(to: server) }
     }
 
     private func refreshProject(_ project: Project) {

@@ -36,9 +36,11 @@ struct ServerCardWithInstances: View {
             BrowserSelectorSheet(
                 url: "http://localhost:\(server.port)",
                 browsers: browsers,
-                onSelect: { browser in
-                    launchInBrowser(browser: browser)
-                    showingBrowserSelector = false
+                onSelect: { browser, shouldOpenURL in
+                    await launchInBrowser(
+                        browser: browser,
+                        shouldOpenURL: shouldOpenURL
+                    )
                 }
             )
         }
@@ -163,21 +165,27 @@ struct ServerCardWithInstances: View {
         }
     }
 
-    private func launchInBrowser(browser: Browser) {
-        let url = "http://localhost:\(server.port)"
-        Task {
-            let result = await browserLaunchService.launchBrowser(
-                browserPath: browser.path,
-                url: url,
-                debugPort: 0
-            )
+    private func launchInBrowser(
+        browser: Browser,
+        shouldOpenURL: Bool
+    ) async -> Result<Void, Error> {
+        let request = BrowserLaunchRequest.devServer(
+            browser: browser,
+            port: server.port,
+            projectPath: server.projectPath,
+            shouldOpenURL: shouldOpenURL,
+            launchSource: "server-card"
+        )
 
-            switch result {
-            case .success(let pid):
-                LogService.shared.success("成功启动浏览器 (PID: \(pid))", category: "浏览器")
-            case .failure(let error):
-                LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
-            }
+        let result = await browserLaunchService.launchBrowser(request)
+
+        switch result {
+        case .success(let pid):
+            LogService.shared.success("成功启动浏览器 (PID: \(pid))", category: "浏览器")
+            return .success(())
+        case .failure(let error):
+            LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
+            return .failure(error)
         }
     }
 }

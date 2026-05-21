@@ -11,9 +11,12 @@ import SwiftUI
 /// 用于选择浏览器打开指定 URL
 struct BrowserSelectorSheet: View {
     @Environment(\.dismiss) private var dismiss
-    let url: String
+    let url: String?
     let browsers: [Browser]
-    let onSelect: (Browser) -> Void
+    let onSelect: @Sendable (Browser, Bool) async -> Result<Void, Error>
+    @State private var shouldOpenURL = true
+    @State private var isLaunching = false
+    @State private var launchErrorMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -48,9 +51,25 @@ struct BrowserSelectorSheet: View {
     private var contentView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppConfig.UI.extraLargeSpacing) {
-                Text("打开 \(url)")
+                Text(url.map { "打开 \($0)" } ?? "启动独立浏览器实例")
                     .font(.system(size: AppConfig.UI.mediumFontSize))
                     .foregroundStyle(.secondary)
+
+                if url != nil {
+                    Toggle("启动后打开当前地址", isOn: $shouldOpenURL)
+                        .disabled(isLaunching)
+                }
+
+                if isLaunching {
+                    ProgressView("正在启动浏览器...")
+                        .font(.system(size: AppConfig.UI.smallFontSize))
+                }
+
+                if let launchErrorMessage {
+                    Text(launchErrorMessage)
+                        .font(.system(size: AppConfig.UI.smallFontSize))
+                        .foregroundStyle(.red)
+                }
 
                 if browsers.isEmpty {
                     emptyStateView
@@ -84,8 +103,27 @@ struct BrowserSelectorSheet: View {
 
         return LazyVGrid(columns: columns, spacing: AppConfig.UI.mediumSpacing) {
             ForEach(browsers) { browser in
-                BrowserCardButton(browser: browser) {
-                    onSelect(browser)
+                BrowserCardButton(browser: browser, isDisabled: isLaunching) {
+                    launch(browser)
+                }
+            }
+        }
+    }
+
+    private func launch(_ browser: Browser) {
+        isLaunching = true
+        launchErrorMessage = nil
+
+        Task {
+            let result = await onSelect(browser, shouldOpenURL)
+
+            await MainActor.run {
+                switch result {
+                case .success:
+                    dismiss()
+                case .failure(let error):
+                    isLaunching = false
+                    launchErrorMessage = error.localizedDescription
                 }
             }
         }
@@ -97,6 +135,7 @@ struct BrowserSelectorSheet: View {
 /// 浏览器卡片按钮
 private struct BrowserCardButton: View {
     let browser: Browser
+    let isDisabled: Bool
     let action: () -> Void
 
     var body: some View {
@@ -114,6 +153,7 @@ private struct BrowserCardButton: View {
             .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
         }
         .buttonStyle(PlainButtonStyle())
+        .disabled(isDisabled)
     }
 
     private var browserIcon: some View {
@@ -136,6 +176,6 @@ private struct BrowserCardButton: View {
     BrowserSelectorSheet(
         url: "http://localhost:3000",
         browsers: [],
-        onSelect: { _ in }
+        onSelect: { _, _ in .success(()) }
     )
 }
