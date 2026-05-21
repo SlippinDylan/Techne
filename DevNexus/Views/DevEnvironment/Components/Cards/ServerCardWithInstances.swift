@@ -33,13 +33,9 @@ struct ServerCardWithInstances: View {
         }
         .sheet(isPresented: $showingBrowserSelector) {
             BrowserSelectorSheet(
-                url: "http://localhost:\(server.port)",
                 browsers: browserDetectionService.installedBrowsers,
-                onSelect: { browser, shouldOpenURL in
-                    await launchInBrowser(
-                        browser: browser,
-                        shouldOpenURL: shouldOpenURL
-                    )
+                onSelect: { browser in
+                    await launchInBrowser(browser: browser)
                 }
             )
         }
@@ -167,14 +163,13 @@ struct ServerCardWithInstances: View {
     }
 
     private func launchInBrowser(
-        browser: Browser,
-        shouldOpenURL: Bool
+        browser: Browser
     ) async -> Result<Void, Error> {
         let request = BrowserLaunchRequest.devServer(
             browser: browser,
             port: server.port,
             projectPath: server.projectPath,
-            shouldOpenURL: shouldOpenURL,
+            shouldOpenURL: true,
             launchSource: "server-card"
         )
 

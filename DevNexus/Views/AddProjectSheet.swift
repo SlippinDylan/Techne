@@ -9,6 +9,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct AddProjectSheet: View {
+    private enum Layout {
+        static let sheetWidth: CGFloat = 700
+    }
+
     let projectType: ProjectType
     let onAdd: (String) -> Void
 
@@ -23,7 +27,8 @@ struct AddProjectSheet: View {
             Divider()
             formView
         }
-        .frame(width: 700, height: 500)
+        .frame(width: Layout.sheetWidth)
+        .fixedSize(horizontal: false, vertical: true)
         .fileImporter(
             isPresented: $showingFilePicker,
             allowedContentTypes: [.folder],
@@ -56,9 +61,7 @@ struct AddProjectSheet: View {
     private var formView: some View {
         VStack(alignment: .leading, spacing: AppConfig.UI.extraLargeSpacing) {
             projectPathField
-            commandSnapshotSection
-
-            Spacer()
+            autoDetectionSection
 
             actionButtons
         }
@@ -89,30 +92,26 @@ struct AddProjectSheet: View {
         }
     }
 
-    private var commandSnapshotSection: some View {
+    private var autoDetectionSection: some View {
         VStack(alignment: .leading, spacing: AppConfig.UI.mediumSpacing) {
-            Text("命令快照")
-                .font(.system(size: AppConfig.UI.mediumFontSize, weight: .medium))
+            Text("添加后会根据项目类型、lockfile 和 package.json scripts 自动生成完整的项目命令快照。")
+                .font(.system(size: AppConfig.UI.smallFontSize))
+                .foregroundStyle(.secondary)
 
-            VStack(alignment: .leading, spacing: AppConfig.UI.mediumSpacing) {
-                Text("添加后会根据项目类型、lockfile 和 package.json scripts 自动生成完整的项目命令快照。")
-                    .font(.system(size: AppConfig.UI.smallFontSize))
-                    .foregroundStyle(.secondary)
+            Text("不会再写入命令模板卡片；项目卡片里展示的就是项目自身命令。")
+                .font(.system(size: AppConfig.UI.smallFontSize))
+                .foregroundStyle(.secondary)
 
-                Text("不会再写入命令模板卡片；项目卡片里展示的就是项目自身命令。")
-                    .font(.system(size: AppConfig.UI.smallFontSize))
-                    .foregroundStyle(.secondary)
-
-                if let snapshot = snapshotPreview {
-                    Divider()
-                    snapshotRows(snapshot)
-                }
+            if let snapshot = snapshotPreview {
+                Divider()
+                    .padding(.vertical, AppConfig.UI.smallSpacing)
+                snapshotRows(snapshot)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(AppConfig.UI.largePadding)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppConfig.UI.largePadding)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
     }
 
     private func snapshotRows(_ snapshot: ProjectCommandSnapshot) -> some View {
@@ -139,6 +138,7 @@ struct AddProjectSheet: View {
                 .font(.system(size: AppConfig.UI.smallFontSize, design: .monospaced))
                 .foregroundStyle(.primary)
                 .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

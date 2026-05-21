@@ -31,6 +31,10 @@ struct ProjectCommandDetails: Equatable {
 }
 
 struct ProjectCommandDetailsPopover: View {
+    private enum Layout {
+        static let width: CGFloat = 560
+    }
+
     let details: ProjectCommandDetails
 
     init(project: Project) {
@@ -38,47 +42,47 @@ struct ProjectCommandDetailsPopover: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppConfig.UI.largeSpacing) {
+        VStack(alignment: .leading, spacing: AppConfig.UI.largeSpacing) {
+            VStack(alignment: .leading, spacing: AppConfig.UI.smallSpacing) {
+                Text(details.profileDisplayName)
+                    .font(.system(size: AppConfig.UI.mediumFontSize + 2, weight: .semibold))
+
+                Text("当前项目卡片展示的是项目自己的命令快照。")
+                    .font(.system(size: AppConfig.UI.smallFontSize))
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(details.sections) { section in
                 VStack(alignment: .leading, spacing: AppConfig.UI.smallSpacing) {
-                    Text(details.profileDisplayName)
-                        .font(.system(size: AppConfig.UI.mediumFontSize + 2, weight: .semibold))
-
-                    Text("当前项目卡片展示的是项目自己的命令快照。")
-                        .font(.system(size: AppConfig.UI.smallFontSize))
+                    Text(section.title)
+                        .font(.system(size: AppConfig.UI.smallFontSize, weight: .medium))
                         .foregroundStyle(.secondary)
-                }
 
-                ForEach(details.sections) { section in
-                    VStack(alignment: .leading, spacing: AppConfig.UI.smallSpacing) {
-                        Text(section.title)
-                            .font(.system(size: AppConfig.UI.smallFontSize, weight: .medium))
+                    if section.isConfigured {
+                        Text(section.value)
+                            .font(.system(size: AppConfig.UI.smallFontSize, design: .monospaced))
+                            .foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(AppConfig.UI.mediumPadding)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius))
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text("未配置")
+                            .font(.system(size: AppConfig.UI.smallFontSize))
                             .foregroundStyle(.secondary)
-
-                        if section.isConfigured {
-                            Text(section.value)
-                                .font(.system(size: AppConfig.UI.smallFontSize, design: .monospaced))
-                                .foregroundStyle(.primary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(AppConfig.UI.mediumPadding)
-                                .background(Color(nsColor: .controlBackgroundColor))
-                                .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius))
-                                .textSelection(.enabled)
-                        } else {
-                            Text("未配置")
-                                .font(.system(size: AppConfig.UI.smallFontSize))
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(AppConfig.UI.mediumPadding)
-                                .background(Color(nsColor: .controlBackgroundColor))
-                                .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius))
-                        }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(AppConfig.UI.mediumPadding)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius))
                     }
                 }
             }
-            .padding(AppConfig.UI.extraLargePadding)
         }
-        .frame(width: 460, height: 420)
+        .frame(width: Layout.width, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(AppConfig.UI.extraLargePadding)
     }
 }
 
