@@ -1,61 +1,61 @@
 {
   "images" : [
     {
-      "filename" : "DevNexus-icon-16×16.png",
+      "filename" : "DevNexus_Icon_16.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "16x16"
     },
     {
-      "filename" : "DevNexus-icon-32×32 1.png",
+      "filename" : "DevNexus_Icon_32 1.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "16x16"
     },
     {
-      "filename" : "DevNexus-icon-32×32.png",
+      "filename" : "DevNexus_Icon_32.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "32x32"
     },
     {
-      "filename" : "DevNexus-icon-64×64.png",
+      "filename" : "DevNexus_Icon_64.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "32x32"
     },
     {
-      "filename" : "DevNexus-icon-128×128.png",
+      "filename" : "DevNexus_Icon_128.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "128x128"
     },
     {
-      "filename" : "DevNexus-icon-256×256 1.png",
+      "filename" : "DevNexus_Icon_256 1.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "128x128"
     },
     {
-      "filename" : "DevNexus-icon-256×256.png",
+      "filename" : "DevNexus_Icon_256.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "256x256"
     },
     {
-      "filename" : "DevNexus-icon-512×512 1.png",
+      "filename" : "DevNexus_Icon_512 1.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "256x256"
     },
     {
-      "filename" : "DevNexus-icon-512×512.png",
+      "filename" : "DevNexus_Icon_512.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "512x512"
     },
     {
-      "filename" : "DevNexus-icon-1024×1024.png",
+      "filename" : "DevNexus_Icon_1024.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "512x512"
