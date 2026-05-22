@@ -47,9 +47,10 @@ struct MenuBarView: View {
                 openWindow(id: "about")
             }
 
-            Button("退出") {
+            Button("退出 DevNexus") {
                 NSApp.terminate(nil)
             }
+            .keyboardShortcut("q", modifiers: .command)
         }
     }
 }

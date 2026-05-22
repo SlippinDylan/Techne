@@ -38,9 +38,6 @@ struct DevNexusApp: App {
         .commands {
             MainWindowNavigationCommands()
             DevNexusAppCommands()
-
-            // 移除默认的 Cmd+Q 行为，由 AppDelegate 处理双击退出
-            CommandGroup(replacing: .appTermination) { }
         }
 
         // 原生设置场景 (Cmd + ,)
@@ -72,6 +69,7 @@ struct DevNexusApp: App {
                 .environment(launchSettings)
                 .environment(mainWindowNavigationCoordinator)
         }
+        .menuBarExtraStyle(.menu)
     }
 }
 
