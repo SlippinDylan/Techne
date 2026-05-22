@@ -15,35 +15,29 @@ struct ServerCardWithInstances: View {
     let onKillServer: () -> Void
     let onKillInstance: (ChromeInstance) -> Void
 
+    @Environment(BrowserDetectionService.self) private var browserDetectionService
     @State private var showingBrowserSelector = false
-    @State private var browsers: [Browser] = []
-    private let browserDetectionService = BrowserDetectionService()
     private let browserLaunchService = BrowserLaunchService()
 
     var body: some View {
-        VStack(spacing: 0) {
-            serverInfoSection
+        AppPanelCard {
+            VStack(spacing: 0) {
+                serverInfoSection
 
-            if !relatedInstances.isEmpty {
-                Divider()
-                    .padding(.horizontal, AppConfig.UI.largePadding)
-                relatedInstancesList
+                if !relatedInstances.isEmpty {
+                    Divider()
+                        .padding(.horizontal, AppConfig.UI.largePadding)
+                    relatedInstancesList
+                }
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
         .sheet(isPresented: $showingBrowserSelector) {
             BrowserSelectorSheet(
-                url: "http://localhost:\(server.port)",
-                browsers: browsers,
+                browsers: browserDetectionService.installedBrowsers,
                 onSelect: { browser in
-                    launchInBrowser(browser: browser)
-                    showingBrowserSelector = false
+                    await launchInBrowser(browser: browser)
                 }
             )
-        }
-        .task {
-            browsers = browserDetectionService.detectInstalledBrowsers()
         }
     }
 
@@ -117,7 +111,7 @@ struct ServerCardWithInstances: View {
         HStack(spacing: AppConfig.UI.largeSpacing) {
             ActionButton(
                 icon: "safari",
-                action: { showingBrowserSelector = true },
+                action: presentBrowserSelector,
                 tooltip: "在浏览器中打开"
             )
 
@@ -163,21 +157,31 @@ struct ServerCardWithInstances: View {
         }
     }
 
-    private func launchInBrowser(browser: Browser) {
-        let url = "http://localhost:\(server.port)"
-        Task {
-            let result = await browserLaunchService.launchBrowser(
-                browserPath: browser.path,
-                url: url,
-                debugPort: 0
-            )
+    private func presentBrowserSelector() {
+        browserDetectionService.refresh()
+        showingBrowserSelector = true
+    }
 
-            switch result {
-            case .success(let pid):
-                LogService.shared.success("成功启动浏览器 (PID: \(pid))", category: "浏览器")
-            case .failure(let error):
-                LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
-            }
+    private func launchInBrowser(
+        browser: Browser
+    ) async -> Result<Void, Error> {
+        let request = BrowserLaunchRequest.devServer(
+            browser: browser,
+            port: server.port,
+            projectPath: server.projectPath,
+            shouldOpenURL: true,
+            launchSource: "server-card"
+        )
+
+        let result = await browserLaunchService.launchBrowser(request)
+
+        switch result {
+        case .success(let pid):
+            LogService.shared.success("成功启动浏览器 (PID: \(pid))", category: "浏览器")
+            return .success(())
+        case .failure(let error):
+            LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
+            return .failure(error)
         }
     }
 }
@@ -197,5 +201,6 @@ struct ServerCardWithInstances: View {
         onKillServer: {},
         onKillInstance: { _ in }
     )
+    .environment(BrowserDetectionService())
     .padding()
 }

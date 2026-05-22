@@ -8,8 +8,13 @@
 import Foundation
 import AppKit
 
+enum BrowserEngine: Sendable {
+    case chromium
+    case safari
+}
+
 // 浏览器类型
-enum BrowserType: String, CaseIterable, Identifiable {
+enum BrowserType: String, Identifiable, Sendable {
     case chrome = "Google Chrome"
     case chromeBeta = "Chrome Beta"
     case chromium = "Chromium"
@@ -19,6 +24,16 @@ enum BrowserType: String, CaseIterable, Identifiable {
     case arc = "Arc"
 
     var id: String { rawValue }
+
+    static let detectionCandidates: [BrowserType] = [
+        .safari,
+        .chrome,
+        .chromeBeta,
+        .chromium,
+        .edge,
+        .brave,
+        .arc
+    ]
 
     var icon: String {
         switch self {
@@ -35,44 +50,12 @@ enum BrowserType: String, CaseIterable, Identifiable {
         }
     }
 
-    // 可能的安装路径
-    var possiblePaths: [String] {
+    var engine: BrowserEngine {
         switch self {
-        case .chrome:
-            return [
-                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                "~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-            ]
-        case .chromeBeta:
-            return [
-                "/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta",
-                "~/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta"
-            ]
-        case .chromium:
-            return [
-                "/Applications/Chromium.app/Contents/MacOS/Chromium",
-                "~/Applications/Chromium.app/Contents/MacOS/Chromium"
-            ]
-        case .edge:
-            return [
-                "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-                "~/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
-            ]
         case .safari:
-            return [
-                "/Applications/Safari.app/Contents/MacOS/Safari",
-                "/System/Cryptexes/App/System/Applications/Safari.app/Contents/MacOS/Safari"
-            ]
-        case .brave:
-            return [
-                "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-                "~/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
-            ]
-        case .arc:
-            return [
-                "/Applications/Arc.app/Contents/MacOS/Arc",
-                "~/Applications/Arc.app/Contents/MacOS/Arc"
-            ]
+            return .safari
+        default:
+            return .chromium
         }
     }
 
@@ -95,50 +78,49 @@ enum BrowserType: String, CaseIterable, Identifiable {
             return "company.thebrowser.Browser"
         }
     }
+
+    var supportsManagedInstances: Bool {
+        engine == .chromium
+    }
+
+    var supportsRemoteDebugging: Bool {
+        engine == .chromium
+    }
+
+    var supportsNewApplicationInstance: Bool {
+        engine == .chromium
+    }
 }
 
 // 浏览器信息
-struct Browser: Identifiable, Hashable {
+struct Browser: Identifiable, Hashable, Sendable {
     let type: BrowserType
-    let path: String
+    let appURL: URL
     let isDefault: Bool
 
-    // 使用 bundleId + path 作为稳定的标识符
+    private var canonicalAppURL: URL {
+        appURL.resolvingSymlinksInPath().standardizedFileURL
+    }
+
+    var appPath: String {
+        canonicalAppURL.path
+    }
+
+    // 使用 bundleId + appURL 作为稳定的标识符
     var id: String {
-        "\(type.bundleId)_\(path)"
+        "\(type.bundleId)_\(appPath)"
     }
 
     var displayName: String {
-        isDefault ? "\(type.rawValue) (默认)" : type.rawValue
+        type.rawValue
+    }
+
+    var sortName: String {
+        type.rawValue
     }
 
     // 获取应用图标
     var appIcon: NSImage? {
-        // 使用正则表达式提取 .app 路径
-        let pattern = "^(.*\\.app)"
-
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
-            // 正则表达式创建失败，使用备用方案
-            if let appRange = path.range(of: ".app") {
-                let appPath = String(path[..<appRange.upperBound])
-                return NSWorkspace.shared.icon(forFile: appPath)
-            }
-            return nil
-        }
-
-        guard let match = regex.firstMatch(in: path, options: [], range: NSRange(path.startIndex..., in: path)),
-              let range = Range(match.range, in: path) else {
-            // 正则匹配失败，使用备用方案
-            if let appRange = path.range(of: ".app") {
-                let appPath = String(path[..<appRange.upperBound])
-                return NSWorkspace.shared.icon(forFile: appPath)
-            }
-            return nil
-        }
-
-        let appPath = String(path[range])
-
-        // 验证路径是否存在
         guard FileManager.default.fileExists(atPath: appPath) else {
             return nil
         }
@@ -149,10 +131,10 @@ struct Browser: Identifiable, Hashable {
     // 实现 Hashable
     func hash(into hasher: inout Hasher) {
         hasher.combine(type.bundleId)
-        hasher.combine(path)
+        hasher.combine(appPath)
     }
 
     static func == (lhs: Browser, rhs: Browser) -> Bool {
-        lhs.type.bundleId == rhs.type.bundleId && lhs.path == rhs.path
+        lhs.type.bundleId == rhs.type.bundleId && lhs.appPath == rhs.appPath
     }
 }

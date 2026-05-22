@@ -15,7 +15,7 @@ struct ProjectListView: View {
     @Environment(ProjectService.self) private var projectService
     @Environment(DevServerDetectionService.self) private var devServerService
     @Environment(ChromeDetectionService.self) private var chromeService
-    @Environment(CommandConfigService.self) private var commandConfigService
+    @Environment(BrowserDetectionService.self) private var browserDetectionService
     @Environment(LogService.self) private var logService
 
     @State private var showingAddSheet = false
@@ -41,9 +41,8 @@ struct ProjectListView: View {
             }
         }
         .sheet(isPresented: $showingAddSheet) {
-            // MARK: - 修正 AddProjectSheet 调用，补全 onAdd 参数
-            AddProjectSheet(projectType: projectType) { path, configId in
-                _ = projectService.addProject(path: path, type: projectType, configId: configId)
+            AddProjectSheet(projectType: projectType) { path in
+                _ = projectService.addProject(path: path, type: projectType)
                 showingAddSheet = false
             }
         }
@@ -108,14 +107,19 @@ struct ProjectListView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .browserDidOpen)) { _ in
             guard projectType == .devServer else { return }
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(1.5))
-                chromeService.refresh()
-            }
+            chromeService.refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .browserInstancesChanged)) { _ in
+            guard projectType == .devServer else { return }
+            chromeService.refresh()
         }
         .onChange(of: devServerService.servers.map(\.id)) { _, _ in
             projectService.reconcileDetectedDevServers(devServerService.servers)
             clearResolvedSuppressedPaths()
+        }
+        .task {
+            guard projectType == .devServer else { return }
+            browserDetectionService.refreshIfNeeded()
         }
     }
 
@@ -300,8 +304,7 @@ struct ProjectListView: View {
 
     private func getRelatedInstances(for server: DevServer?) -> [ChromeInstance] {
         guard let server = server else { return [] }
-        // 依据：浏览器实例的 URL 通常包含服务器的端口号
-        return chromeService.instances.filter { $0.url.contains(":\(server.port)") }
+        return chromeService.instances.filter { $0.isRelated(to: server) }
     }
 
     private func refreshProject(_ project: Project) {
@@ -375,5 +378,5 @@ struct ProjectListView: View {
         .environment(ProjectService(commandConfigService: commandConfigService))
         .environment(DevServerDetectionService())
         .environment(ChromeDetectionService())
-        .environment(commandConfigService)
+        .environment(BrowserDetectionService())
 }

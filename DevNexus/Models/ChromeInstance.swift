@@ -15,6 +15,7 @@ struct ChromeInstance: Identifiable, Equatable {
     let debugPort: Int?
     let commandLine: String
     let startTime: Date
+    let launchTarget: BrowserLaunchTarget?
 
     var displayName: String {
         if url.isEmpty {
@@ -25,6 +26,18 @@ struct ChromeInstance: Identifiable, Equatable {
 
     var hasDebugPort: Bool {
         debugPort != nil
+    }
+
+    func isRelated(to server: DevServer) -> Bool {
+        if let launchTarget {
+            return launchTarget.matches(server: server)
+        }
+
+        guard let launchedPort = launchedPort else {
+            return false
+        }
+
+        return launchedPort == server.port
     }
 
     // 获取应用图标
@@ -44,6 +57,18 @@ struct ChromeInstance: Identifiable, Equatable {
     private func extractAppPath(from path: String) -> String {
         guard let range = path.range(of: ".app") else { return "" }
         return String(path[..<range.upperBound])
+    }
+
+    private var launchedPort: Int? {
+        if let port = URLComponents(string: url)?.port {
+            return port
+        }
+
+        guard let range = url.range(of: #":(\d+)"#, options: .regularExpression) else {
+            return nil
+        }
+
+        return Int(url[range].dropFirst())
     }
 
     static func == (lhs: ChromeInstance, rhs: ChromeInstance) -> Bool {

@@ -25,60 +25,81 @@ struct ProjectCard: View {
     let onCardTap: () -> Void
 
     @Environment(ProjectService.self) var projectService
-    @State private var branches: [String] = []
-    @State private var workingDirStatus: (fileCount: Int, hasChanges: Bool) = (0, false)
-    @State private var showingBranchSelector = false
+    @Environment(BrowserDetectionService.self) private var browserDetectionService
+    @State private var branchPickerViewModel: BranchPickerViewModel
+    @State private var showingBranchPicker = false
     @State private var showingRemoveAlert = false
     @State private var showingDiscardAlert = false
     @State private var showingBrowserSelector = false
-    @State private var browsers: [Browser] = []
-    private let browserDetectionService = BrowserDetectionService()
+    @State private var showingCommandDetails = false
+    @State private var isProjectTerminalExpanded = true
     private let browserLaunchService = BrowserLaunchService()
 
-    var body: some View {
-        VStack(spacing: 0) {
-            projectInfoSection
-
-            if project.uncommittedFileCount > 0 {
-                Divider()
-                    .padding(.horizontal, AppConfig.UI.largePadding)
-                workingDirectoryWarning
-            }
-
-            // 开发服务：显示浏览器实例
-            if project.type == .devServer && !relatedInstances.isEmpty {
-                Divider()
-                    .padding(.horizontal, AppConfig.UI.largePadding)
-                relatedInstancesList
-            }
-
-            // 小程序：显示终端输出
-            if project.type == .miniApp {
-                Divider()
-                    .padding(.horizontal, AppConfig.UI.largePadding)
-                terminalOutputView
-            }
-        }
-        .background(Color.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
-        .sheet(isPresented: $showingBranchSelector) {
-            BranchSelectorSheet(
-                currentBranch: project.currentBranch,
-                branches: branches,
-                onSelect: { branch in
-                    showingBranchSelector = false
-                    onSwitchBranch(branch)
-                }
+    init(
+        project: Project,
+        relatedServer: DevServer?,
+        relatedInstances: [ChromeInstance],
+        onRemove: @escaping () -> Void,
+        onSwitchBranch: @escaping (String) -> Void,
+        onDiscardChanges: @escaping () -> Void,
+        onStartServer: @escaping () -> Void,
+        onStopServer: @escaping () -> Void,
+        onRefresh: @escaping () -> Void,
+        onKillServer: @escaping () -> Void,
+        onKillInstance: @escaping (ChromeInstance) -> Void,
+        onCardTap: @escaping () -> Void
+    ) {
+        self.project = project
+        self.relatedServer = relatedServer
+        self.relatedInstances = relatedInstances
+        self.onRemove = onRemove
+        self.onSwitchBranch = onSwitchBranch
+        self.onDiscardChanges = onDiscardChanges
+        self.onStartServer = onStartServer
+        self.onStopServer = onStopServer
+        self.onRefresh = onRefresh
+        self.onKillServer = onKillServer
+        self.onKillInstance = onKillInstance
+        self.onCardTap = onCardTap
+        _branchPickerViewModel = State(
+            wrappedValue: BranchPickerViewModel(
+                projectPath: project.path,
+                currentBranch: project.currentBranch
             )
+        )
+    }
+
+    var body: some View {
+        AppPanelCard {
+            VStack(spacing: 0) {
+                projectInfoSection
+
+                if project.uncommittedFileCount > 0 {
+                    Divider()
+                        .padding(.horizontal, AppConfig.UI.largePadding)
+                    workingDirectoryWarning
+                }
+
+                // 开发服务：显示浏览器实例
+                if project.type == .devServer && !relatedInstances.isEmpty {
+                    Divider()
+                        .padding(.horizontal, AppConfig.UI.largePadding)
+                    relatedInstancesList
+                }
+
+                if shouldShowProjectTerminalSection {
+                    Divider()
+                        .padding(.horizontal, AppConfig.UI.largePadding)
+                    terminalOutputView
+                }
+            }
         }
         .sheet(isPresented: $showingBrowserSelector) {
             if let server = relatedServer {
                 BrowserSelectorSheet(
-                    url: "http://localhost:\(server.port)",
-                    browsers: browsers,
+                    browsers: browserDetectionService.installedBrowsers,
                     onSelect: { browser in
-                        launchInBrowser(browser: browser, port: server.port)
-                        showingBrowserSelector = false
+                        await launchInBrowser(browser: browser, port: server.port)
                     }
                 )
             }
@@ -101,10 +122,14 @@ struct ProjectCard: View {
             Text("确定要放弃所有未提交的更改吗？此操作不可撤销。")
         }
         .task {
+            branchPickerViewModel.updateProjectContext(path: project.path, currentBranch: project.currentBranch)
             updateStatus()
-            if project.type == .devServer {
-                browsers = browserDetectionService.detectInstalledBrowsers()
-            }
+        }
+        .onChange(of: project.path) { _, newPath in
+            branchPickerViewModel.updateProjectContext(path: newPath, currentBranch: project.currentBranch)
+        }
+        .onChange(of: project.currentBranch) { _, newCurrentBranch in
+            branchPickerViewModel.updateProjectContext(path: project.path, currentBranch: newCurrentBranch)
         }
     }
 
@@ -180,6 +205,20 @@ struct ProjectCard: View {
             Text(project.name)
                 .font(.system(size: AppConfig.UI.mediumFontSize + 2, weight: .semibold))
 
+            Button(commandDetails.profileDisplayName) {
+                showingCommandDetails = true
+            }
+            .font(.system(size: AppConfig.UI.smallFontSize))
+            .padding(.horizontal, AppConfig.UI.mediumSpacing)
+            .padding(.vertical, 2)
+            .background(.secondary.opacity(0.12))
+            .foregroundStyle(.secondary)
+            .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.smallCornerRadius))
+            .buttonStyle(.plain)
+            .popover(isPresented: $showingCommandDetails, arrowEdge: .top) {
+                ProjectCommandDetailsPopover(project: project)
+            }
+
             if let statusLabel = transitionStatusLabel {
                 Text(statusLabel)
                     .font(.system(size: AppConfig.UI.smallFontSize))
@@ -207,10 +246,20 @@ struct ProjectCard: View {
             ClickableBranchLabel(
                 branchName: project.currentBranch.isEmpty ? "未知分支" : project.currentBranch,
                 onTap: {
-                    updateStatus()
-                    showingBranchSelector = true
+                    branchPickerViewModel.updateProjectContext(path: project.path, currentBranch: project.currentBranch)
+                    showingBranchPicker = true
+                    branchPickerViewModel.open()
                 }
             )
+            .popover(isPresented: $showingBranchPicker, arrowEdge: .top) {
+                BranchPickerPopover(
+                    viewModel: branchPickerViewModel,
+                    onSelect: { branch in
+                        showingBranchPicker = false
+                        onSwitchBranch(branch)
+                    }
+                )
+            }
 
             if project.uncommittedFileCount > 0 {
                 Label("\(project.uncommittedFileCount) 个未提交的文件", systemImage: "doc.badge.ellipsis")
@@ -232,7 +281,7 @@ struct ProjectCard: View {
 
         return HStack(spacing: AppConfig.UI.largePadding) {
             if let server = relatedServer {
-                Button(action: { showingBrowserSelector = true }) {
+                Button(action: presentBrowserSelector) {
                     HStack(spacing: AppConfig.UI.smallSpacing) {
                         Image(systemName: "network")
                             .font(.system(size: AppConfig.UI.smallFontSize))
@@ -274,6 +323,14 @@ struct ProjectCard: View {
                     icon: "play.fill",
                     action: onStartServer,
                     tooltip: "启动服务器"
+                )
+            }
+
+            if shouldShowProjectTerminalToggle {
+                ActionButton(
+                    icon: "rectangle.bottomthird.inset.filled",
+                    action: { isProjectTerminalExpanded.toggle() },
+                    tooltip: "显示或隐藏日志"
                 )
             }
 
@@ -328,37 +385,13 @@ struct ProjectCard: View {
         }
     }
 
-    // MARK: - Terminal Output View (MiniApp only)
+    // MARK: - Terminal Output View
 
     private var terminalOutputView: some View {
-        ScrollView {
-            ScrollViewReader { proxy in
-                if project.terminalOutput.isEmpty {
-                    Text("终端...")
-                        .font(.system(size: AppConfig.UI.smallFontSize, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(AppConfig.UI.mediumSpacing)
-                } else {
-                    Text(project.terminalOutput)
-                        .font(.system(size: AppConfig.UI.smallFontSize, design: .monospaced))
-                        .foregroundStyle(.primary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(AppConfig.UI.mediumSpacing)
-                        .id("terminalBottom")
-                        .onChange(of: project.terminalOutput) { _, _ in
-                            proxy.scrollTo("terminalBottom", anchor: .bottom)
-                        }
-                }
-            }
-        }
-        .frame(height: 200)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.smallCornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppConfig.UI.smallCornerRadius)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+        TerminalPanel(
+            output: project.terminalOutput,
+            emptyText: "等待任务启动...",
+            height: 200
         )
         .padding(AppConfig.UI.largePadding)
     }
@@ -373,10 +406,24 @@ struct ProjectCard: View {
         project.transitionState != .idle
     }
 
+    private var commandDetails: ProjectCommandDetails {
+        ProjectCommandDetails(project: project)
+    }
+
+    private var shouldShowProjectTerminalToggle: Bool {
+        ProjectTerminalVisibility.showsToggle(for: project)
+    }
+
+    private var shouldShowProjectTerminalSection: Bool {
+        shouldShowProjectTerminalToggle && isProjectTerminalExpanded
+    }
+
     private var transitionStatusLabel: String? {
         switch project.transitionState {
         case .idle:
             return nil
+        case .installing:
+            return "安装中"
         case .starting:
             return "启动中"
         case .stopping:
@@ -393,37 +440,32 @@ struct ProjectCard: View {
         try? task.run()
     }
 
-    private func launchInBrowser(browser: Browser, port: Int) {
-        let url = "http://localhost:\(port)"
-        let launchService = browserLaunchService
-        let defaultPort = AppConfig.Browser.defaultDebugPort
+    private func presentBrowserSelector() {
+        browserDetectionService.refresh()
+        showingBrowserSelector = true
+    }
 
-        Task {
-            // 在后台线程查找可用端口，避免阻塞主线程
-            let debugPort = await Task.detached {
-                launchService.findAvailablePort(startingFrom: defaultPort) ?? defaultPort
-            }.value
+    private func launchInBrowser(
+        browser: Browser,
+        port: Int
+    ) async -> Result<Void, Error> {
+        let request = BrowserLaunchRequest.devServer(
+            browser: browser,
+            port: port,
+            projectPath: project.path,
+            shouldOpenURL: true,
+            launchSource: "project-card"
+        )
 
-            // 记录找到的端口
-            await MainActor.run {
-                LogService.shared.info("找到可用调试端口: \(debugPort)", category: "浏览器")
-            }
+        let result = await browserLaunchService.launchBrowser(request)
 
-            let result = await launchService.launchBrowser(
-                browserPath: browser.path,
-                url: url,
-                debugPort: debugPort
-            )
-
-            await MainActor.run {
-                switch result {
-                case .success(let pid):
-                    LogService.shared.success("成功启动浏览器实例 (PID: \(pid))", category: "浏览器")
-                    NotificationCenter.default.post(name: .browserDidOpen, object: nil)
-                case .failure(let error):
-                    LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
-                }
-            }
+        switch result {
+        case .success(let pid):
+            LogService.shared.success("成功启动浏览器实例 (PID: \(pid))", category: "浏览器")
+            return .success(())
+        case .failure(let error):
+            LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
+            return .failure(error)
         }
     }
 
@@ -434,15 +476,11 @@ struct ProjectCard: View {
         Task.detached {
             // 在后台线程执行 git 操作
             let gitService = GitService.shared
-            let newBranches = gitService.getLocalBranches(at: projectPath)
             let newStatus = gitService.getWorkingDirectoryStatus(at: projectPath)
             let newCurrentBranch = gitService.getCurrentBranch(at: projectPath)
 
             await MainActor.run { [weak projectService] in
                 guard let projectService else { return }
-
-                self.branches = newBranches
-                self.workingDirStatus = newStatus
 
                 // 更新项目模型中的 uncommittedFileCount 和 currentBranch
                 if let index = projectService.projects.firstIndex(where: { $0.id == projectId }) {
@@ -485,5 +523,6 @@ struct ProjectCard: View {
         onCardTap: {}
     )
     .environment(ProjectService(commandConfigService: CommandConfigService()))
+    .environment(BrowserDetectionService())
     .padding()
 }

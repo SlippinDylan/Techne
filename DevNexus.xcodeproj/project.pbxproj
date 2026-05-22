@@ -10,14 +10,30 @@
 		BEE630012EF01A4D00A1B2C3 /* SwiftGitX in Frameworks */ = {isa = PBXBuildFile; productRef = BEE630002EF01A4D00A1B2C3 /* SwiftGitX */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		BE4800012F000001008B541B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BE38068D2EEDA48B008B541B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BE3806942EEDA48B008B541B;
+			remoteInfo = DevNexus;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		BE3806952EEDA48B008B541B /* DevNexus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DevNexus.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BE4800022F000001008B541B /* DevNexusTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DevNexusTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BE3806972EEDA48B008B541B /* DevNexus */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = DevNexus;
+			sourceTree = "<group>";
+		};
+		BE4800032F000001008B541B /* DevNexusTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = DevNexusTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -31,6 +47,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BE4800042F000001008B541B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -38,6 +61,7 @@
 			isa = PBXGroup;
 			children = (
 				BE3806972EEDA48B008B541B /* DevNexus */,
+				BE4800032F000001008B541B /* DevNexusTests */,
 				BE3806962EEDA48B008B541B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				BE3806952EEDA48B008B541B /* DevNexus.app */,
+				BE4800022F000001008B541B /* DevNexusTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -76,6 +101,29 @@
 			productReference = BE3806952EEDA48B008B541B /* DevNexus.app */;
 			productType = "com.apple.product-type.application";
 		};
+		BE4800052F000001008B541B /* DevNexusTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BE48000A2F000001008B541B /* Build configuration list for PBXNativeTarget "DevNexusTests" */;
+			buildPhases = (
+				BE4800062F000001008B541B /* Sources */,
+				BE4800042F000001008B541B /* Frameworks */,
+				BE4800072F000001008B541B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BE4800092F000001008B541B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BE4800032F000001008B541B /* DevNexusTests */,
+			);
+			name = DevNexusTests;
+			packageProductDependencies = (
+			);
+			productName = DevNexusTests;
+			productReference = BE4800022F000001008B541B /* DevNexusTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -88,6 +136,10 @@
 				TargetAttributes = {
 					BE3806942EEDA48B008B541B = {
 						CreatedOnToolsVersion = 26.2;
+					};
+					BE4800052F000001008B541B = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = BE3806942EEDA48B008B541B;
 					};
 				};
 			};
@@ -109,12 +161,20 @@
 			projectRoot = "";
 			targets = (
 				BE3806942EEDA48B008B541B /* DevNexus */,
+				BE4800052F000001008B541B /* DevNexusTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		BE3806932EEDA48B008B541B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BE4800072F000001008B541B /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -131,7 +191,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BE4800062F000001008B541B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BE4800092F000001008B541B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BE3806942EEDA48B008B541B /* DevNexus */;
+			targetProxy = BE4800012F000001008B541B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		BE38069E2EEDA48C008B541B /* Debug */ = {
@@ -261,7 +336,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = K7623V57QS;
+				DEVELOPMENT_TEAM = DS4FSRW7VS;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -293,7 +368,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = K7623V57QS;
+				DEVELOPMENT_TEAM = DS4FSRW7VS;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -316,6 +391,64 @@
 			};
 			name = Release;
 		};
+		BE48000B2F000001008B541B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = DS4FSRW7VS;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = studio.slippindylan.DevNexusTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DevNexus.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DevNexus";
+				TEST_TARGET_NAME = DevNexus;
+			};
+			name = Debug;
+		};
+		BE48000C2F000001008B541B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = DS4FSRW7VS;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = studio.slippindylan.DevNexusTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DevNexus.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DevNexus";
+				TEST_TARGET_NAME = DevNexus;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -333,6 +466,15 @@
 			buildConfigurations = (
 				BE3806A12EEDA48C008B541B /* Debug */,
 				BE3806A22EEDA48C008B541B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BE48000A2F000001008B541B /* Build configuration list for PBXNativeTarget "DevNexusTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BE48000B2F000001008B541B /* Debug */,
+				BE48000C2F000001008B541B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

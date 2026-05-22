@@ -7,70 +7,129 @@
 
 import Foundation
 import AppKit
+import CoreServices
+import Observation
 
-class BrowserDetectionService {
+protocol BrowserApplicationWorkspace {
+    func urlForApplication(withBundleIdentifier bundleIdentifier: String) -> URL?
+    func urlsForApplications(withBundleIdentifier bundleIdentifier: String) -> [URL]
+}
+
+extension NSWorkspace: BrowserApplicationWorkspace {}
+
+@MainActor
+@Observable
+final class BrowserDetectionService {
+    var installedBrowsers: [Browser] = []
+
+    nonisolated private static let browserResolutionURL = URL(string: "https://localhost")!
+
+    private let workspace: BrowserApplicationWorkspace
+    private let fileManager: FileManager
+    private let defaultBrowserBundleIDProvider: () -> String?
+
+    init(
+        workspace: BrowserApplicationWorkspace = NSWorkspace.shared,
+        fileManager: FileManager = .default,
+        defaultBrowserBundleIDProvider: @escaping () -> String? = BrowserDetectionService.resolveDefaultBrowserBundleID
+    ) {
+        self.workspace = workspace
+        self.fileManager = fileManager
+        self.defaultBrowserBundleIDProvider = defaultBrowserBundleIDProvider
+    }
+
+    func refresh() {
+        installedBrowsers = detectInstalledBrowsers()
+    }
+
+    func refreshIfNeeded() {
+        guard installedBrowsers.isEmpty else { return }
+        refresh()
+    }
+
+    nonisolated static func resolveDefaultBrowserBundleID() -> String? {
+        guard let appURL = NSWorkspace.shared.urlForApplication(toOpen: browserResolutionURL) else {
+            return nil
+        }
+
+        return Bundle(url: appURL)?.bundleIdentifier
+    }
 
     // 获取系统默认浏览器的 Bundle ID
     func getDefaultBrowserBundleId() -> String? {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
-        task.arguments = ["read", "com.apple.LaunchServices/com.apple.launchservices.secure", "LSHandlers"]
-
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-
-        do {
-            let terminationStatus = try ProcessUtils.runAndWaitForTerminationSync(task, errorDomain: "BrowserDetectionService")
-
-            guard terminationStatus == 0 else {
-                return nil
-            }
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8) {
-                // 查找 http 或 https 协议的处理程序
-                // 使用更精确的正则表达式，确保匹配的是 http/https 协议
-                let pattern = #"LSHandlerURLScheme\s*=\s*"?https?"?;[^}]*LSHandlerRoleAll\s*=\s*"([^"]+)";"#
-                if let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]),
-                   let match = regex.firstMatch(in: output, options: [], range: NSRange(output.startIndex..., in: output)),
-                   let bundleIdRange = Range(match.range(at: 1), in: output) {
-                    return String(output[bundleIdRange])
-                }
-            }
-        } catch {
-        }
-
-        return nil
+        defaultBrowserBundleIDProvider()
     }
 
     // 检测系统中安装的所有浏览器
     func detectInstalledBrowsers() -> [Browser] {
-        var browsers: [Browser] = []
         let defaultBundleId = getDefaultBrowserBundleId()
 
-        for browserType in BrowserType.allCases {
-            if let path = findBrowserPath(for: browserType) {
-                let isDefault = (browserType.bundleId == defaultBundleId)
-                let browser = Browser(type: browserType, path: path, isDefault: isDefault)
-                browsers.append(browser)
+        return BrowserType.detectionCandidates.compactMap { browserType in
+            guard let appURL = resolvedApplicationURL(for: browserType) else {
+                return nil
             }
+
+            return Browser(
+                type: browserType,
+                appURL: appURL,
+                isDefault: browserType.bundleId == defaultBundleId
+            )
         }
+        .sorted { lhs, rhs in
+            if lhs.isDefault != rhs.isDefault {
+                return lhs.isDefault && !rhs.isDefault
+            }
 
-        // 将默认浏览器排在第一位
-        browsers.sort { $0.isDefault && !$1.isDefault }
-
-        return browsers
+            return lhs.sortName.localizedStandardCompare(rhs.sortName) == .orderedAscending
+        }
     }
 
-    // 查找浏览器的实际路径
-    private func findBrowserPath(for browserType: BrowserType) -> String? {
-        for path in browserType.possiblePaths {
-            let expandedPath = NSString(string: path).expandingTildeInPath
-            if FileManager.default.fileExists(atPath: expandedPath) {
-                return expandedPath
+    private func resolvedApplicationURL(for browserType: BrowserType) -> URL? {
+        let preferredURL = workspace.urlForApplication(withBundleIdentifier: browserType.bundleId)
+        let discoveredURLs = workspace.urlsForApplications(withBundleIdentifier: browserType.bundleId)
+
+        for candidate in deduplicatedCandidateURLs(preferredURL: preferredURL, discoveredURLs: discoveredURLs) {
+            if isInstalledApplication(at: candidate) {
+                return candidate
             }
         }
+
         return nil
+    }
+
+    private func deduplicatedCandidateURLs(preferredURL: URL?, discoveredURLs: [URL]) -> [URL] {
+        var seenPaths: Set<String> = []
+        var candidates: [URL] = []
+
+        for rawURL in [preferredURL] + discoveredURLs {
+            guard let canonicalURL = canonicalApplicationURL(from: rawURL) else {
+                continue
+            }
+
+            let canonicalPath = canonicalURL.path
+            guard seenPaths.insert(canonicalPath).inserted else {
+                continue
+            }
+
+            candidates.append(canonicalURL)
+        }
+
+        return candidates
+    }
+
+    private func canonicalApplicationURL(from rawURL: URL?) -> URL? {
+        guard let rawURL else { return nil }
+
+        let canonicalURL = rawURL.resolvingSymlinksInPath().standardizedFileURL
+        guard canonicalURL.pathExtension.caseInsensitiveCompare("app") == .orderedSame else {
+            return nil
+        }
+
+        return canonicalURL
+    }
+
+    private func isInstalledApplication(at url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 }

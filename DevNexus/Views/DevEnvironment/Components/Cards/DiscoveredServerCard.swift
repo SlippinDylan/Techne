@@ -16,37 +16,32 @@ struct DiscoveredServerCard: View {
     let onKillServer: () -> Void
     let onKillInstance: (ChromeInstance) -> Void
 
+    @Environment(BrowserDetectionService.self) private var browserDetectionService
     @State private var showingBrowserSelector = false
-    @State private var browsers: [Browser] = []
     @State private var currentBranch: String?
-    private let browserDetectionService = BrowserDetectionService()
     private let browserLaunchService = BrowserLaunchService()
 
     var body: some View {
-        VStack(spacing: 0) {
-            serverInfoSection
+        AppPanelCard {
+            VStack(spacing: 0) {
+                serverInfoSection
 
-            if !relatedInstances.isEmpty {
-                Divider()
-                    .padding(.horizontal, AppConfig.UI.largePadding)
-                relatedInstancesList
+                if !relatedInstances.isEmpty {
+                    Divider()
+                        .padding(.horizontal, AppConfig.UI.largePadding)
+                    relatedInstancesList
+                }
             }
         }
-        .background(Color.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
         .sheet(isPresented: $showingBrowserSelector) {
             BrowserSelectorSheet(
-                url: "http://localhost:\(server.port)",
-                browsers: browsers,
+                browsers: browserDetectionService.installedBrowsers,
                 onSelect: { browser in
-                    launchInBrowser(browser: browser)
-                    showingBrowserSelector = false
+                    await launchInBrowser(browser: browser)
                 }
             )
         }
         .task {
-            // 同步加载浏览器列表
-            browsers = browserDetectionService.detectInstalledBrowsers()
             // 异步加载分支信息，避免阻塞主线程
             if !server.projectPath.isEmpty {
                 currentBranch = await Task.detached {
@@ -124,7 +119,7 @@ struct DiscoveredServerCard: View {
 
     private var serverAddressInfo: some View {
         HStack(spacing: AppConfig.UI.largePadding) {
-            Button(action: { showingBrowserSelector = true }) {
+            Button(action: presentBrowserSelector) {
                 HStack(spacing: AppConfig.UI.smallSpacing) {
                     Image(systemName: "network")
                         .font(.system(size: AppConfig.UI.smallFontSize))
@@ -202,24 +197,31 @@ struct DiscoveredServerCard: View {
         }
     }
 
-    private func launchInBrowser(browser: Browser) {
-        let url = "http://localhost:\(server.port)"
-        Task {
-            // 查找可用的调试端口
-            let debugPort = browserLaunchService.findAvailablePort() ?? AppConfig.Browser.defaultDebugPort
+    private func presentBrowserSelector() {
+        browserDetectionService.refresh()
+        showingBrowserSelector = true
+    }
 
-            let result = await browserLaunchService.launchBrowser(
-                browserPath: browser.path,
-                url: url,
-                debugPort: debugPort
-            )
+    private func launchInBrowser(
+        browser: Browser
+    ) async -> Result<Void, Error> {
+        let request = BrowserLaunchRequest.devServer(
+            browser: browser,
+            port: server.port,
+            projectPath: server.projectPath,
+            shouldOpenURL: true,
+            launchSource: "discovered-server"
+        )
 
-            switch result {
-            case .success(let pid):
-                LogService.shared.success("成功启动浏览器实例 (PID: \(pid))", category: "浏览器")
-            case .failure(let error):
-                LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
-            }
+        let result = await browserLaunchService.launchBrowser(request)
+
+        switch result {
+        case .success(let pid):
+            LogService.shared.success("成功启动浏览器实例 (PID: \(pid))", category: "浏览器")
+            return .success(())
+        case .failure(let error):
+            LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
+            return .failure(error)
         }
     }
 }
@@ -240,5 +242,6 @@ struct DiscoveredServerCard: View {
         onKillServer: {},
         onKillInstance: { _ in }
     )
+    .environment(BrowserDetectionService())
     .padding()
 }

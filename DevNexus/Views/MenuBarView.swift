@@ -35,30 +35,18 @@ struct MenuBarView: View {
 
             Divider()
 
-            // 基础支撑模块
-            Button("命令配置") {
-                openAndFocusWindow()
-                NotificationCenter.default.post(name: .switchToConfig, object: nil)
+            SettingsLink {
+                Text("设置…")
             }
-            .keyboardShortcut("4", modifiers: .command)
-
-            Button("设置") {
-                openAndFocusWindow()
-                NotificationCenter.default.post(name: .switchToSettings, object: nil)
-            }
-            .keyboardShortcut(",", modifiers: .command)
 
             Button("日志") {
-                openAndFocusWindow()
-                NotificationCenter.default.post(name: .switchToLog, object: nil)
+                openWindow(id: "logs")
             }
-            .keyboardShortcut("6", modifiers: .command)
 
             Divider()
 
-            Button("关于") {
-                openAndFocusWindow()
-                NotificationCenter.default.post(name: .switchToAbout, object: nil)
+            Button("关于 DevNexus") {
+                openWindow(id: "about")
             }
 
             Button("退出") {

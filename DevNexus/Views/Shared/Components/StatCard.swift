@@ -18,46 +18,32 @@ struct StatCard: View {
     var isClickable: Bool = false
     var action: (() -> Void)?
 
-    @State private var isHovered = false
-
     var body: some View {
-        HStack(spacing: AppConfig.UI.largeSpacing) {
-            Image(systemName: icon)
-                .font(.system(size: AppConfig.UI.iconSize))
-                .foregroundStyle(iconColor)
+        AppPanelCard {
+            HStack(spacing: AppConfig.UI.largeSpacing) {
+                Image(systemName: icon)
+                    .font(.system(size: AppConfig.UI.iconSize))
+                    .foregroundStyle(iconColor)
 
-            VStack(alignment: .leading, spacing: AppConfig.UI.smallSpacing) {
-                Text(label)
-                    .font(.system(size: AppConfig.UI.smallFontSize))
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: AppConfig.UI.smallSpacing) {
+                    Text(label)
+                        .font(.system(size: AppConfig.UI.smallFontSize))
+                        .foregroundStyle(.secondary)
 
-                Text(value)
-                    .font(.system(size: AppConfig.UI.mediumFontSize + 1, weight: .medium))
-                    .foregroundStyle(.primary)
+                    Text(value)
+                        .font(.system(size: AppConfig.UI.mediumFontSize + 1, weight: .medium))
+                        .foregroundStyle(.primary)
+                }
+
+                Spacer(minLength: 0)
             }
-
-            Spacer(minLength: 0)
+            .padding(AppConfig.UI.largePadding)
+            .frame(maxWidth: .infinity)
         }
-        .padding(AppConfig.UI.largePadding)
-        .frame(maxWidth: .infinity)
-        .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
         .contentShape(Rectangle())
-        .onHover { hovering in
-            if isClickable {
-                isHovered = hovering
-            }
-        }
         .onTapGesture {
             action?()
         }
-    }
-
-    private var cardBackground: Color {
-        if isHovered && isClickable {
-            return Color.cardBackground.opacity(0.8)
-        }
-        return Color.cardBackground
     }
 }
 

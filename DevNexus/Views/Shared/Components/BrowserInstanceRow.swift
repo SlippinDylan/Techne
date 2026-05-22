@@ -89,7 +89,8 @@ struct BrowserInstanceRow: View {
                 url: "http://localhost:3000",
                 debugPort: 9222,
                 commandLine: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                startTime: Date()
+                startTime: Date(),
+                launchTarget: nil
             ),
             onKill: {}
         )

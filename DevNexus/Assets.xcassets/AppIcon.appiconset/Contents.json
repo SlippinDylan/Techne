@@ -1,61 +1,61 @@
 {
   "images" : [
     {
-      "filename" : "DevNexus_16×16.png",
+      "filename" : "DevNexus_Icon_16.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "16x16"
     },
     {
-      "filename" : "DevNexus_32x32 1.png",
+      "filename" : "DevNexus_Icon_32 1.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "16x16"
     },
     {
-      "filename" : "DevNexus_32x32.png",
+      "filename" : "DevNexus_Icon_32.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "32x32"
     },
     {
-      "filename" : "DevNexus_64×64.png",
+      "filename" : "DevNexus_Icon_64.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "32x32"
     },
     {
-      "filename" : "DevNexus_512x512-2.png",
+      "filename" : "DevNexus_Icon_128.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "128x128"
     },
     {
-      "filename" : "DevNexus_512x512-1 1.png",
+      "filename" : "DevNexus_Icon_256 1.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "128x128"
     },
     {
-      "filename" : "DevNexus_512x512-1.png",
+      "filename" : "DevNexus_Icon_256.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "256x256"
     },
     {
-      "filename" : "DevNexus_512x512 1.png",
+      "filename" : "DevNexus_Icon_512 1.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "256x256"
     },
     {
-      "filename" : "DevNexus_512x512.png",
+      "filename" : "DevNexus_Icon_512.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "512x512"
     },
     {
-      "filename" : "DevNexus_512x512@2x.png",
+      "filename" : "DevNexus_Icon_1024.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "512x512"

@@ -33,16 +33,23 @@ final class ProjectService {
     private let processManager = ProcessManager()
     private let terminalHandler = TerminalOutputHandler()
     private let commandConfigService: CommandConfigService
+    private let managedBrowserInstanceService: ManagedBrowserInstanceService
 
     private var gitMonitors: [String: GitWorkspaceMonitor] = [:]
     private var cachedProcessKeywords: [String]?
+    private var devServerDetectionTriggeredProjectIDs: Set<UUID> = []
 
     // MARK: - Initialization
 
     @MainActor
-    init(commandConfigService: CommandConfigService) {
+    init(
+        commandConfigService: CommandConfigService,
+        managedBrowserInstanceService: ManagedBrowserInstanceService = ManagedBrowserInstanceService(),
+        persistenceService: PersistenceService<Project> = PersistenceService(filename: "projects.json")
+    ) {
         self.commandConfigService = commandConfigService
-        persistenceService = PersistenceService(filename: "projects.json")
+        self.managedBrowserInstanceService = managedBrowserInstanceService
+        self.persistenceService = persistenceService
         loadProjects()
     }
 
@@ -119,12 +126,21 @@ final class ProjectService {
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
             return .failure(.pathNotFound(path))
         }
+        if ProjectPersistenceMigration.isTemporaryProjectPath(path) {
+            return .failure(.invalidConfiguration("临时目录项目不会被持久化，请选择真实项目目录"))
+        }
         if projects.contains(where: { $0.path == path }) {
             return .failure(.projectAlreadyExists(path))
         }
         let projectName = URL(fileURLWithPath: path).lastPathComponent
-        let startCommand = (configId != nil ? commandConfigService.getConfig(by: configId!)?.startCommand : nil) ?? type.defaultStartCommand
-        let project = Project(name: projectName, path: path, type: type, startCommand: startCommand, commandConfigId: configId)
+        let commandConfig = configId.flatMap(commandConfigService.getConfig(by:))
+        let project = ProjectCommandSnapshotResolver.makeProject(
+            name: projectName,
+            path: path,
+            type: type,
+            commandConfigId: configId,
+            legacyConfig: commandConfig
+        )
         projects.append(project)
         saveProjects()
         
@@ -164,6 +180,21 @@ final class ProjectService {
         }
     }
 
+    @MainActor
+    func replaceProjectsForImport(_ projects: [Project]) {
+        applyPersistenceMigration(projects: projects)
+        synchronizeMonitorsWithProjects()
+        refreshAll()
+    }
+
+    @MainActor
+    func mergeImportedProjects(_ imported: [Project]) {
+        let mergedProjects = BackupService.mergeProjects(existing: projects, incoming: imported)
+        applyPersistenceMigration(projects: mergedProjects)
+        synchronizeMonitorsWithProjects()
+        refreshAll()
+    }
+
     // MARK: - Monitor Management
 
     private func setupMonitorsForAllProjects() {
@@ -172,6 +203,19 @@ final class ProjectService {
                 await setupMonitor(for: project)
             }
         }
+    }
+
+    @MainActor
+    private func synchronizeMonitorsWithProjects() {
+        let activePaths = Set(projects.map(\.path))
+        let stalePaths = gitMonitors.keys.filter { !activePaths.contains($0) }
+
+        for stalePath in stalePaths {
+            gitMonitors[stalePath]?.stop()
+            gitMonitors.removeValue(forKey: stalePath)
+        }
+
+        setupMonitorsForAllProjects()
     }
 
     private func setupMonitor(for project: Project) async {
@@ -199,7 +243,7 @@ final class ProjectService {
     func switchBranch(at path: String, to branch: String, autoStart: Bool = true) async -> Result<Void, ProjectServiceError> {
         guard let projectIndex = projects.firstIndex(where: { $0.path == path }) else { return .failure(.pathNotFound(path)) }
         let project = projects[projectIndex]
-        let cleanCommand = getCommandConfig(for: project)?.cleanCommand ?? AppConfig.Git.cacheCleanCommand
+        let cleanCommand = cleanCommand(for: project)
         
         let result = await operationsManager.switchBranch(
             at: path, 
@@ -229,12 +273,11 @@ final class ProjectService {
     @MainActor
     func startServer(for project: Project) -> Result<Void, ProjectServiceError> {
         let category = getCategoryName(for: project.type)
-        if let idx = projects.firstIndex(where: { $0.id == project.id }) {
-            projects[idx].transitionState = .starting
-        }
         switch project.type {
-        case .devServer: return startDevServerWithoutOutput(for: project, category: category)
-        case .miniApp: return startDevServerWithOutput(for: project, category: category)
+        case .devServer:
+            return startProjectThroughCoordinator(for: project, category: category)
+        case .miniApp:
+            return startProjectThroughCoordinator(for: project, category: category)
         }
     }
 
@@ -251,63 +294,69 @@ final class ProjectService {
     }
 
     @MainActor
-    private func startDevServerWithoutOutput(for project: Project, category: String) -> Result<Void, ProjectServiceError> {
-        let cleanCommand = getCommandConfig(for: project)?.cleanCommand ?? AppConfig.Git.cacheCleanCommand
-        let escapedPath = ShellEscape.escape(project.path)
-        let command = "source ~/.zshrc 2>/dev/null || source ~/.bash_profile 2>/dev/null || source ~/.bashrc 2>/dev/null\ncd \(escapedPath)\n\(cleanCommand)\n\(project.startCommand)"
-        Task {
-            do {
-                _ = try await ModernProcessExecutor.execute(
-                    command: command,
-                    in: URL(fileURLWithPath: project.path),
-                    onStart: { [weak self] pid in
-                        Task { @MainActor [weak self] in
-                            if let idx = self?.projects.firstIndex(where: { $0.id == project.id }) {
-                                self?.projects[idx].runningProcessPID = pid
-                                self?.projects[idx].isRunning = true
-                            }
-                            NotificationCenter.default.post(
-                                name: .devServerProcessStarted,
-                                object: nil,
-                                userInfo: ["pid": pid, "path": project.path]
-                            )
-                        }
-                    },
-                    onOutput: { output in
-                        let cleanOutput = self.terminalHandler.stripANSICodes(output)
-                        let keywords = ["error", "warn", "failed", "✓", "✗", "listening", "ready", "started"]
-                        let lowercased = cleanOutput.lowercased()
-                        let shouldLog = keywords.contains { lowercased.contains($0) }
-                        let logMessage = String(cleanOutput.prefix(500))
-                        Task { @MainActor [weak self] in
-                            if shouldLog {
-                                LogService.shared.info(logMessage, category: project.name)
-                            }
-                            if let idx = self?.projects.firstIndex(where: { $0.id == project.id }) {
-                                self?.projects[idx].terminalOutput += output
-                                if let terminalOutput = self?.projects[idx].terminalOutput {
-                                    self?.projects[idx].terminalOutput = self?.terminalHandler.limitOutput(terminalOutput) ?? terminalOutput
-                                }
-                            }
-                        }
-                    }
-                )
-            } catch {
-                await MainActor.run { [weak self] in
-                    if let idx = self?.projects.firstIndex(where: { $0.id == project.id }) {
-                        self?.projects[idx].transitionState = .idle
-                        self?.projects[idx].isRunning = false
-                        self?.projects[idx].runningProcessPID = nil
-                    }
+    private func startProjectThroughCoordinator(
+        for project: Project,
+        category: String
+    ) -> Result<Void, ProjectServiceError> {
+        let plan = ProjectStartupCoordinator.makePlan(
+            for: project,
+            fallbackCleanCommand: cleanCommand(for: project)
+        )
+        applyInitialStartupState(for: project.id, shouldInstallDependencies: plan.shouldInstallDependencies)
+
+        return processManager.startProject(
+            for: project,
+            category: category,
+            plan: plan,
+            onStart: { [weak self] pid in
+                Self.performStartupUpdate(on: self) { service in
+                    service.handleProjectProcessStart(for: project, pid: pid)
                 }
-                AppLogError("执行异常：\(error.localizedDescription)", category: category)
+            },
+            onEvent: { [weak self] event in
+                Self.performStartupUpdate(on: self) { service in
+                    service.handleProjectStartupEvent(event, for: project)
+                }
+            },
+            onCompletion: { [weak self] completion in
+                Self.performStartupUpdate(on: self) { service in
+                    service.handleProjectStartupCompletion(completion, for: project.id)
+                }
+            }
+        ) { [weak self] projectID, output in
+            Self.performStartupUpdate(on: self) { service in
+                service.appendTerminalOutput(output, for: projectID)
+                if ProjectStartupCoordinator.containsStartPhaseMessage(output) {
+                    service.handleProjectStartupEvent(.phaseStarted(.start), for: project)
+                }
             }
         }
-        return .success(())
+    }
+
+    private nonisolated static func performStartupUpdate(
+        on service: ProjectService?,
+        _ update: @escaping @MainActor (ProjectService) -> Void
+    ) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                guard let service else { return }
+                update(service)
+            }
+            return
+        }
+
+        DispatchQueue.main.sync {
+            MainActor.assumeIsolated {
+                guard let service else { return }
+                update(service)
+            }
+        }
     }
 
     @MainActor
     private func stopDevServerWithoutOutput(for project: Project, category: String, cleanCache: Bool) async -> Result<Void, ProjectServiceError> {
+        appendSystemTerminalMessage("正在停止开发服务...", for: project.id)
+
         let result: Result<Void, ProjectServiceError>
         if let pid = project.runningProcessPID {
             result = await processService.stopProcess(pid: pid)
@@ -316,6 +365,8 @@ final class ProjectService {
         }
         
         if case .success = result {
+            appendSystemTerminalMessage("开发服务已停止", for: project.id)
+            await closeManagedBrowserInstances(for: project, category: category)
             if let idx = self.projects.firstIndex(where: { $0.id == project.id }) {
                 self.projects[idx].runningProcessPID = nil
                 self.projects[idx].isRunning = false
@@ -325,35 +376,64 @@ final class ProjectService {
             if cleanCache { cleanCacheAfterStop(for: project) }
         } else if let idx = self.projects.firstIndex(where: { $0.id == project.id }) {
             self.projects[idx].transitionState = .idle
+            if case .failure(let error) = result {
+                appendSystemTerminalMessage("开发服务停止失败: \(error.localizedDescription)", for: project.id)
+            }
         }
         return result
     }
 
     @MainActor
-    private func startDevServerWithOutput(for project: Project, category: String) -> Result<Void, ProjectServiceError> {
-        let cleanCommand = getCommandConfig(for: project)?.cleanCommand ?? AppConfig.Git.cacheCleanCommand
-        return processManager.startDevServer(for: project, category: category, cleanCommand: cleanCommand, onStart: { [weak self] pid in
-            Task { @MainActor [weak self] in
-                if let idx = self?.projects.firstIndex(where: { $0.id == project.id }) {
-                    self?.projects[idx].runningProcessPID = pid
-                    self?.projects[idx].isRunning = true
-                    self?.projects[idx].transitionState = .idle
-                }
+    private func closeManagedBrowserInstances(for project: Project, category: String) async {
+        do {
+            let managedBrowserInstanceService = self.managedBrowserInstanceService
+            let result = try await Task.detached(priority: .utility) {
+                try await managedBrowserInstanceService.terminateManagedInstances(forProjectPath: project.path)
+            }.value
+
+            if result.matchedCount > 0 {
+                appendSystemTerminalMessage("检测到 \(result.matchedCount) 个受管浏览器实例", for: project.id)
+                logService.info(
+                    "停止项目时回收 \(result.matchedCount) 个受管浏览器实例",
+                    category: category
+                )
             }
-        }) { [weak self] pid, output in 
-            Task { @MainActor [weak self] in 
-                guard let self = self else { return }
-                if let idx = self.projects.firstIndex(where: { $0.id == pid }) { 
-                    self.projects[idx].terminalOutput += output
-                    self.projects[idx].terminalOutput = self.terminalHandler.limitOutput(self.projects[idx].terminalOutput) 
-                } 
-            } 
+
+            if result.terminatedPIDs.isEmpty == false {
+                appendSystemTerminalMessage(
+                    "已关闭浏览器实例 PID: \(result.terminatedPIDs.map(String.init).joined(separator: ", "))",
+                    for: project.id
+                )
+                logService.success(
+                    "已关闭浏览器实例 PID: \(result.terminatedPIDs.map(String.init).joined(separator: ", "))",
+                    category: category
+                )
+            }
+
+            if result.failedPIDs.isEmpty == false {
+                appendSystemTerminalMessage(
+                    "以下浏览器实例未能关闭: \(result.failedPIDs.map(String.init).joined(separator: ", "))",
+                    for: project.id
+                )
+                logService.warning(
+                    "以下浏览器实例未能关闭: \(result.failedPIDs.map(String.init).joined(separator: ", "))",
+                    category: category
+                )
+            }
+        } catch {
+            appendSystemTerminalMessage("回收受管浏览器实例失败: \(error.localizedDescription)", for: project.id)
+            logService.warning(
+                "回收受管浏览器实例失败: \(error.localizedDescription)",
+                category: category
+            )
         }
+
+        NotificationCenter.default.post(name: .browserInstancesChanged, object: nil, userInfo: ["projectPath": project.path])
     }
 
     @MainActor
     private func stopDevServerWithOutput(for project: Project, category: String) async -> Result<Void, ProjectServiceError> {
-        let cleanCommand = getCommandConfig(for: project)?.cleanCommand ?? AppConfig.Git.cacheCleanCommand
+        let cleanCommand = cleanCommand(for: project)
         let result = await processManager.stopDevServer(for: project, category: category, cleanCommand: cleanCommand) { [weak self] pid, output in 
             Task { @MainActor [weak self] in 
                 guard let self = self else { return }
@@ -375,6 +455,104 @@ final class ProjectService {
     }
 
     @MainActor
+    private func applyInitialStartupState(for projectID: UUID, shouldInstallDependencies: Bool) {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        devServerDetectionTriggeredProjectIDs.remove(projectID)
+        projects[index].transitionState = shouldInstallDependencies ? .installing : .starting
+    }
+
+    @MainActor
+    private func handleProjectProcessStart(
+        for project: Project,
+        pid: Int32
+    ) {
+        guard let index = projects.firstIndex(where: { $0.id == project.id }) else { return }
+
+        projects[index].runningProcessPID = pid
+        projects[index].isRunning = true
+    }
+
+    @MainActor
+    private func handleProjectStartupEvent(_ event: ProjectStartupEvent, for project: Project) {
+        guard let index = projects.firstIndex(where: { $0.id == project.id }) else { return }
+
+        switch event {
+        case .phaseStarted(.install):
+            projects[index].transitionState = .installing
+        case .phaseStarted(.clean):
+            break
+        case .phaseStarted(.start):
+            switch project.type {
+            case .devServer:
+                projects[index].transitionState = .starting
+            case .miniApp:
+                projects[index].transitionState = .idle
+            }
+        case .startCommandStarted(let pid):
+            projects[index].runningProcessPID = pid
+            projects[index].isRunning = true
+            postDevServerDetectionIfNeeded(for: project.id, path: project.path, pid: pid)
+        }
+    }
+
+    @MainActor
+    private func postDevServerDetectionIfNeeded(for projectID: UUID, path: String, pid: Int32) {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        guard projects[index].type == .devServer else { return }
+        guard devServerDetectionTriggeredProjectIDs.contains(projectID) == false else { return }
+
+        devServerDetectionTriggeredProjectIDs.insert(projectID)
+        NotificationCenter.default.post(
+            name: .devServerProcessStarted,
+            object: nil,
+            userInfo: ["pid": pid, "path": path]
+        )
+    }
+
+    @MainActor
+    private func clearDevServerDetectionTrigger(for projectID: UUID) {
+        devServerDetectionTriggeredProjectIDs.remove(projectID)
+    }
+
+    @MainActor
+    private func resetProjectStartupState(at index: Int) {
+        let projectID = projects[index].id
+        clearDevServerDetectionTrigger(for: projectID)
+        projects[index].runningProcessPID = nil
+        projects[index].isRunning = false
+        projects[index].transitionState = .idle
+    }
+
+    @MainActor
+    private func appendTerminalOutput(_ output: String, for projectID: UUID) {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+
+        projects[index].terminalOutput += output
+        projects[index].terminalOutput = terminalHandler.limitOutput(projects[index].terminalOutput)
+    }
+
+    @MainActor
+    private func appendSystemTerminalMessage(_ message: String, for projectID: UUID) {
+        appendTerminalOutput("[系统] \(message)\n", for: projectID)
+    }
+
+    @MainActor
+    private func handleProjectStartupCompletion(_ completion: ProjectStartupCompletion, for projectID: UUID) {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+
+        switch completion {
+        case .exited(let exitCode):
+            if exitCode != 0 || projects[index].transitionState != .idle {
+                resetProjectStartupState(at: index)
+            } else {
+                clearDevServerDetectionTrigger(for: projectID)
+            }
+        case .executionFailed:
+            resetProjectStartupState(at: index)
+        }
+    }
+
+    @MainActor
     func reconcileDetectedDevServers(_ servers: [DevServer]) {
         let normalizedServers = servers.map { server in
             (server: server, normalizedPath: normalizedPath(for: server.projectPath))
@@ -391,25 +569,39 @@ final class ProjectService {
                 if projects[index].transitionState == .starting {
                     projects[index].transitionState = .idle
                 }
+                clearDevServerDetectionTrigger(for: projects[index].id)
             } else if projects[index].transitionState == .stopping {
                 projects[index].runningProcessPID = nil
                 projects[index].isRunning = false
                 projects[index].transitionState = .idle
+                clearDevServerDetectionTrigger(for: projects[index].id)
             }
         }
-    }
-
-    private func getCommandConfig(for project: Project) -> CommandConfig? {
-        guard let id = project.commandConfigId else { return nil }
-        return commandConfigService.getConfig(by: id)
     }
 
     @MainActor
     private func cleanCacheAfterStop(for project: Project) {
         Task {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
-            let cmd = getCommandConfig(for: project)?.cleanCommand ?? AppConfig.Git.cacheCleanCommand
-            _ = GitService.shared.cleanCache(at: project.path, command: cmd)
+            let cmd = cleanCommand(for: project)
+            if cmd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                await MainActor.run {
+                    self.appendSystemTerminalMessage("正在执行缓存清理...", for: project.id)
+                }
+            }
+
+            let result = GitService.shared.cleanCache(at: project.path, command: cmd)
+
+            await MainActor.run {
+                switch result {
+                case .success:
+                    if cmd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                        self.appendSystemTerminalMessage("缓存清理完成", for: project.id)
+                    }
+                case .failure(let error):
+                    self.appendSystemTerminalMessage("缓存清理失败: \(error.localizedDescription)", for: project.id)
+                }
+            }
         }
     }
 
@@ -424,15 +616,34 @@ final class ProjectService {
 
     @MainActor
     private func loadProjects() {
-        projects = persistenceService.load()
-        setupMonitorsForAllProjects()
+        let loadedProjects = persistenceService.load()
+        applyPersistenceMigration(projects: loadedProjects)
+        synchronizeMonitorsWithProjects()
         refreshAll()
     }
 
     @MainActor
     private func saveProjects() { _ = persistenceService.save(projects) }
 
+    @MainActor
+    private func applyPersistenceMigration(projects: [Project]) {
+        let result = ProjectPersistenceMigration.migrate(
+            projects: projects,
+            commandConfigs: commandConfigService.configs
+        )
+        self.projects = result.projects
+        commandConfigService.applyPersistenceMigration(result.commandConfigs)
+        if result.didChange {
+            saveProjects()
+        }
+    }
+
     private func normalizedPath(for path: String) -> String {
         URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+    }
+
+    private func cleanCommand(for project: Project) -> String {
+        let trimmedCommand = project.cleanCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedCommand.isEmpty ? AppConfig.Git.cacheCleanCommand : trimmedCommand
     }
 }

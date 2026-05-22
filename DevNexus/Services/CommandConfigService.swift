@@ -16,8 +16,10 @@ final class CommandConfigService {
 
     private let persistenceService: PersistenceService<CommandConfig>
 
-    init() {
-        persistenceService = PersistenceService(filename: "commandconfigs.json")
+    init(
+        persistenceService: PersistenceService<CommandConfig> = PersistenceService(filename: "commandconfigs.json")
+    ) {
+        self.persistenceService = persistenceService
         loadConfigs()
     }
 
@@ -114,16 +116,29 @@ final class CommandConfigService {
         configs.first { $0.id == id }
     }
 
+    func replaceConfigsForImport(_ configs: [CommandConfig]) {
+        self.configs = configs
+        saveConfigs()
+    }
+
+    func mergeImportedConfigs(_ configs: [CommandConfig]) {
+        self.configs = BackupService.mergeConfigs(existing: self.configs, incoming: configs)
+        saveConfigs()
+    }
+
+    func applyPersistenceMigration(_ configs: [CommandConfig]) {
+        guard self.configs != configs else {
+            return
+        }
+
+        self.configs = configs
+        saveConfigs()
+    }
+
     // MARK: - Persistence
 
     private func loadConfigs() {
         configs = persistenceService.load()
-
-        // 如果没有配置，加载默认配置
-        if configs.isEmpty {
-            configs = CommandConfig.defaultConfigs
-            saveConfigs()
-        }
     }
 
     private func saveConfigs() {
