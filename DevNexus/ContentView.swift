@@ -23,70 +23,36 @@ struct ContentView: View {
     // LogService 是单例，直接引用
     private var logService: LogService { LogService.shared }
 
-    enum ContentType {
-        case sidebarItem(SidebarItem)
-        case settings
-        case log
-        case about
-    }
-
-    @State private var selectedContent: ContentType = .sidebarItem(.devEnvironment)
-
     var body: some View {
         NavigationSplitView {
             // 侧边栏
-            VStack(spacing: 0) {
-                List(SidebarItem.allCases, selection: $selectedItem) { item in
-                    Label(item.rawValue, systemImage: item.icon)
-                        .tag(item)
-                        .padding(.vertical, 4)
-                }
-                .listStyle(.sidebar)
-
-                Divider()
-
-                // 底部按钮区域
-                VStack(spacing: 0) {
-                    bottomSidebarButton(title: "设置", icon: "gearshape", type: .settings)
-                    bottomSidebarButton(title: "日志", icon: "doc.text", type: .log)
-                    bottomSidebarButton(title: "关于", icon: "info.circle", type: .about)
-                }
+            List(SidebarItem.allCases, selection: $selectedItem) { item in
+                Label(item.rawValue, systemImage: item.icon)
+                    .tag(item)
+                    .padding(.vertical, 4)
             }
+            .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
             // 详情区域
             Group {
-                switch selectedContent {
-                case .sidebarItem(let item):
-                    switch item {
-                    case .devEnvironment:
-                        ProjectListView(projectType: .devServer)
-                            .environment(devServerDetectionService)
-                            .environment(chromeDetectionService)
-                            .environment(browserDetectionService)
-                            .environment(projectService)
-                            .environment(logService)
-                    case .miniApp:
-                        ProjectListView(projectType: .miniApp)
-                            .environment(projectService)
-                            .environment(devServerDetectionService)
-                            .environment(chromeDetectionService)
-                            .environment(browserDetectionService)
-                            .environment(logService)
-                    case .adbDeploy:
-                        ADBDeployView(viewModel: adbDeployViewModel)
-                    }
-                case .settings:
-                    MainSettingsView(
-                        projectService: projectService,
-                        commandConfigService: commandConfigService
-                    )
-                        .environment(launchSettings)
-                case .log:
-                    LogView()
+                switch selectedItem ?? .devEnvironment {
+                case .devEnvironment:
+                    ProjectListView(projectType: .devServer)
+                        .environment(devServerDetectionService)
+                        .environment(chromeDetectionService)
+                        .environment(browserDetectionService)
+                        .environment(projectService)
                         .environment(logService)
-                case .about:
-                    AboutView()
+                case .miniApp:
+                    ProjectListView(projectType: .miniApp)
+                        .environment(projectService)
+                        .environment(devServerDetectionService)
+                        .environment(chromeDetectionService)
+                        .environment(browserDetectionService)
+                        .environment(logService)
+                case .adbDeploy:
+                    ADBDeployView(viewModel: adbDeployViewModel)
                 }
             }
             .navigationTitle(navigationTitle)
@@ -104,43 +70,41 @@ struct ContentView: View {
             }
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
-                    if case .sidebarItem(let item) = selectedContent {
-                        if item == .devEnvironment || item == .miniApp {
-                            HStack(spacing: 12) {
-                                // Task 3: 恢复刷新按钮
-                                if projectService.isLoading {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                        .frame(width: 28, height: 28)
-                                } else {
-                                    Button(action: { refreshCurrentSidebarItem(item) }) {
-                                        Image(systemName: "arrow.clockwise")
-                                    }
-                                    .adaptiveGlassButtonStyle()
-                                    .help("刷新状态 (Cmd+R)")
-                                    .keyboardShortcut("r", modifiers: .command)
-                                }
-
-                                if item == .devEnvironment {
-                                    Button(action: presentManualBrowserLaunch) {
-                                        Image(systemName: "globe.badge.chevron.backward")
-                                    }
-                                    .adaptiveGlassButtonStyle()
-                                    .help("新建浏览器实例")
-                                }
-
-                                Button(action: {
-                                    if item == .devEnvironment {
-                                        NotificationCenter.default.post(name: .addDevProject, object: nil)
-                                    } else if item == .miniApp {
-                                        NotificationCenter.default.post(name: .addMiniAppProject, object: nil)
-                                    }
-                                }) {
-                                    Image(systemName: "plus")
+                    let item = selectedItem ?? .devEnvironment
+                    if item == .devEnvironment || item == .miniApp {
+                        HStack(spacing: 12) {
+                            if projectService.isLoading {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .frame(width: 28, height: 28)
+                            } else {
+                                Button(action: { refreshCurrentSidebarItem(item) }) {
+                                    Image(systemName: "arrow.clockwise")
                                 }
                                 .adaptiveGlassButtonStyle()
-                                .help(item == .devEnvironment ? "添加服务" : "添加项目")
+                                .help("刷新状态 (Cmd+R)")
+                                .keyboardShortcut("r", modifiers: .command)
                             }
+
+                            if item == .devEnvironment {
+                                Button(action: presentManualBrowserLaunch) {
+                                    Image(systemName: "globe.badge.chevron.backward")
+                                }
+                                .adaptiveGlassButtonStyle()
+                                .help("新建浏览器实例")
+                            }
+
+                            Button(action: {
+                                if item == .devEnvironment {
+                                    NotificationCenter.default.post(name: .addDevProject, object: nil)
+                                } else if item == .miniApp {
+                                    NotificationCenter.default.post(name: .addMiniAppProject, object: nil)
+                                }
+                            }) {
+                                Image(systemName: "plus")
+                            }
+                            .adaptiveGlassButtonStyle()
+                            .help(item == .devEnvironment ? "添加服务" : "添加项目")
                         }
                     }
                 }
@@ -149,54 +113,21 @@ struct ContentView: View {
         .navigationSplitViewStyle(.prominentDetail)
         .frame(minWidth: 1080, minHeight: 720)
         .onChange(of: selectedItem) { oldValue, newValue in
-            if let newValue = newValue {
-                selectedContent = .sidebarItem(newValue)
+            if newValue == nil {
+                selectedItem = oldValue ?? .devEnvironment
             }
         }
         // 通知监听：同步 UI 状态
         .onReceive(NotificationCenter.default.publisher(for: .switchToDevEnvironment)) { _ in switchTo(.devEnvironment) }
         .onReceive(NotificationCenter.default.publisher(for: .switchToMiniApp)) { _ in switchTo(.miniApp) }
         .onReceive(NotificationCenter.default.publisher(for: .switchToADBDeploy)) { _ in switchTo(.adbDeploy) }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToSettings)) { _ in
-            WindowManager.showMainWindow()
-            selectedItem = nil
-            selectedContent = .settings
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToLog)) { _ in
-            WindowManager.showMainWindow()
-            selectedItem = nil
-            selectedContent = .log
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToAbout)) { _ in
-            WindowManager.showMainWindow()
-            selectedItem = nil
-            selectedContent = .about
-        }
     }
 
     // MARK: - Helper Views & Methods
 
-    private func bottomSidebarButton(title: String, icon: String, type: ContentType) -> some View {
-        Button(action: {
-            selectedItem = nil
-            selectedContent = type
-        }) {
-            HStack {
-                Image(systemName: icon)
-                Text(title)
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
     private func switchTo(_ item: SidebarItem) {
         WindowManager.showMainWindow()
         selectedItem = item
-        selectedContent = .sidebarItem(item)
     }
 
     private func refreshCurrentSidebarItem(_ item: SidebarItem) {
@@ -215,35 +146,11 @@ struct ContentView: View {
     }
 
     private var navigationTitle: String {
-        switch selectedContent {
-        case .sidebarItem(let item): return item.title
-        case .settings: return "设置"
-        case .log: return "操作日志"
-        case .about: return "关于"
-        }
+        (selectedItem ?? .devEnvironment).title
     }
 
     private var navigationSubtitle: String {
-        switch selectedContent {
-        case .sidebarItem(let item): return item.subtitle
-        case .settings: return "管理应用的启动行为与全局偏好"
-        case .log: return "查看应用中的所有操作记录"
-        case .about: return "DevNexus 版本 1.0.0"
-        }
-    }
-}
-
-// MARK: - Main Settings View
-
-struct MainSettingsView: View {
-    let projectService: ProjectService
-    let commandConfigService: CommandConfigService
-
-    var body: some View {
-        SettingsContentView(
-            projectService: projectService,
-            commandConfigService: commandConfigService
-        )
+        (selectedItem ?? .devEnvironment).subtitle
     }
 }
 

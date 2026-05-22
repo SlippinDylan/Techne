@@ -47,10 +47,27 @@ struct DevNexusApp: App {
                 .environment(launchSettings)
         }
 
+        Window("操作日志", id: "logs") {
+            LogView()
+                .environment(LogService.shared)
+                .frame(minWidth: 920, minHeight: 620)
+        }
+        .defaultSize(width: 1040, height: 720)
+
+        Window("关于 DevNexus", id: "about") {
+            AboutView()
+                .frame(minWidth: 520, minHeight: 420)
+        }
+        .defaultSize(width: 560, height: 460)
+        .windowResizability(.contentSize)
+
         // 菜单栏
         MenuBarExtra("DevNexus", systemImage: "macbook.and.iphone") {
             MenuBarView()
                 .environment(launchSettings)
+        }
+        .commands {
+            DevNexusAppCommands()
         }
     }
 }
@@ -67,5 +84,26 @@ struct SettingsView: View {
         )
         .frame(width: 560, height: 320)
         .navigationTitle("设置")
+    }
+}
+
+struct DevNexusAppCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            Button("关于 DevNexus") {
+                openWindow(id: "about")
+            }
+        }
+
+        CommandGroup(after: .windowArrangement) {
+            Divider()
+
+            Button("操作日志") {
+                openWindow(id: "logs")
+            }
+            .keyboardShortcut("l", modifiers: [.command, .shift])
+        }
     }
 }

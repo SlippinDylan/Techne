@@ -212,10 +212,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 extension Notification.Name {
     static let switchToDevEnvironment = Notification.Name("switchToDevEnvironment")
     static let switchToMiniApp = Notification.Name("switchToMiniApp")
-    static let switchToLog = Notification.Name("switchToLog")
-    static let switchToAbout = Notification.Name("switchToAbout")
     static let addDevProject = Notification.Name("addDevProject")
     static let addMiniAppProject = Notification.Name("addMiniAppProject")
     static let switchToADBDeploy = Notification.Name("switchToADBDeploy")
-    static let switchToSettings = Notification.Name("switchToSettings")
 }
