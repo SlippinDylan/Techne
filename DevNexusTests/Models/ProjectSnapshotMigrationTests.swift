@@ -4,6 +4,32 @@ import Testing
 
 struct ProjectSnapshotMigrationTests {
     @Test
+    func persistenceRootApplicationSupportMatchesLegacyLocation() {
+        let root = PersistenceRoot.applicationSupport()
+        let expectedPath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "studio.slippindylan.DevNexus", isDirectory: true)
+            .path
+
+        #expect(root.directoryURL.path == expectedPath)
+    }
+
+    @Test
+    func persistenceServiceSupportsExplicitPersistenceRoot() throws {
+        let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: isolatedPersistenceRoot)
+        }
+
+        let persistence = PersistenceService<CommandConfig>(
+            filename: "commandconfigs.json",
+            root: .custom(isolatedPersistenceRoot)
+        )
+
+        #expect(persistence.storageURL.deletingLastPathComponent().path == isolatedPersistenceRoot.path)
+    }
+
+    @Test
     @MainActor
     func commandConfigServiceLeavesEmptyPersistenceEmpty() throws {
         let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -14,7 +40,7 @@ struct ProjectSnapshotMigrationTests {
 
         let persistence = PersistenceService<CommandConfig>(
             filename: "commandconfigs.json",
-            directoryURL: isolatedPersistenceRoot
+            root: .custom(isolatedPersistenceRoot)
         )
 
         let service = CommandConfigService(persistenceService: persistence)
@@ -88,12 +114,12 @@ struct ProjectSnapshotMigrationTests {
 
         let projectPersistence = PersistenceService<Project>(
             filename: "projects.json",
-            directoryURL: isolatedPersistenceRoot
+            root: .custom(isolatedPersistenceRoot)
         )
         let configService = CommandConfigService(
             persistenceService: PersistenceService<CommandConfig>(
                 filename: "commandconfigs.json",
-                directoryURL: isolatedPersistenceRoot
+                root: .custom(isolatedPersistenceRoot)
             )
         )
 
@@ -214,11 +240,11 @@ struct ProjectSnapshotMigrationTests {
         )
         let configPersistence = PersistenceService<CommandConfig>(
             filename: "commandconfigs.json",
-            directoryURL: isolatedPersistenceRoot
+            root: .custom(isolatedPersistenceRoot)
         )
         let projectPersistence = PersistenceService<Project>(
             filename: "projects.json",
-            directoryURL: isolatedPersistenceRoot
+            root: .custom(isolatedPersistenceRoot)
         )
         _ = configPersistence.save([tempConfig, keptConfig])
         _ = projectPersistence.save([
@@ -293,7 +319,7 @@ struct ProjectSnapshotMigrationTests {
 
         let projectPersistence = PersistenceService<Project>(
             filename: "projects.json",
-            directoryURL: isolatedPersistenceRoot
+            root: .custom(isolatedPersistenceRoot)
         )
         _ = projectPersistence.save([
             Project(
@@ -316,7 +342,7 @@ struct ProjectSnapshotMigrationTests {
             commandConfigService: CommandConfigService(
                 persistenceService: PersistenceService<CommandConfig>(
                     filename: "commandconfigs.json",
-                    directoryURL: isolatedPersistenceRoot
+                    root: .custom(isolatedPersistenceRoot)
                 )
             ),
             persistenceService: projectPersistence

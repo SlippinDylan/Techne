@@ -250,7 +250,7 @@ struct ProjectServiceStartupRecoveryTests {
         let configService = CommandConfigService(
             persistenceService: PersistenceService<CommandConfig>(
                 filename: "commandconfigs.json",
-                directoryURL: persistenceRoot
+                root: .custom(persistenceRoot)
             )
         )
 
@@ -259,7 +259,7 @@ struct ProjectServiceStartupRecoveryTests {
             managedBrowserInstanceService: managedBrowserInstanceService,
             persistenceService: PersistenceService<Project>(
                 filename: "projects.json",
-                directoryURL: persistenceRoot
+                root: .custom(persistenceRoot)
             )
         )
     }

@@ -7,25 +7,36 @@
 
 import Foundation
 
+/// 持久化根目录策略。
+/// 默认使用 ~/Library/Application Support/<bundle-id>/，测试场景可显式注入隔离目录。
+struct PersistenceRoot: Sendable {
+    let directoryURL: URL
+
+    static func applicationSupport(
+        fileManager: FileManager = .default,
+        bundleIdentifier: String? = Bundle.main.bundleIdentifier,
+        fallbackBundleIdentifier: String = "studio.slippindylan.DevNexus"
+    ) -> PersistenceRoot {
+        let resolvedBundleIdentifier = bundleIdentifier ?? fallbackBundleIdentifier
+        let directoryURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(resolvedBundleIdentifier, isDirectory: true)
+        return PersistenceRoot(directoryURL: directoryURL)
+    }
+
+    static func custom(_ directoryURL: URL) -> PersistenceRoot {
+        PersistenceRoot(directoryURL: directoryURL)
+    }
+}
+
 /// 通用持久化服务
 /// 数据存放在 ~/Library/Application Support/<bundle-id>/
-final class PersistenceService<T: Codable & Sendable>: Sendable {
+struct PersistenceService<T: Codable & Sendable>: Sendable {
     let storageURL: URL
 
-    init(filename: String, directoryURL: URL? = nil) {
+    init(filename: String, root: PersistenceRoot = .applicationSupport()) {
         let fileManager = FileManager.default
-        let baseDirectoryURL: URL
-
-        if let directoryURL {
-            baseDirectoryURL = directoryURL
-        } else {
-            let bundleID = Bundle.main.bundleIdentifier ?? "studio.slippindylan.DevNexus"
-            baseDirectoryURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent(bundleID, isDirectory: true)
-        }
-
-        try? fileManager.createDirectory(at: baseDirectoryURL, withIntermediateDirectories: true)
-        self.storageURL = baseDirectoryURL.appendingPathComponent(filename)
+        try? fileManager.createDirectory(at: root.directoryURL, withIntermediateDirectories: true)
+        self.storageURL = root.directoryURL.appendingPathComponent(filename)
     }
 
     func load() -> [T] {

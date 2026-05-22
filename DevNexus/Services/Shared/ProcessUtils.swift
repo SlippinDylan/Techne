@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import os
 
 enum ProcessUtils {
     nonisolated static func runAndWaitForTerminationSync(_ process: Process, errorDomain: String = "ProcessUtils") throws -> Int32 {
@@ -42,24 +43,23 @@ enum ProcessUtils {
     }
 }
 
-private final class LockedResultBox<T>: @unchecked Sendable {
+private struct LockedResultBox<T: Sendable>: Sendable {
     private let errorDomain: String
-    private let lock = NSLock()
-    nonisolated(unsafe) private var storage: Result<T, Error>?
+    private let storage = OSAllocatedUnfairLock<Result<T, Error>?>(initialState: nil)
 
     nonisolated init(errorDomain: String) {
         self.errorDomain = errorDomain
     }
 
     nonisolated func store(_ result: Result<T, Error>) {
-        lock.lock()
-        storage = result
-        lock.unlock()
+        storage.withLock { state in
+            state = result
+        }
     }
 
     nonisolated var value: Result<T, Error> {
-        lock.lock()
-        defer { lock.unlock() }
-        return storage ?? .failure(NSError(domain: errorDomain, code: -1, userInfo: [NSLocalizedDescriptionKey: "进程等待结果缺失"]))
+        storage.withLock { state in
+            state ?? .failure(NSError(domain: errorDomain, code: -1, userInfo: [NSLocalizedDescriptionKey: "进程等待结果缺失"]))
+        }
     }
 }
