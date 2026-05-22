@@ -21,17 +21,17 @@ private struct AppScrollViewConfigurator: NSViewRepresentable {
     let role: AppScrollSurfaceRole
 
     func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        DispatchQueue.main.async {
-            applyConfiguration(from: view)
-        }
+        let view = AppScrollConfigurationHostView()
+        view.applyConfiguration = applyConfiguration(from:)
+        applyConfiguration(from: view)
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            applyConfiguration(from: nsView)
+        if let hostView = nsView as? AppScrollConfigurationHostView {
+            hostView.applyConfiguration = applyConfiguration(from:)
         }
+        applyConfiguration(from: nsView)
     }
 
     private func applyConfiguration(from hostView: NSView) {
@@ -51,5 +51,24 @@ private struct AppScrollViewConfigurator: NSViewRepresentable {
         scrollView.autohidesScrollers = configuration.autohidesScrollers
         scrollView.verticalScroller?.controlSize = configuration.controlSize
         scrollView.horizontalScroller?.controlSize = configuration.controlSize
+    }
+}
+
+private final class AppScrollConfigurationHostView: NSView {
+    var applyConfiguration: ((NSView) -> Void)?
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        applyConfiguration?(self)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        applyConfiguration?(self)
+    }
+
+    override func layout() {
+        super.layout()
+        applyConfiguration?(self)
     }
 }
