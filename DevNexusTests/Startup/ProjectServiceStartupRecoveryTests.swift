@@ -217,6 +217,40 @@ struct ProjectServiceStartupRecoveryTests {
 
     @Test
     @MainActor
+    func nestedDetectedServerClearsStartingStateForManagedRootProject() {
+        let service = makeProjectService(
+            persistenceRoot: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        )
+
+        var project = Project(
+            name: "Portlens",
+            path: "/Users/test/Portlens",
+            type: .devServer,
+            currentBranch: "main",
+            startCommand: "pnpm dev:mock"
+        )
+        project.transitionState = .starting
+        service.projects = [project]
+
+        let nestedServer = DevServer(
+            id: 26834,
+            processName: "node",
+            port: 3000,
+            projectPath: "/Users/test/Portlens/app",
+            projectName: "app",
+            serverType: .nextjs,
+            commandLine: "node ./scripts/workspace-next.mjs dev mock"
+        )
+
+        service.reconcileDetectedDevServers([nestedServer])
+
+        #expect(service.projects[0].runningProcessPID == 26834)
+        #expect(service.projects[0].isRunning)
+        #expect(service.projects[0].transitionState == .idle)
+    }
+
+    @Test
+    @MainActor
     func switchingStartupModeWhileStoppedPersistsSelectionWithoutStartingProcess() async throws {
         let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)

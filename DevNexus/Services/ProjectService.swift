@@ -585,13 +585,28 @@ final class ProjectService {
 
     @MainActor
     func reconcileDetectedDevServers(_ servers: [DevServer]) {
-        let normalizedServers = servers.map { server in
-            (server: server, normalizedPath: normalizedPath(for: server.projectPath))
-        }
+        let managedProjectPaths = projects
+            .filter { $0.type == .devServer }
+            .map(\.path)
 
         for index in projects.indices where projects[index].type == .devServer {
-            let projectPath = normalizedPath(for: projects[index].path)
-            let matchedServer = normalizedServers.first { $0.normalizedPath == projectPath }?.server
+            let normalizedProjectPath = DevServerProjectMatcher.normalize(projects[index].path)
+            let pidMatchedServer = projects[index].runningProcessPID.flatMap { pid in
+                servers.first { server in
+                    server.id == pid
+                        && DevServerProjectMatcher.bestMatchingProjectPath(
+                            for: server,
+                            managedProjectPaths: managedProjectPaths
+                        ) == normalizedProjectPath
+                }
+            }
+            let pathMatchedServer = servers.first { server in
+                DevServerProjectMatcher.bestMatchingProjectPath(
+                    for: server,
+                    managedProjectPaths: managedProjectPaths
+                ) == normalizedProjectPath
+            }
+            let matchedServer = pidMatchedServer ?? pathMatchedServer
 
             if let matchedServer {
                 projects[index].runningProcessPID = matchedServer.id
@@ -667,10 +682,6 @@ final class ProjectService {
         if result.didChange {
             saveProjects()
         }
-    }
-
-    private func normalizedPath(for path: String) -> String {
-        URL(fileURLWithPath: path).resolvingSymlinksInPath().path
     }
 
     private func cleanCommand(for project: Project) -> String {
