@@ -113,6 +113,15 @@ struct AddProjectSheet: View {
                 .font(.system(size: AppConfig.UI.mediumFontSize, weight: .semibold))
 
             previewRow("启动", snapshot.startCommand)
+            if !snapshot.startupModes.isEmpty {
+                Divider()
+                    .padding(.vertical, AppConfig.UI.smallSpacing)
+                Text("可选启动模式")
+                    .font(.system(size: AppConfig.UI.smallFontSize, weight: .medium))
+                ForEach(snapshot.startupModes) { mode in
+                    previewRow(mode.displayName, mode.startCommand)
+                }
+            }
             previewRow("安装依赖", snapshot.installCommand)
             previewRow("构建", snapshot.buildCommand)
             previewRow("清理", snapshot.cleanCommand)

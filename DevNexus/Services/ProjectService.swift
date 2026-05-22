@@ -271,6 +271,37 @@ final class ProjectService {
     }
 
     @MainActor
+    func switchStartupMode(for project: Project, to modeID: String) async -> Result<Void, ProjectServiceError> {
+        guard let index = projects.firstIndex(where: { $0.id == project.id }) else {
+            return .failure(.pathNotFound(project.path))
+        }
+        guard projects[index].availableStartupModes.contains(where: { $0.id == modeID }) else {
+            return .failure(.invalidConfiguration("无效的启动模式"))
+        }
+
+        let wasRunning = projects[index].isRunning || projects[index].runningProcessPID != nil
+        projects[index].selectStartupMode(id: modeID)
+        let updatedProject = projects[index]
+        saveProjects()
+        appendSystemTerminalMessage(
+            "已切换启动模式为 \(updatedProject.selectedStartupMode?.displayName ?? "默认")",
+            for: updatedProject.id
+        )
+
+        guard wasRunning else {
+            return .success(())
+        }
+
+        let stopResult = await stopServer(for: updatedProject, cleanCache: false)
+        guard case .success = stopResult else {
+            appendSystemTerminalMessage("启动模式切换已保存，但停止旧进程失败", for: updatedProject.id)
+            return stopResult
+        }
+
+        return startServer(for: projects[index])
+    }
+
+    @MainActor
     func startServer(for project: Project) -> Result<Void, ProjectServiceError> {
         let category = getCategoryName(for: project.type)
         switch project.type {

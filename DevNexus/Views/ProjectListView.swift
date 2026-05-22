@@ -245,6 +245,7 @@ struct ProjectListView: View {
                         onDiscardChanges: { _ = projectService.discardChanges(at: project.path) },
                         onStartServer: { startServer(for: project) },
                         onStopServer: { stopServer(for: project) },
+                        onSwitchStartupMode: { switchStartupMode(for: project, to: $0) },
                         onRefresh: { refreshProject(project) },
                         onKillServer: { 
                             if let server = findRelatedServer(for: project) {
@@ -337,6 +338,18 @@ struct ProjectListView: View {
     private func stopServer(for project: Project) {
         Task {
             _ = await projectService.stopServer(for: project)
+        }
+    }
+
+    private func switchStartupMode(for project: Project, to modeID: String) {
+        Task {
+            let result = await projectService.switchStartupMode(for: project, to: modeID)
+            if case .failure(let error) = result {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                }
+            }
         }
     }
 

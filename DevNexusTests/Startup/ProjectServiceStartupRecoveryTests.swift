@@ -215,6 +215,102 @@ struct ProjectServiceStartupRecoveryTests {
         #expect(elapsed >= .milliseconds(350))
     }
 
+    @Test
+    @MainActor
+    func switchingStartupModeWhileStoppedPersistsSelectionWithoutStartingProcess() async throws {
+        let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: isolatedPersistenceRoot) }
+
+        let service = makeProjectService(persistenceRoot: isolatedPersistenceRoot)
+        let project = Project(
+            name: "frontend-app",
+            path: isolatedPersistenceRoot.appendingPathComponent("project").path,
+            type: .devServer,
+            currentBranch: "main",
+            startCommand: "pnpm dev",
+            availableStartupModes: [
+                ProjectStartupMode(id: "dev", displayName: "默认", startCommand: "pnpm dev", source: .autoDetected),
+                ProjectStartupMode(id: "dev:mock", displayName: "Mock", startCommand: "pnpm dev:mock", source: .autoDetected)
+            ],
+            selectedStartupModeID: "dev"
+        )
+        service.projects = [project]
+
+        let result = await service.switchStartupMode(for: project, to: "dev:mock")
+
+        guard case .success = result else {
+            Issue.record("expected switchStartupMode to succeed")
+            return
+        }
+
+        let updated = service.projects[0]
+        #expect(updated.selectedStartupModeID == "dev:mock")
+        #expect(updated.startCommand == "pnpm dev:mock")
+        #expect(updated.isRunning == false)
+    }
+
+    @Test
+    @MainActor
+    func switchingStartupModeWhileRunningStopsOldProcessAndStartsNewCommand() async throws {
+        let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: isolatedPersistenceRoot) }
+
+        let projectRoot = isolatedPersistenceRoot.appendingPathComponent("project")
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+
+        let oldProcess = Process()
+        oldProcess.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        oldProcess.arguments = ["30"]
+        try oldProcess.run()
+        defer {
+            if oldProcess.isRunning {
+                oldProcess.terminate()
+            }
+        }
+
+        let service = makeProjectService(persistenceRoot: isolatedPersistenceRoot)
+        var project = Project(
+            name: "portlens-workspace",
+            path: projectRoot.path,
+            type: .devServer,
+            currentBranch: "main",
+            startCommand: "sleep 30",
+            buildCommand: "",
+            cleanCommand: "",
+            installCommand: "",
+            stopCommand: ProjectCommandSnapshot.managedStopCommand,
+            discardChangesCommand: ProjectCommandSnapshot.defaultDiscardChangesCommand,
+            commandProfileName: "自动识别 · Next.js + pnpm",
+            installStrategy: .never,
+            availableStartupModes: [
+                ProjectStartupMode(id: "dev", displayName: "默认", startCommand: "sleep 30", source: .autoDetected),
+                ProjectStartupMode(id: "dev:mock", displayName: "Mock", startCommand: "touch mode-switched && sleep 0.2", source: .autoDetected)
+            ],
+            selectedStartupModeID: "dev"
+        )
+        project.isRunning = true
+        project.runningProcessPID = oldProcess.processIdentifier
+        service.projects = [project]
+
+        let result = await service.switchStartupMode(for: project, to: "dev:mock")
+
+        guard case .success = result else {
+            Issue.record("expected switchStartupMode to begin restart")
+            return
+        }
+
+        let restarted = await waitUntil(timeout: .seconds(3)) {
+            FileManager.default.fileExists(atPath: projectRoot.appendingPathComponent("mode-switched").path)
+        }
+
+        #expect(restarted)
+        #expect(service.projects[0].selectedStartupModeID == "dev:mock")
+        #expect(service.projects[0].startCommand == "touch mode-switched && sleep 0.2")
+        #expect(service.projects[0].terminalOutput.contains("[系统] 已切换启动模式为 Mock"))
+    }
+
     @MainActor
     private func waitUntil(
         timeout: Duration,

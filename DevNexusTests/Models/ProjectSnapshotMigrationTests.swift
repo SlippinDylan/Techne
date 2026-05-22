@@ -468,6 +468,36 @@ struct ProjectSnapshotMigrationTests {
         #expect(project.selectedStartupMode?.displayName == "Mock")
     }
 
+    @Test
+    func startupModeDisplayNamesPreferMockAndLiveLabels() throws {
+        let projectRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: projectRoot) }
+
+        try """
+        {
+          "name": "workspace",
+          "scripts": {
+            "dev": "vite",
+            "dev:mock": "vite --mode mock",
+            "dev:live": "vite --mode live"
+          },
+          "devDependencies": {
+            "vite": "^5.0.0"
+          }
+        }
+        """.write(to: projectRoot.appendingPathComponent("package.json"), atomically: true, encoding: .utf8)
+        try "".write(to: projectRoot.appendingPathComponent("pnpm-lock.yaml"), atomically: true, encoding: .utf8)
+
+        let project = ProjectCommandSnapshotResolver.makeProject(
+            name: "workspace",
+            path: projectRoot.path,
+            type: .devServer
+        )
+
+        #expect(project.availableStartupModes.map(\.displayName) == ["默认", "Mock", "Live"])
+    }
+
     private func makeNonTemporaryFixtureDirectory(named name: String) -> URL {
         let root = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".devnexus-test-fixtures", isDirectory: true)

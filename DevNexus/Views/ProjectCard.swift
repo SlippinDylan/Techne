@@ -19,6 +19,7 @@ struct ProjectCard: View {
     let onDiscardChanges: () -> Void
     let onStartServer: () -> Void
     let onStopServer: () -> Void
+    let onSwitchStartupMode: (String) -> Void
     let onRefresh: () -> Void
     let onKillServer: () -> Void
     let onKillInstance: (ChromeInstance) -> Void
@@ -44,6 +45,7 @@ struct ProjectCard: View {
         onDiscardChanges: @escaping () -> Void,
         onStartServer: @escaping () -> Void,
         onStopServer: @escaping () -> Void,
+        onSwitchStartupMode: @escaping (String) -> Void,
         onRefresh: @escaping () -> Void,
         onKillServer: @escaping () -> Void,
         onKillInstance: @escaping (ChromeInstance) -> Void,
@@ -57,6 +59,7 @@ struct ProjectCard: View {
         self.onDiscardChanges = onDiscardChanges
         self.onStartServer = onStartServer
         self.onStopServer = onStopServer
+        self.onSwitchStartupMode = onSwitchStartupMode
         self.onRefresh = onRefresh
         self.onKillServer = onKillServer
         self.onKillInstance = onKillInstance
@@ -217,6 +220,15 @@ struct ProjectCard: View {
             .buttonStyle(.plain)
             .popover(isPresented: $showingCommandDetails, arrowEdge: .top) {
                 ProjectCommandDetailsPopover(project: project)
+            }
+
+            if project.type == .devServer, project.availableStartupModes.count > 1 {
+                StartupModePicker(
+                    modes: project.availableStartupModes,
+                    selectedModeID: project.selectedStartupModeID,
+                    isDisabled: isTransitioning,
+                    onSelect: onSwitchStartupMode
+                )
             }
 
             if let statusLabel = transitionStatusLabel {
@@ -517,6 +529,7 @@ struct ProjectCard: View {
         onDiscardChanges: {},
         onStartServer: {},
         onStopServer: {},
+        onSwitchStartupMode: { _ in },
         onRefresh: {},
         onKillServer: {},
         onKillInstance: { _ in },
