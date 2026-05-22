@@ -109,6 +109,10 @@ struct ProjectListView: View {
             guard projectType == .devServer else { return }
             chromeService.refresh()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .browserInstancesChanged)) { _ in
+            guard projectType == .devServer else { return }
+            chromeService.refresh()
+        }
         .onChange(of: devServerService.servers.map(\.id)) { _, _ in
             projectService.reconcileDetectedDevServers(devServerService.servers)
             clearResolvedSuppressedPaths()

@@ -11,4 +11,5 @@ extension Notification.Name {
     static let devServerProcessStarted = Notification.Name("devServerProcessStarted")
     static let devServerStopped = Notification.Name("devServerStopped")
     static let browserDidOpen = Notification.Name("browserDidOpen")
+    static let browserInstancesChanged = Notification.Name("browserInstancesChanged")
 }

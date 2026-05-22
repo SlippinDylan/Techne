@@ -75,14 +75,7 @@ struct AddProjectSheet: View {
 
             TextField("请输入项目路径", text: $projectPath)
                 .textFieldStyle(.plain)
-                .padding(.horizontal, AppConfig.UI.mediumPadding)
-                .frame(height: 44)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius)
-                        .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
-                )
+                .projectInputFieldSurface(height: 44)
                 .overlay(
                     Button(action: { showingFilePicker = true }) {
                         Color.clear.contentShape(Rectangle())

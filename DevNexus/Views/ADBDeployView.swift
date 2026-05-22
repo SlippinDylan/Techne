@@ -90,46 +90,25 @@ struct ADBDeployView: View {
     private var deployControlsSection: some View {
         VStack(spacing: 16) {
             HStack(spacing: 12) {
-                // 左侧：路径显示/点击区域 (模拟 Liquid Glass 风格的输入框容器)
-                Button(action: { viewModel.selectAPK() }) {
-                    HStack {
-                        Image(systemName: "doc.badge.plus")
+                InteractivePathField(
+                    leadingSystemImage: "doc.badge.plus",
+                    text: viewModel.selectedAPK?.url.path,
+                    placeholder: "点击选择或拖入 APK 文件...",
+                    height: deployControlOuterHeight,
+                    action: { viewModel.selectAPK() },
+                    onDropProviders: handleAPKDrop(providers:)
+                ) {
+                    if let apk = viewModel.selectedAPK {
+                        Text(apk.formattedSize)
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(Color.accentColor.opacity(0.12))
                             .foregroundStyle(Color.accentColor)
-
-                        if let apk = viewModel.selectedAPK {
-                            Text(apk.url.path)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .font(.system(.body, design: .monospaced))
-                        } else {
-                            Text("点击选择或拖入 APK 文件...")
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-
-                        if let apk = viewModel.selectedAPK {
-                            Text(apk.formattedSize)
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 2)
-                                .background(Color.accentColor.opacity(0.2))
-                                .clipShape(Capsule())
-                        }
+                            .clipShape(Capsule())
                     }
-                    .padding(.horizontal, 12)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black.opacity(0.2))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                    )
                 }
-                .frame(maxWidth: .infinity, minHeight: deployControlOuterHeight, maxHeight: deployControlOuterHeight)
-                .buttonStyle(.plain)
-                .onDrop(of: [UTType.fileURL.identifier], isTargeted: nil) { providers in
-                    handleAPKDrop(providers: providers)
-                }
+                .frame(maxWidth: .infinity)
 
                 CleanMyMacButton(
                     title: "立即部署",
@@ -167,10 +146,11 @@ struct ADBDeployView: View {
 
     // MARK: - Console Section
     private var consoleSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        TerminalPanel(output: viewModel.terminalOutput, emptyText: "等待任务启动...") {
             if !viewModel.terminalOutput.isEmpty {
                 HStack {
                     Spacer()
+
                     Button("复制日志") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(viewModel.terminalOutput, forType: .string)
@@ -181,27 +161,6 @@ struct ADBDeployView: View {
                     Button("清除日志") { viewModel.clearTerminal() }
                         .adaptiveGlassButtonStyle()
                         .controlSize(.small)
-                }
-            }
-
-            ScrollViewReader { proxy in
-                ScrollView {
-                    Text(viewModel.terminalOutput.isEmpty ? "等待任务启动..." : viewModel.terminalOutput)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(viewModel.terminalOutput.isEmpty ? .secondary : .primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
-                        .id("bottom")
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.black.opacity(0.3))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                )
-                .onChange(of: viewModel.terminalOutput) { _, _ in
-                    proxy.scrollTo("bottom", anchor: .bottom)
                 }
             }
         }

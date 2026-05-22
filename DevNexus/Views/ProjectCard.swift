@@ -26,14 +26,48 @@ struct ProjectCard: View {
 
     @Environment(ProjectService.self) var projectService
     @Environment(BrowserDetectionService.self) private var browserDetectionService
-    @State private var branches: [String] = []
-    @State private var workingDirStatus: (fileCount: Int, hasChanges: Bool) = (0, false)
-    @State private var showingBranchSelector = false
+    @State private var branchPickerViewModel: BranchPickerViewModel
+    @State private var showingBranchPicker = false
     @State private var showingRemoveAlert = false
     @State private var showingDiscardAlert = false
     @State private var showingBrowserSelector = false
     @State private var showingCommandDetails = false
+    @State private var isProjectTerminalExpanded = true
     private let browserLaunchService = BrowserLaunchService()
+
+    init(
+        project: Project,
+        relatedServer: DevServer?,
+        relatedInstances: [ChromeInstance],
+        onRemove: @escaping () -> Void,
+        onSwitchBranch: @escaping (String) -> Void,
+        onDiscardChanges: @escaping () -> Void,
+        onStartServer: @escaping () -> Void,
+        onStopServer: @escaping () -> Void,
+        onRefresh: @escaping () -> Void,
+        onKillServer: @escaping () -> Void,
+        onKillInstance: @escaping (ChromeInstance) -> Void,
+        onCardTap: @escaping () -> Void
+    ) {
+        self.project = project
+        self.relatedServer = relatedServer
+        self.relatedInstances = relatedInstances
+        self.onRemove = onRemove
+        self.onSwitchBranch = onSwitchBranch
+        self.onDiscardChanges = onDiscardChanges
+        self.onStartServer = onStartServer
+        self.onStopServer = onStopServer
+        self.onRefresh = onRefresh
+        self.onKillServer = onKillServer
+        self.onKillInstance = onKillInstance
+        self.onCardTap = onCardTap
+        _branchPickerViewModel = State(
+            wrappedValue: BranchPickerViewModel(
+                projectPath: project.path,
+                currentBranch: project.currentBranch
+            )
+        )
+    }
 
     var body: some View {
         AppPanelCard {
@@ -53,23 +87,12 @@ struct ProjectCard: View {
                     relatedInstancesList
                 }
 
-                // 小程序：显示终端输出
-                if project.type == .miniApp {
+                if shouldShowProjectTerminalSection {
                     Divider()
                         .padding(.horizontal, AppConfig.UI.largePadding)
                     terminalOutputView
                 }
             }
-        }
-        .sheet(isPresented: $showingBranchSelector) {
-            BranchSelectorSheet(
-                currentBranch: project.currentBranch,
-                branches: branches,
-                onSelect: { branch in
-                    showingBranchSelector = false
-                    onSwitchBranch(branch)
-                }
-            )
         }
         .sheet(isPresented: $showingBrowserSelector) {
             if let server = relatedServer {
@@ -99,7 +122,14 @@ struct ProjectCard: View {
             Text("确定要放弃所有未提交的更改吗？此操作不可撤销。")
         }
         .task {
+            branchPickerViewModel.updateProjectContext(path: project.path, currentBranch: project.currentBranch)
             updateStatus()
+        }
+        .onChange(of: project.path) { _, newPath in
+            branchPickerViewModel.updateProjectContext(path: newPath, currentBranch: project.currentBranch)
+        }
+        .onChange(of: project.currentBranch) { _, newCurrentBranch in
+            branchPickerViewModel.updateProjectContext(path: project.path, currentBranch: newCurrentBranch)
         }
     }
 
@@ -216,10 +246,20 @@ struct ProjectCard: View {
             ClickableBranchLabel(
                 branchName: project.currentBranch.isEmpty ? "未知分支" : project.currentBranch,
                 onTap: {
-                    updateStatus()
-                    showingBranchSelector = true
+                    branchPickerViewModel.updateProjectContext(path: project.path, currentBranch: project.currentBranch)
+                    showingBranchPicker = true
+                    branchPickerViewModel.open()
                 }
             )
+            .popover(isPresented: $showingBranchPicker, arrowEdge: .top) {
+                BranchPickerPopover(
+                    viewModel: branchPickerViewModel,
+                    onSelect: { branch in
+                        showingBranchPicker = false
+                        onSwitchBranch(branch)
+                    }
+                )
+            }
 
             if project.uncommittedFileCount > 0 {
                 Label("\(project.uncommittedFileCount) 个未提交的文件", systemImage: "doc.badge.ellipsis")
@@ -286,6 +326,14 @@ struct ProjectCard: View {
                 )
             }
 
+            if shouldShowProjectTerminalToggle {
+                ActionButton(
+                    icon: "rectangle.bottomthird.inset.filled",
+                    action: { isProjectTerminalExpanded.toggle() },
+                    tooltip: "显示或隐藏日志"
+                )
+            }
+
             ActionButton(
                 icon: "terminal",
                 action: openInTerminal,
@@ -337,37 +385,13 @@ struct ProjectCard: View {
         }
     }
 
-    // MARK: - Terminal Output View (MiniApp only)
+    // MARK: - Terminal Output View
 
     private var terminalOutputView: some View {
-        ScrollView {
-            ScrollViewReader { proxy in
-                if project.terminalOutput.isEmpty {
-                    Text("终端...")
-                        .font(.system(size: AppConfig.UI.smallFontSize, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(AppConfig.UI.mediumSpacing)
-                } else {
-                    Text(project.terminalOutput)
-                        .font(.system(size: AppConfig.UI.smallFontSize, design: .monospaced))
-                        .foregroundStyle(.primary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(AppConfig.UI.mediumSpacing)
-                        .id("terminalBottom")
-                        .onChange(of: project.terminalOutput) { _, _ in
-                            proxy.scrollTo("terminalBottom", anchor: .bottom)
-                        }
-                }
-            }
-        }
-        .frame(height: 200)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.smallCornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppConfig.UI.smallCornerRadius)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+        TerminalPanel(
+            output: project.terminalOutput,
+            emptyText: "等待任务启动...",
+            height: 200
         )
         .padding(AppConfig.UI.largePadding)
     }
@@ -384,6 +408,14 @@ struct ProjectCard: View {
 
     private var commandDetails: ProjectCommandDetails {
         ProjectCommandDetails(project: project)
+    }
+
+    private var shouldShowProjectTerminalToggle: Bool {
+        ProjectTerminalVisibility.showsToggle(for: project)
+    }
+
+    private var shouldShowProjectTerminalSection: Bool {
+        shouldShowProjectTerminalToggle && isProjectTerminalExpanded
     }
 
     private var transitionStatusLabel: String? {
@@ -444,15 +476,11 @@ struct ProjectCard: View {
         Task.detached {
             // 在后台线程执行 git 操作
             let gitService = GitService.shared
-            let newBranches = gitService.getLocalBranches(at: projectPath)
             let newStatus = gitService.getWorkingDirectoryStatus(at: projectPath)
             let newCurrentBranch = gitService.getCurrentBranch(at: projectPath)
 
             await MainActor.run { [weak projectService] in
                 guard let projectService else { return }
-
-                self.branches = newBranches
-                self.workingDirStatus = newStatus
 
                 // 更新项目模型中的 uncommittedFileCount 和 currentBranch
                 if let index = projectService.projects.firstIndex(where: { $0.id == projectId }) {

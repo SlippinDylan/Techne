@@ -5,6 +5,76 @@ import Testing
 struct ProjectServiceStartupRecoveryTests {
     @Test
     @MainActor
+    func stoppingDevServerAppendsTerminalHistoryAndClosesManagedBrowsers() async throws {
+        let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: isolatedPersistenceRoot) }
+
+        let projectRoot = isolatedPersistenceRoot.appendingPathComponent("project")
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+
+        let browserStore = BrowserInstanceStore(rootDirectoryURL: isolatedPersistenceRoot.appendingPathComponent("browser-store"))
+        let browserRecord = try makeBrowserRecord(
+            store: browserStore,
+            instanceName: "dev-server-browser",
+            projectPath: projectRoot.path,
+            port: 5173
+        )
+        let signalRecorder = TestManagedBrowserSignalRecorder(runningPIDs: [browserRecord.pid])
+        let managedBrowserService = ManagedBrowserInstanceService(
+            instanceStore: browserStore,
+            sendSignal: signalRecorder.send(pid:signal:),
+            isProcessRunning: signalRecorder.isRunning(pid:),
+            sleep: { _ in }
+        )
+
+        let service = makeProjectService(
+            persistenceRoot: isolatedPersistenceRoot,
+            managedBrowserInstanceService: managedBrowserService
+        )
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        process.arguments = ["30"]
+        try process.run()
+        defer {
+            if process.isRunning {
+                process.terminate()
+            }
+        }
+
+        var project = Project(
+            name: "stoppable-dev-server",
+            path: projectRoot.path,
+            type: .devServer,
+            currentBranch: "main",
+            startCommand: "pnpm dev"
+        )
+        project.isRunning = true
+        project.runningProcessPID = process.processIdentifier
+        service.projects = [project]
+
+        let result = await service.stopServer(for: project, cleanCache: false)
+
+        guard case .success = result else {
+            Issue.record("expected stopServer to succeed")
+            return
+        }
+
+        let updatedProject = service.projects[0]
+        #expect(updatedProject.isRunning == false)
+        #expect(updatedProject.runningProcessPID == nil)
+        #expect(updatedProject.transitionState == ProjectTransitionState.idle)
+        #expect(updatedProject.terminalOutput.contains("[系统] 正在停止开发服务"))
+        #expect(updatedProject.terminalOutput.contains("[系统] 开发服务已停止"))
+        #expect(updatedProject.terminalOutput.contains("[系统] 检测到 1 个受管浏览器实例"))
+        #expect(updatedProject.terminalOutput.contains("[系统] 已关闭浏览器实例 PID: \(browserRecord.pid)"))
+        #expect(signalRecorder.events() == [ManagedSignalEvent(pid: browserRecord.pid, signal: SIGTERM)])
+        #expect(try browserStore.loadTrackedInstances().isEmpty)
+    }
+
+    @Test
+    @MainActor
     func installFailureResetsProjectBackToIdle() async throws {
         let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
@@ -166,6 +236,17 @@ struct ProjectServiceStartupRecoveryTests {
 
     @MainActor
     private func makeProjectService(persistenceRoot: URL) -> ProjectService {
+        makeProjectService(
+            persistenceRoot: persistenceRoot,
+            managedBrowserInstanceService: ManagedBrowserInstanceService()
+        )
+    }
+
+    @MainActor
+    private func makeProjectService(
+        persistenceRoot: URL,
+        managedBrowserInstanceService: ManagedBrowserInstanceService
+    ) -> ProjectService {
         let configService = CommandConfigService(
             persistenceService: PersistenceService<CommandConfig>(
                 filename: "commandconfigs.json",
@@ -175,12 +256,91 @@ struct ProjectServiceStartupRecoveryTests {
 
         return ProjectService(
             commandConfigService: configService,
+            managedBrowserInstanceService: managedBrowserInstanceService,
             persistenceService: PersistenceService<Project>(
                 filename: "projects.json",
                 directoryURL: persistenceRoot
             )
         )
     }
+
+    private func makeBrowserRecord(
+        store: BrowserInstanceStore,
+        instanceName: String,
+        projectPath: String,
+        port: Int
+    ) throws -> BrowserInstanceRecord {
+        let profileDirectory = store.profilesDirectoryURL.appendingPathComponent(instanceName, isDirectory: true)
+        try FileManager.default.createDirectory(at: profileDirectory, withIntermediateDirectories: true)
+
+        let record = BrowserInstanceRecord(
+            instanceName: instanceName,
+            pid: getpid(),
+            browserName: "Google Chrome",
+            browserBundleID: BrowserType.chrome.bundleId,
+            browserAppPath: "/Applications/Google Chrome.app",
+            launchedURL: "http://localhost:\(port)",
+            debugPort: 9222 + port,
+            profileDirectoryPath: profileDirectory.path,
+            startedAt: Date(timeIntervalSince1970: 1_716_100_000 + TimeInterval(port)),
+            launchTarget: BrowserLaunchTarget(
+                launchSource: "project-card",
+                serverPort: port,
+                projectPath: projectPath
+            )
+        )
+
+        try store.save(record)
+        return record
+    }
+}
+
+private final class TestManagedBrowserSignalRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    nonisolated(unsafe) private var runningPIDs: Set<Int32>
+    nonisolated(unsafe) private(set) var signals: [ManagedSignalEvent] = []
+
+    init(runningPIDs: Set<Int32>) {
+        self.runningPIDs = runningPIDs
+    }
+
+    nonisolated
+    func send(pid: Int32, signal: Int32) -> ManagedBrowserInstanceService.SignalResult {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard runningPIDs.contains(pid) else {
+            return .notRunning
+        }
+
+        signals.append(ManagedSignalEvent(pid: pid, signal: signal))
+
+        if signal == SIGTERM || signal == SIGKILL {
+            runningPIDs.remove(pid)
+            return .delivered
+        }
+
+        return .failed
+    }
+
+    nonisolated
+    func isRunning(pid: Int32) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return runningPIDs.contains(pid)
+    }
+
+    nonisolated
+    func events() -> [ManagedSignalEvent] {
+        lock.lock()
+        defer { lock.unlock() }
+        return signals
+    }
+}
+
+private struct ManagedSignalEvent: Equatable {
+    let pid: Int32
+    let signal: Int32
 }
 
 private final class NotificationRecorder: @unchecked Sendable {

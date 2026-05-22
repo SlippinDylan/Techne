@@ -33,6 +33,7 @@ final class ProjectService {
     private let processManager = ProcessManager()
     private let terminalHandler = TerminalOutputHandler()
     private let commandConfigService: CommandConfigService
+    private let managedBrowserInstanceService: ManagedBrowserInstanceService
 
     private var gitMonitors: [String: GitWorkspaceMonitor] = [:]
     private var cachedProcessKeywords: [String]?
@@ -43,9 +44,11 @@ final class ProjectService {
     @MainActor
     init(
         commandConfigService: CommandConfigService,
+        managedBrowserInstanceService: ManagedBrowserInstanceService = ManagedBrowserInstanceService(),
         persistenceService: PersistenceService<Project> = PersistenceService(filename: "projects.json")
     ) {
         self.commandConfigService = commandConfigService
+        self.managedBrowserInstanceService = managedBrowserInstanceService
         self.persistenceService = persistenceService
         loadProjects()
     }
@@ -352,6 +355,8 @@ final class ProjectService {
 
     @MainActor
     private func stopDevServerWithoutOutput(for project: Project, category: String, cleanCache: Bool) async -> Result<Void, ProjectServiceError> {
+        appendSystemTerminalMessage("正在停止开发服务...", for: project.id)
+
         let result: Result<Void, ProjectServiceError>
         if let pid = project.runningProcessPID {
             result = await processService.stopProcess(pid: pid)
@@ -360,6 +365,8 @@ final class ProjectService {
         }
         
         if case .success = result {
+            appendSystemTerminalMessage("开发服务已停止", for: project.id)
+            await closeManagedBrowserInstances(for: project, category: category)
             if let idx = self.projects.firstIndex(where: { $0.id == project.id }) {
                 self.projects[idx].runningProcessPID = nil
                 self.projects[idx].isRunning = false
@@ -369,8 +376,59 @@ final class ProjectService {
             if cleanCache { cleanCacheAfterStop(for: project) }
         } else if let idx = self.projects.firstIndex(where: { $0.id == project.id }) {
             self.projects[idx].transitionState = .idle
+            if case .failure(let error) = result {
+                appendSystemTerminalMessage("开发服务停止失败: \(error.localizedDescription)", for: project.id)
+            }
         }
         return result
+    }
+
+    @MainActor
+    private func closeManagedBrowserInstances(for project: Project, category: String) async {
+        do {
+            let managedBrowserInstanceService = self.managedBrowserInstanceService
+            let result = try await Task.detached(priority: .utility) {
+                try await managedBrowserInstanceService.terminateManagedInstances(forProjectPath: project.path)
+            }.value
+
+            if result.matchedCount > 0 {
+                appendSystemTerminalMessage("检测到 \(result.matchedCount) 个受管浏览器实例", for: project.id)
+                logService.info(
+                    "停止项目时回收 \(result.matchedCount) 个受管浏览器实例",
+                    category: category
+                )
+            }
+
+            if result.terminatedPIDs.isEmpty == false {
+                appendSystemTerminalMessage(
+                    "已关闭浏览器实例 PID: \(result.terminatedPIDs.map(String.init).joined(separator: ", "))",
+                    for: project.id
+                )
+                logService.success(
+                    "已关闭浏览器实例 PID: \(result.terminatedPIDs.map(String.init).joined(separator: ", "))",
+                    category: category
+                )
+            }
+
+            if result.failedPIDs.isEmpty == false {
+                appendSystemTerminalMessage(
+                    "以下浏览器实例未能关闭: \(result.failedPIDs.map(String.init).joined(separator: ", "))",
+                    for: project.id
+                )
+                logService.warning(
+                    "以下浏览器实例未能关闭: \(result.failedPIDs.map(String.init).joined(separator: ", "))",
+                    category: category
+                )
+            }
+        } catch {
+            appendSystemTerminalMessage("回收受管浏览器实例失败: \(error.localizedDescription)", for: project.id)
+            logService.warning(
+                "回收受管浏览器实例失败: \(error.localizedDescription)",
+                category: category
+            )
+        }
+
+        NotificationCenter.default.post(name: .browserInstancesChanged, object: nil, userInfo: ["projectPath": project.path])
     }
 
     @MainActor
@@ -474,6 +532,11 @@ final class ProjectService {
     }
 
     @MainActor
+    private func appendSystemTerminalMessage(_ message: String, for projectID: UUID) {
+        appendTerminalOutput("[系统] \(message)\n", for: projectID)
+    }
+
+    @MainActor
     private func handleProjectStartupCompletion(_ completion: ProjectStartupCompletion, for projectID: UUID) {
         guard let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
 
@@ -521,7 +584,24 @@ final class ProjectService {
         Task {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             let cmd = cleanCommand(for: project)
-            _ = GitService.shared.cleanCache(at: project.path, command: cmd)
+            if cmd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                await MainActor.run {
+                    self.appendSystemTerminalMessage("正在执行缓存清理...", for: project.id)
+                }
+            }
+
+            let result = GitService.shared.cleanCache(at: project.path, command: cmd)
+
+            await MainActor.run {
+                switch result {
+                case .success:
+                    if cmd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                        self.appendSystemTerminalMessage("缓存清理完成", for: project.id)
+                    }
+                case .failure(let error):
+                    self.appendSystemTerminalMessage("缓存清理失败: \(error.localizedDescription)", for: project.id)
+                }
+            }
         }
     }
 
