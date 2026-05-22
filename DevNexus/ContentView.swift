@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     let commandConfigService: CommandConfigService
     let projectService: ProjectService
+    @Environment(MainWindowNavigationCoordinator.self) private var mainWindowNavigation
 
     @State private var selectedItem: SidebarItem? = .devEnvironment
     @State private var chromeDetectionService = ChromeDetectionService()
@@ -117,16 +118,20 @@ struct ContentView: View {
                 selectedItem = oldValue ?? .devEnvironment
             }
         }
-        // 通知监听：同步 UI 状态
-        .onReceive(NotificationCenter.default.publisher(for: .switchToDevEnvironment)) { _ in switchTo(.devEnvironment) }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToMiniApp)) { _ in switchTo(.miniApp) }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToADBDeploy)) { _ in switchTo(.adbDeploy) }
+        .onAppear {
+            applyPendingSidebarSelection()
+        }
+        .onChange(of: mainWindowNavigation.selectionRevision) { _, _ in
+            applyPendingSidebarSelection()
+        }
     }
 
     // MARK: - Helper Views & Methods
 
-    private func switchTo(_ item: SidebarItem) {
-        WindowManager.showMainWindow()
+    private func applyPendingSidebarSelection() {
+        guard let item = mainWindowNavigation.consumePendingSidebarItem() else {
+            return
+        }
         selectedItem = item
     }
 

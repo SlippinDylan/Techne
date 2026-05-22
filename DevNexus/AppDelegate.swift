@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        WindowManager.showMainWindow(identifier: "main")
+        MainWindowNavigationCoordinator.shared.showMainWindow()
         return true
     }
 

@@ -37,4 +37,76 @@ struct MainWindowCoordinatorTests {
 
         #expect(openCount == 1)
     }
+
+    @Test
+    @MainActor
+    func showMainWindowImmediatelyOpensMissingWindowWithoutDependingOnMenuBarLifecycle() {
+        var openCount = 0
+        let navigation = MainWindowNavigationCoordinator(
+            makeWindowCoordinator: { openWindow in
+                MainWindowCoordinator(
+                    findWindow: { _ in nil },
+                    activateApp: { },
+                    openWindow: openWindow,
+                    focusWindow: { _ in }
+                )
+            }
+        )
+        navigation.registerOpenMainWindowAction {
+            openCount += 1
+        }
+
+        navigation.showMainWindow()
+
+        #expect(openCount == 1)
+    }
+
+    @Test
+    @MainActor
+    func lateOpenActionRegistrationDoesNotReplayEarlierReopenRequest() {
+        var openCount = 0
+        let navigation = MainWindowNavigationCoordinator(
+            makeWindowCoordinator: { openWindow in
+                MainWindowCoordinator(
+                    findWindow: { _ in nil },
+                    activateApp: { },
+                    openWindow: openWindow,
+                    focusWindow: { _ in }
+                )
+            }
+        )
+
+        navigation.showMainWindow()
+
+        navigation.registerOpenMainWindowAction {
+            openCount += 1
+        }
+
+        #expect(openCount == 0)
+    }
+
+    @Test
+    @MainActor
+    func showMainWindowSelectingSidebarStoresAtomicNavigationIntentUntilConsumed() {
+        var openCount = 0
+        let navigation = MainWindowNavigationCoordinator(
+            makeWindowCoordinator: { openWindow in
+                MainWindowCoordinator(
+                    findWindow: { _ in nil },
+                    activateApp: { },
+                    openWindow: openWindow,
+                    focusWindow: { _ in }
+                )
+            }
+        )
+        navigation.registerOpenMainWindowAction {
+            openCount += 1
+        }
+
+        navigation.showMainWindow(selecting: .miniApp)
+
+        #expect(openCount == 1)
+        #expect(navigation.consumePendingSidebarItem() == .miniApp)
+        #expect(navigation.consumePendingSidebarItem() == nil)
+    }
 }

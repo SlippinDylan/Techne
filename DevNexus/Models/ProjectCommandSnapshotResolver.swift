@@ -62,10 +62,11 @@ struct ProjectCommandSnapshotResolver {
         }
 
         let legacy = snapshot(from: legacyConfig)
+        let startupSnapshot = preferredStartupSnapshot(primary: legacy, fallback: builtin)
         return ProjectCommandSnapshot(
-            startCommand: preferredCommand(primary: legacy.startCommand, fallback: builtin.startCommand),
-            startupModes: builtin.startupModes,
-            selectedStartupModeID: builtin.selectedStartupModeID,
+            startCommand: startupSnapshot.startCommand,
+            startupModes: startupSnapshot.startupModes,
+            selectedStartupModeID: startupSnapshot.selectedStartupModeID,
             buildCommand: preferredCommand(primary: legacy.buildCommand, fallback: builtin.buildCommand),
             cleanCommand: preferredCommand(primary: legacy.cleanCommand, fallback: builtin.cleanCommand),
             installCommand: preferredCommand(primary: legacy.installCommand, fallback: builtin.installCommand),
@@ -294,6 +295,14 @@ struct ProjectCommandSnapshotResolver {
         return trimmedPrimary.isEmpty ? fallback : trimmedPrimary
     }
 
+    private static func preferredStartupSnapshot(
+        primary: ProjectCommandSnapshot,
+        fallback: ProjectCommandSnapshot
+    ) -> ProjectCommandSnapshot {
+        let trimmedPrimaryStartCommand = primary.startCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedPrimaryStartCommand.isEmpty ? fallback : primary
+    }
+
     private static func detectPackageManager(
         at path: String,
         manifest: PackageManifest?,
@@ -461,7 +470,9 @@ struct ProjectPersistenceMigration {
             lhs.stopCommand != rhs.stopCommand ||
             lhs.discardChangesCommand != rhs.discardChangesCommand ||
             lhs.commandProfileName != rhs.commandProfileName ||
-            lhs.commandConfigId != rhs.commandConfigId
+            lhs.commandConfigId != rhs.commandConfigId ||
+            lhs.availableStartupModes != rhs.availableStartupModes ||
+            lhs.selectedStartupModeID != rhs.selectedStartupModeID
         }
     }
 
