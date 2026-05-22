@@ -19,7 +19,14 @@ struct ProjectCommandDetails: Equatable {
 
         profileDisplayName = trimmedProfileName.isEmpty ? "自定义命令" : trimmedProfileName
         sections = [
+            Section(title: "当前启动模式", value: project.selectedStartupMode?.displayName ?? "默认"),
             Section(title: "启动命令", value: project.startCommand),
+            Section(
+                title: "可选启动模式",
+                value: project.availableStartupModes
+                    .map { "\($0.displayName): \($0.startCommand)" }
+                    .joined(separator: "\n")
+            ),
             Section(title: "安装依赖命令", value: project.installCommand),
             Section(title: "构建命令", value: project.buildCommand),
             Section(title: "清理命令", value: project.cleanCommand),

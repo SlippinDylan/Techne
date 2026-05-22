@@ -378,8 +378,94 @@ struct ProjectSnapshotMigrationTests {
         let details = ProjectCommandDetails(project: project)
 
         #expect(details.profileDisplayName == "自定义命令")
-        #expect(details.sections.map(\.title) == ["启动命令", "安装依赖命令", "构建命令", "清理命令", "停止命令", "丢弃更改命令", "安装策略"])
-        #expect(details.sections.map(\.value) == ["pnpm dev:mp-weixin", "", "", "rm -rf dist", "pkill -f weixin", "", "总是安装"])
+        #expect(details.sections.map(\.title) == ["当前启动模式", "启动命令", "可选启动模式", "安装依赖命令", "构建命令", "清理命令", "停止命令", "丢弃更改命令", "安装策略"])
+        #expect(details.sections.map(\.value) == ["默认", "pnpm dev:mp-weixin", "默认: pnpm dev:mp-weixin", "", "", "rm -rf dist", "pkill -f weixin", "", "总是安装"])
+    }
+
+    @Test
+    func addProjectDetectsMultipleStartupModesAndDefaultsToDev() throws {
+        let projectRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: projectRoot) }
+
+        try """
+        {
+          "name": "portlens-workspace",
+          "scripts": {
+            "dev": "node ./scripts/workspace-next.mjs dev dev-default",
+            "dev:mock": "node ./scripts/workspace-next.mjs dev mock",
+            "dev:live": "node ./scripts/workspace-next.mjs dev live",
+            "build": "next build"
+          },
+          "dependencies": {
+            "next": "^15.0.0"
+          }
+        }
+        """.write(to: projectRoot.appendingPathComponent("package.json"), atomically: true, encoding: .utf8)
+        try "".write(to: projectRoot.appendingPathComponent("pnpm-lock.yaml"), atomically: true, encoding: .utf8)
+
+        let project = ProjectCommandSnapshotResolver.makeProject(
+            name: "portlens-workspace",
+            path: projectRoot.path,
+            type: .devServer
+        )
+
+        #expect(project.availableStartupModes.map(\.id) == ["dev", "dev:mock", "dev:live"])
+        #expect(project.selectedStartupModeID == "dev")
+        #expect(project.startCommand == "pnpm dev")
+        #expect(project.selectedStartupMode?.displayName == "默认")
+    }
+
+    @Test
+    func legacyProjectWithoutStartupModesBackfillsSelectedModeFromStartCommand() {
+        let legacyProject = Project(
+            name: "legacy-app",
+            path: "/tmp/legacy-app",
+            type: .devServer,
+            currentBranch: "main",
+            startCommand: "pnpm dev:mock",
+            buildCommand: "pnpm build",
+            cleanCommand: "rm -rf .next",
+            installCommand: "pnpm install",
+            stopCommand: ProjectCommandSnapshot.managedStopCommand,
+            discardChangesCommand: ProjectCommandSnapshot.defaultDiscardChangesCommand,
+            commandProfileName: "自动识别 · Next.js + pnpm"
+        )
+
+        let updated = ProjectCommandSnapshotResolver.backfillingMissingSnapshot(for: legacyProject)
+
+        #expect(updated.availableStartupModes.count == 1)
+        #expect(updated.availableStartupModes[0].startCommand == "pnpm dev:mock")
+        #expect(updated.selectedStartupModeID == updated.availableStartupModes[0].id)
+        #expect(updated.startCommand == "pnpm dev:mock")
+    }
+
+    @Test
+    func selectingStartupModeUpdatesCompatibilityStartCommand() {
+        var project = Project(
+            name: "frontend-app",
+            path: "/tmp/frontend-app",
+            type: .devServer,
+            currentBranch: "main",
+            startCommand: "pnpm dev",
+            buildCommand: "pnpm build",
+            cleanCommand: "rm -rf dist",
+            installCommand: "pnpm install",
+            stopCommand: ProjectCommandSnapshot.managedStopCommand,
+            discardChangesCommand: ProjectCommandSnapshot.defaultDiscardChangesCommand,
+            commandProfileName: "自动识别 · Vite + pnpm",
+            availableStartupModes: [
+                ProjectStartupMode(id: "dev", displayName: "默认", startCommand: "pnpm dev", source: .autoDetected),
+                ProjectStartupMode(id: "dev:mock", displayName: "Mock", startCommand: "pnpm dev:mock", source: .autoDetected)
+            ],
+            selectedStartupModeID: "dev"
+        )
+
+        project.selectStartupMode(id: "dev:mock")
+
+        #expect(project.selectedStartupModeID == "dev:mock")
+        #expect(project.startCommand == "pnpm dev:mock")
+        #expect(project.selectedStartupMode?.displayName == "Mock")
     }
 
     private func makeNonTemporaryFixtureDirectory(named name: String) -> URL {

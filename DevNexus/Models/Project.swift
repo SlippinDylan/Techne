@@ -20,6 +20,19 @@ enum InstallStrategy: String, Codable, Sendable {
     case always
 }
 
+enum ProjectStartupModeSource: String, Codable, Sendable {
+    case autoDetected
+    case importedLegacy
+    case commandConfig
+}
+
+struct ProjectStartupMode: Identifiable, Codable, Equatable, Sendable {
+    let id: String
+    let displayName: String
+    let startCommand: String
+    let source: ProjectStartupModeSource
+}
+
 // MARK: - ProjectType Extension
 
 extension ProjectType {
@@ -53,6 +66,8 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
     var commandProfileName: String?
     var installStrategy: InstallStrategy
     var commandConfigId: UUID?
+    var availableStartupModes: [ProjectStartupMode]
+    var selectedStartupModeID: String?
     let addedDate: Date
 
     // MARK: - 运行时状态（不持久化）
@@ -79,14 +94,27 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         discardChangesCommand: String = "",
         commandProfileName: String? = nil,
         installStrategy: InstallStrategy = .ifMissing,
-        commandConfigId: UUID? = nil
+        commandConfigId: UUID? = nil,
+        availableStartupModes: [ProjectStartupMode] = [],
+        selectedStartupModeID: String? = nil
     ) {
         self.id = id
         self.name = name
         self.path = path
         self.type = type
         self.currentBranch = currentBranch
-        self.startCommand = startCommand ?? type.defaultStartCommand
+        let resolvedStartCommand = startCommand ?? type.defaultStartCommand
+        let resolvedStartupModes = Self.resolvedStartupModes(
+            availableStartupModes,
+            fallbackStartCommand: resolvedStartCommand
+        )
+        let resolvedSelectedStartupModeID = Self.resolvedSelectedStartupModeID(
+            selectedStartupModeID,
+            availableStartupModes: resolvedStartupModes
+        )
+        let selectedStartupMode = resolvedStartupModes.first(where: { $0.id == resolvedSelectedStartupModeID })
+
+        self.startCommand = selectedStartupMode?.startCommand ?? resolvedStartCommand
         self.buildCommand = buildCommand
         self.cleanCommand = cleanCommand
         self.installCommand = installCommand
@@ -95,6 +123,8 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         self.commandProfileName = commandProfileName
         self.installStrategy = installStrategy
         self.commandConfigId = commandConfigId
+        self.availableStartupModes = resolvedStartupModes
+        self.selectedStartupModeID = resolvedSelectedStartupModeID
         self.addedDate = Date()
 
         // 运行时状态初始化
@@ -143,6 +173,8 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         case commandProfileName
         case installStrategy
         case commandConfigId
+        case availableStartupModes
+        case selectedStartupModeID
         case addedDate
     }
 
@@ -163,7 +195,14 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         self.commandProfileName = try container.decodeIfPresent(String.self, forKey: .commandProfileName)
         self.installStrategy = try container.decodeIfPresent(InstallStrategy.self, forKey: .installStrategy) ?? .ifMissing
         self.commandConfigId = try container.decodeIfPresent(UUID.self, forKey: .commandConfigId)
+        let defaultMode = Project.defaultStartupMode(for: self.startCommand)
+        self.availableStartupModes = try container.decodeIfPresent([ProjectStartupMode].self, forKey: .availableStartupModes) ?? [defaultMode]
+        self.selectedStartupModeID = try container.decodeIfPresent(String.self, forKey: .selectedStartupModeID) ??
+            Project.resolvedSelectedStartupModeID(nil, availableStartupModes: self.availableStartupModes)
         self.addedDate = try container.decode(Date.self, forKey: .addedDate)
+        if let selectedMode = self.availableStartupModes.first(where: { $0.id == self.selectedStartupModeID }) {
+            self.startCommand = selectedMode.startCommand
+        }
         
         // 初始化运行时状态
         self.isRunning = false
@@ -190,11 +229,52 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         try container.encodeIfPresent(commandProfileName, forKey: .commandProfileName)
         try container.encode(installStrategy, forKey: .installStrategy)
         try container.encodeIfPresent(commandConfigId, forKey: .commandConfigId)
+        try container.encode(availableStartupModes, forKey: .availableStartupModes)
+        try container.encodeIfPresent(selectedStartupModeID, forKey: .selectedStartupModeID)
         try container.encode(addedDate, forKey: .addedDate)
+    }
+
+    nonisolated private static func defaultStartupMode(for startCommand: String) -> ProjectStartupMode {
+        ProjectStartupMode(
+            id: "default",
+            displayName: "默认",
+            startCommand: startCommand,
+            source: .importedLegacy
+        )
+    }
+
+    nonisolated private static func resolvedStartupModes(
+        _ startupModes: [ProjectStartupMode],
+        fallbackStartCommand: String
+    ) -> [ProjectStartupMode] {
+        startupModes.isEmpty ? [defaultStartupMode(for: fallbackStartCommand)] : startupModes
+    }
+
+    nonisolated private static func resolvedSelectedStartupModeID(
+        _ selectedStartupModeID: String?,
+        availableStartupModes: [ProjectStartupMode]
+    ) -> String? {
+        if let selectedStartupModeID,
+           availableStartupModes.contains(where: { $0.id == selectedStartupModeID }) {
+            return selectedStartupModeID
+        }
+        return availableStartupModes.first?.id
     }
 }
 
 extension Project {
+    var selectedStartupMode: ProjectStartupMode? {
+        availableStartupModes.first(where: { $0.id == selectedStartupModeID })
+    }
+
+    mutating func selectStartupMode(id: String) {
+        guard let mode = availableStartupModes.first(where: { $0.id == id }) else {
+            return
+        }
+        selectedStartupModeID = mode.id
+        startCommand = mode.startCommand
+    }
+
     init(
         name: String,
         path: String,
@@ -235,6 +315,16 @@ extension Project {
         }
         if updated.commandProfileName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
             updated.commandProfileName = snapshot.commandProfileName
+        }
+        if updated.availableStartupModes.isEmpty {
+            updated.availableStartupModes = snapshot.startupModes
+        }
+        if updated.selectedStartupModeID == nil ||
+            updated.availableStartupModes.contains(where: { $0.id == updated.selectedStartupModeID }) == false {
+            updated.selectedStartupModeID = snapshot.selectedStartupModeID ?? updated.availableStartupModes.first?.id
+        }
+        if let selectedMode = updated.selectedStartupMode {
+            updated.startCommand = selectedMode.startCommand
         }
 
         return updated
