@@ -41,6 +41,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        WindowManager.showMainWindow(identifier: "main")
+        return true
+    }
+
     // MARK: - Private Methods
 
     private func cleanup() {

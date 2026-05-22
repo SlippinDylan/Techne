@@ -24,7 +24,7 @@ struct DevNexusApp: App {
 
     var body: some Scene {
         // 主窗口
-        WindowGroup(id: "main") {
+        Window("DevNexus", id: "main") {
             ContentView(
                 commandConfigService: commandConfigService,
                 projectService: projectService

@@ -57,16 +57,8 @@ struct MenuBarView: View {
 
     // MARK: - Private Methods
 
-    /// 唤起并聚焦窗口 (macOS 15 适配方案)
     private func openAndFocusWindow() {
-        // 1. SwiftUI 唤起/聚焦窗口结构
-        openWindow(id: "main")
-        
-        // 2. WindowManager 执行物理层面的“空间拉取”与“层级提权”
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(50))
-            WindowManager.showMainWindow(identifier: "main")
-        }
+        MainWindowCoordinator(openWindow: { openWindow(id: "main") }).showMainWindow()
     }
 }
 
