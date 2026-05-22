@@ -39,13 +39,3 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                event.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
     }
 }
-
-// MARK: - Notification Names
-
-extension Notification.Name {
-    static let switchToDevEnvironment = Notification.Name("switchToDevEnvironment")
-    static let switchToMiniApp = Notification.Name("switchToMiniApp")
-    static let addDevProject = Notification.Name("addDevProject")
-    static let addMiniAppProject = Notification.Name("addMiniAppProject")
-    static let switchToADBDeploy = Notification.Name("switchToADBDeploy")
-}
