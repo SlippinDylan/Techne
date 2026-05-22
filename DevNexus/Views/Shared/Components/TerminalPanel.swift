@@ -46,6 +46,7 @@ struct TerminalPanel<ToolbarContent: View>: View {
                         .id("terminalBottom")
                 }
             }
+            .appScrollChrome(.utilityPanel)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .modify { view in
                 if let height {

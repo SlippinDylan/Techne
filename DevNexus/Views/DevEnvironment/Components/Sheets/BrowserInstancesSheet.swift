@@ -79,6 +79,7 @@ struct BrowserInstancesSheet: View {
             }
             .padding(AppConfig.UI.extraLargePadding)
         }
+        .appScrollChrome(.utilityPanel)
     }
 }
 

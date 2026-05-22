@@ -26,4 +26,16 @@ struct AppScrollerPolicyTests {
         #expect(configuration.autohidesScrollers)
         #expect(configuration.controlSize == .small)
     }
+
+    @Test
+    func utilityPanelKeepsLegacyVisibilityWhenSystemWantsVisibleScrollBars() {
+        let configuration = AppScrollerPolicy.configuration(
+            for: .utilityPanel,
+            preferredStyle: .legacy
+        )
+
+        #expect(configuration.scrollerStyle == .legacy)
+        #expect(configuration.autohidesScrollers == false)
+        #expect(configuration.controlSize == .small)
+    }
 }

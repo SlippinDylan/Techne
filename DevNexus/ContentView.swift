@@ -33,6 +33,7 @@ struct ContentView: View {
                     .padding(.vertical, 4)
             }
             .listStyle(.sidebar)
+            .appScrollChrome(.mainContent)
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
             // 详情区域
@@ -250,6 +251,7 @@ struct SettingsContentView: View {
             .padding(AppConfig.UI.extraLargePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .appScrollChrome(.mainContent)
         .fileExporter(
             isPresented: $exportingBackup,
             document: backupDocument,

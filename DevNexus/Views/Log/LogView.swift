@@ -184,6 +184,7 @@ struct LogView: View {
                         .padding(.vertical, 2)
                 }
                 .listStyle(.inset)
+                .appScrollChrome(.mainContent)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
