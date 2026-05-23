@@ -4,19 +4,19 @@ import Testing
 
 struct AppScrollerPolicyTests {
     @Test
-    func mainContentFollowsLegacySystemPreference() {
+    func mainContentUsesUnifiedOverlayScrollerChromeEvenWhenSystemPrefersLegacy() {
         let configuration = AppScrollerPolicy.configuration(
             for: .mainContent,
             preferredStyle: .legacy
         )
 
-        #expect(configuration.scrollerStyle == .legacy)
-        #expect(configuration.autohidesScrollers == false)
+        #expect(configuration.scrollerStyle == .overlay)
+        #expect(configuration.autohidesScrollers)
         #expect(configuration.controlSize == .regular)
     }
 
     @Test
-    func utilityPanelUsesOverlayAutohideWhenSystemPrefersOverlay() {
+    func utilityPanelUsesSameUnifiedScrollerChromeAsMainContent() {
         let configuration = AppScrollerPolicy.configuration(
             for: .utilityPanel,
             preferredStyle: .overlay
@@ -24,18 +24,18 @@ struct AppScrollerPolicyTests {
 
         #expect(configuration.scrollerStyle == .overlay)
         #expect(configuration.autohidesScrollers)
-        #expect(configuration.controlSize == .small)
+        #expect(configuration.controlSize == .regular)
     }
 
     @Test
-    func utilityPanelKeepsLegacyVisibilityWhenSystemWantsVisibleScrollBars() {
+    func consoleViewportPrefersOverlayAutohideAndRegularWidthEvenWhenSystemPrefersLegacy() {
         let configuration = AppScrollerPolicy.configuration(
-            for: .utilityPanel,
+            for: .consoleViewport,
             preferredStyle: .legacy
         )
 
-        #expect(configuration.scrollerStyle == .legacy)
-        #expect(configuration.autohidesScrollers == false)
-        #expect(configuration.controlSize == .small)
+        #expect(configuration.scrollerStyle == .overlay)
+        #expect(configuration.autohidesScrollers)
+        #expect(configuration.controlSize == .regular)
     }
 }

@@ -45,6 +45,10 @@ struct LogEntry: Identifiable, Codable, Sendable {
         timestamp.formatted(date: .omitted, time: .standard)
     }
 
+    var formattedLine: String {
+        "[\(formattedTimestamp)] [\(level.rawValue)] [\(category)] \(message)"
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, timestamp, level, message, category
     }
@@ -96,9 +100,17 @@ final class LogService {
     private let persistenceService: PersistenceService<LogEntry>
 
     private init() {
-        // 由于 init 在 MainActor，我们可以安全地在主线程完成初始化
-        persistenceService = PersistenceService(filename: "logs.json")
+        let persistenceService = PersistenceService<LogEntry>(filename: "logs.json")
+        self.persistenceService = persistenceService
         logs = persistenceService.load()
+    }
+
+    init(
+        initialLogs: [LogEntry],
+        persistenceService: PersistenceService<LogEntry>? = nil
+    ) {
+        self.persistenceService = persistenceService ?? PersistenceService(filename: "logs.json")
+        self.logs = initialLogs
     }
 
     // MARK: - Public Methods

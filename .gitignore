@@ -96,3 +96,6 @@ iOSInjectionProject/
 # Build logs
 *.log
 build_output.log
+
+# Local xcodebuild derived data
+build-local-*/

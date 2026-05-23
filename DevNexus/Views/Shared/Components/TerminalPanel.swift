@@ -1,70 +1,67 @@
 import SwiftUI
 
 struct TerminalPanel<ToolbarContent: View>: View {
-    let output: String
-    let emptyText: String
-    let height: CGFloat?
-    let showsToolbar: Bool
+    private let output: String
+    private let emptyText: String
+    private let explicitHeight: CGFloat?
+    private let configuration: ConsolePanelStyle.Configuration
     @ViewBuilder let toolbarContent: () -> ToolbarContent
 
     init(
         output: String,
         emptyText: String,
         height: CGFloat? = nil,
-        showsToolbar: Bool = true,
+        configuration: ConsolePanelStyle.Configuration = ConsolePanelStyle.configuration(for: .embeddedTerminal),
         @ViewBuilder toolbarContent: @escaping () -> ToolbarContent
     ) {
         self.output = output
         self.emptyText = emptyText
-        self.height = height
-        self.showsToolbar = showsToolbar
+        self.explicitHeight = height
+        self.configuration = configuration
         self.toolbarContent = toolbarContent
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppConfig.UI.mediumSpacing) {
-            if showsToolbar {
-                toolbarContent()
+        Group {
+            if ToolbarContent.self == EmptyView.self {
+                ConsolePanelContainer(configuration: configuration) {
+                    terminalViewport
+                }
+            } else {
+                ConsolePanelContainer(configuration: configuration) {
+                    toolbarContent()
+                } content: {
+                    terminalViewport
+                }
             }
-            terminalBody
         }
     }
 
-    private var terminalBody: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(displayedText)
-                        .font(.system(size: AppConfig.UI.smallFontSize, design: .monospaced))
-                        .foregroundStyle(output.isEmpty ? .secondary : .primary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(AppConfig.UI.mediumSpacing)
-
-                    Color.clear
-                        .frame(height: 1)
-                        .id("terminalBottom")
-                }
-            }
-            .appScrollChrome(.utilityPanel)
+    private var terminalViewport: some View {
+        ConsoleTextViewport(
+            text: displayedText,
+            isPlaceholder: output.isEmpty,
+            padding: configuration.viewport.padding
+        )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .modify { view in
-                if let height {
-                    view.frame(height: height)
+                if let explicitHeight {
+                    view.frame(height: explicitHeight)
                 } else {
-                    view
+                    switch configuration.viewport.sizing {
+                    case .fixed(let height):
+                        view.frame(height: height)
+                    case .flexible:
+                        view
+                    }
                 }
             }
-            .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.smallCornerRadius))
+            .background(configuration.palette.viewportBackground.resolvedColor)
+            .clipShape(RoundedRectangle(cornerRadius: configuration.viewport.cornerRadius))
             .overlay(
-                RoundedRectangle(cornerRadius: AppConfig.UI.smallCornerRadius)
-                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                RoundedRectangle(cornerRadius: configuration.viewport.cornerRadius)
+                    .stroke(configuration.palette.viewportBorder.resolvedColor, lineWidth: 1)
             )
-            .onChange(of: output) { _, _ in
-                proxy.scrollTo("terminalBottom", anchor: .bottom)
-            }
-        }
     }
 
     private var displayedText: String {
@@ -76,10 +73,13 @@ extension TerminalPanel where ToolbarContent == EmptyView {
     init(
         output: String,
         emptyText: String,
-        height: CGFloat? = nil
+        height: CGFloat? = nil,
+        configuration: ConsolePanelStyle.Configuration = ConsolePanelStyle.configuration(for: .embeddedTerminal)
     ) {
-        self.init(output: output, emptyText: emptyText, height: height, showsToolbar: false) {
-            EmptyView()
-        }
+        self.output = output
+        self.emptyText = emptyText
+        self.explicitHeight = height
+        self.configuration = configuration
+        self.toolbarContent = { EmptyView() }
     }
 }

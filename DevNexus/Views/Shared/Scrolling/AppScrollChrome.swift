@@ -32,25 +32,59 @@ private struct AppScrollViewConfigurator: NSViewRepresentable {
             hostView.applyConfiguration = applyConfiguration(from:)
         }
         applyConfiguration(from: nsView)
+        DispatchQueue.main.async { [weak nsView] in
+            guard let nsView else {
+                return
+            }
+
+            applyConfiguration(from: nsView)
+        }
     }
 
     private func applyConfiguration(from hostView: NSView) {
-        guard let initialView = hostView.superview else {
-            return
-        }
-
-        guard let scrollView = sequence(first: initialView, next: { $0.superview })
-            .compactMap({ $0 as? NSScrollView })
-            .first
-        else {
+        guard let scrollView = resolvedScrollView(from: hostView) else {
             return
         }
 
         let configuration = AppScrollerPolicy.configuration(for: role)
         scrollView.scrollerStyle = configuration.scrollerStyle
         scrollView.autohidesScrollers = configuration.autohidesScrollers
+        scrollView.scrollerKnobStyle = .default
         scrollView.verticalScroller?.controlSize = configuration.controlSize
         scrollView.horizontalScroller?.controlSize = configuration.controlSize
+        scrollView.tile()
+    }
+
+    private func resolvedScrollView(from hostView: NSView) -> NSScrollView? {
+        if let scrollView = hostView.enclosingScrollView {
+            return scrollView
+        }
+
+        for candidate in sequence(first: hostView, next: { $0.superview }) {
+            if let scrollView = candidate as? NSScrollView {
+                return scrollView
+            }
+
+            if let scrollView = firstDescendantScrollView(in: candidate) {
+                return scrollView
+            }
+        }
+
+        return nil
+    }
+
+    private func firstDescendantScrollView(in rootView: NSView) -> NSScrollView? {
+        for subview in rootView.subviews {
+            if let scrollView = subview as? NSScrollView {
+                return scrollView
+            }
+
+            if let scrollView = firstDescendantScrollView(in: subview) {
+                return scrollView
+            }
+        }
+
+        return nil
     }
 }
 

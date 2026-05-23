@@ -3,6 +3,7 @@ import AppKit
 enum AppScrollSurfaceRole {
     case mainContent
     case utilityPanel
+    case consoleViewport
 }
 
 struct AppScrollerConfiguration: Equatable {
@@ -14,35 +15,15 @@ struct AppScrollerConfiguration: Equatable {
 enum AppScrollerPolicy {
     static func configuration(
         for role: AppScrollSurfaceRole,
-        preferredStyle: NSScroller.Style = NSScroller.preferredScrollerStyle
+        preferredStyle _: NSScroller.Style = NSScroller.preferredScrollerStyle
     ) -> AppScrollerConfiguration {
-        switch (role, preferredStyle) {
-        case (.mainContent, .legacy):
-            AppScrollerConfiguration(
-                scrollerStyle: .legacy,
-                autohidesScrollers: false,
-                controlSize: .regular
-            )
-        case (.mainContent, .overlay):
+        switch role {
+        case .mainContent, .utilityPanel, .consoleViewport:
             AppScrollerConfiguration(
                 scrollerStyle: .overlay,
                 autohidesScrollers: true,
                 controlSize: .regular
             )
-        case (.utilityPanel, .legacy):
-            AppScrollerConfiguration(
-                scrollerStyle: .legacy,
-                autohidesScrollers: false,
-                controlSize: .small
-            )
-        case (.utilityPanel, .overlay):
-            AppScrollerConfiguration(
-                scrollerStyle: .overlay,
-                autohidesScrollers: true,
-                controlSize: .small
-            )
-        @unknown default:
-            configuration(for: role, preferredStyle: .overlay)
         }
     }
 }

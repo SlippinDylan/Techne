@@ -160,6 +160,21 @@ struct ContentView: View {
     }
 }
 
+extension ContentView {
+    @MainActor
+    static func preview() -> some View {
+        let commandConfigService = CommandConfigService()
+        let projectService = ProjectService(commandConfigService: commandConfigService)
+        let navigationCoordinator = MainWindowNavigationCoordinator()
+
+        return ContentView(
+            commandConfigService: commandConfigService,
+            projectService: projectService
+        )
+        .environment(navigationCoordinator)
+    }
+}
+
 struct SettingsContentView: View {
     @Environment(LaunchSettings.self) private var launchSettings
     let projectService: ProjectService
@@ -334,9 +349,5 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 }
 
 #Preview {
-    let commandConfigService = CommandConfigService()
-    ContentView(
-        commandConfigService: commandConfigService,
-        projectService: ProjectService(commandConfigService: commandConfigService)
-    )
+    ContentView.preview()
 }

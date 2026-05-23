@@ -35,6 +35,16 @@ struct ProjectTerminalVisibilityTests {
     }
 
     @Test
+    func keepsConsoleVisibleForRunningProjectAfterBufferedOutputClears() {
+        var project = makeProject(type: .devServer)
+        project.isRunning = true
+        project.terminalOutput = ""
+
+        #expect(ProjectTerminalVisibility.showsConsole(for: project))
+        #expect(ProjectTerminalVisibility.showsToggle(for: project))
+    }
+
+    @Test
     func showsConsoleForDevServerProjectsUsingTheSameRules() {
         var project = makeProject(type: .devServer)
         project.terminalOutput = "[系统] server ready\n"

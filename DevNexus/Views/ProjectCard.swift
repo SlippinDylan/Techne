@@ -324,7 +324,7 @@ struct ProjectCard: View {
                 ProgressView()
                     .controlSize(.small)
                     .frame(width: 28, height: 28)
-            } else if relatedServer != nil || project.isRunning {
+            } else if isRunning {
                 ActionButton(
                     icon: "stop.fill",
                     action: onStopServer,
@@ -400,18 +400,23 @@ struct ProjectCard: View {
     // MARK: - Terminal Output View
 
     private var terminalOutputView: some View {
-        TerminalPanel(
+        EmbeddedConsoleSection(
             output: project.terminalOutput,
             emptyText: "等待任务启动...",
-            height: 200
+            height: ConsolePanelStyle.embeddedTerminalViewportHeight
         )
-        .padding(AppConfig.UI.largePadding)
     }
 
     // MARK: - Helper Properties
 
     private var isRunning: Bool {
         relatedServer != nil || project.isRunning
+    }
+
+    private var terminalVisibilityProject: Project {
+        var project = project
+        project.isRunning = isRunning
+        return project
     }
 
     private var isTransitioning: Bool {
@@ -423,7 +428,7 @@ struct ProjectCard: View {
     }
 
     private var shouldShowProjectTerminalToggle: Bool {
-        ProjectTerminalVisibility.showsToggle(for: project)
+        ProjectTerminalVisibility.showsToggle(for: terminalVisibilityProject)
     }
 
     private var shouldShowProjectTerminalSection: Bool {
