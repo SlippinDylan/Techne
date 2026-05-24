@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import DevNexus
 
+@Suite(.serialized)
 struct ProjectServiceStartupRecoveryTests {
     @Test
     @MainActor
@@ -27,12 +28,6 @@ struct ProjectServiceStartupRecoveryTests {
             isProcessRunning: signalRecorder.isRunning(pid:),
             sleep: { _ in }
         )
-
-        let service = makeProjectService(
-            persistenceRoot: isolatedPersistenceRoot,
-            managedBrowserInstanceService: managedBrowserService
-        )
-
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sleep")
         process.arguments = ["30"]
@@ -42,6 +37,22 @@ struct ProjectServiceStartupRecoveryTests {
                 process.terminate()
             }
         }
+        let processService = makeProjectScopedTestProcessService(
+            snapshots: [
+                ProjectProcessSnapshot(
+                    pid: process.processIdentifier,
+                    processGroupID: getpgid(process.processIdentifier),
+                    commandLine: "sleep 30",
+                    currentWorkingDirectory: projectRoot.path
+                )
+            ]
+        )
+
+        let service = makeProjectService(
+            persistenceRoot: isolatedPersistenceRoot,
+            managedBrowserInstanceService: managedBrowserService,
+            processService: processService
+        )
 
         var project = Project(
             name: "stoppable-dev-server",
@@ -251,6 +262,88 @@ struct ProjectServiceStartupRecoveryTests {
 
     @Test
     @MainActor
+    func stoppingDevServerUsesProjectRootScopeWhenStoredPIDIsStale() async {
+        let persistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let recorder = TestProcessRuntimeRecorder(
+            aliveProcessIDs: [111, 99751, 99752, 99767],
+            processGroupIDs: [
+                111: 111,
+                99751: 99365,
+                99752: 99365,
+                99767: 99365
+            ]
+        )
+        let processService = ProcessService(
+            runtime: .init(
+                processSnapshots: {
+                    [
+                        ProjectProcessSnapshot(
+                            pid: 111,
+                            processGroupID: 111,
+                            commandLine: "node /tmp/other-project/dev.mjs",
+                            currentWorkingDirectory: "/tmp/other-project"
+                        ),
+                        ProjectProcessSnapshot(
+                            pid: 99751,
+                            processGroupID: 99365,
+                            commandLine: "pnpm dev:mock",
+                            currentWorkingDirectory: "/Users/test/Portlens"
+                        ),
+                        ProjectProcessSnapshot(
+                            pid: 99752,
+                            processGroupID: 99365,
+                            commandLine: "node ./scripts/workspace-next.mjs dev mock",
+                            currentWorkingDirectory: "/Users/test/Portlens"
+                        ),
+                        ProjectProcessSnapshot(
+                            pid: 99767,
+                            processGroupID: 99365,
+                            commandLine: "next-server (v15.5.18)",
+                            currentWorkingDirectory: "/Users/test/Portlens/app"
+                        )
+                    ]
+                },
+                processGroupID: recorder.processGroupID(for:),
+                sendSignalToProcessGroup: recorder.sendGroupSignal(groupID:signal:),
+                sendSignalToProcess: recorder.sendProcessSignal(pid:signal:),
+                isProcessRunning: recorder.isRunning(pid:),
+                sleep: { _ in }
+            )
+        )
+        let service = makeProjectService(
+            persistenceRoot: persistenceRoot,
+            managedBrowserInstanceService: ManagedBrowserInstanceService(),
+            processService: processService
+        )
+
+        var project = Project(
+            name: "Portlens",
+            path: "/Users/test/Portlens",
+            type: .devServer,
+            currentBranch: "main",
+            startCommand: "pnpm dev:mock"
+        )
+        project.isRunning = true
+        project.runningProcessPID = 111
+        service.projects = [project]
+
+        let result = await service.stopServer(for: project, cleanCache: false)
+
+        guard case .success = result else {
+            Issue.record("expected stopServer to succeed when a descendant process matches the managed project root")
+            return
+        }
+
+        let updatedProject = service.projects[0]
+        #expect(updatedProject.runningProcessPID == nil)
+        #expect(updatedProject.isRunning == false)
+        #expect(updatedProject.transitionState == .idle)
+        #expect(recorder.groupSignals() == [ProcessSignalEvent(target: 99365, signal: SIGTERM)])
+        #expect(recorder.processSignals().isEmpty)
+    }
+
+    @Test
+    @MainActor
     func switchingStartupModeWhileStoppedPersistsSelectionWithoutStartingProcess() async throws {
         let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
@@ -303,8 +396,22 @@ struct ProjectServiceStartupRecoveryTests {
                 oldProcess.terminate()
             }
         }
+        let processService = makeProjectScopedTestProcessService(
+            snapshots: [
+                ProjectProcessSnapshot(
+                    pid: oldProcess.processIdentifier,
+                    processGroupID: getpgid(oldProcess.processIdentifier),
+                    commandLine: "sleep 30",
+                    currentWorkingDirectory: projectRoot.path
+                )
+            ]
+        )
 
-        let service = makeProjectService(persistenceRoot: isolatedPersistenceRoot)
+        let service = makeProjectService(
+            persistenceRoot: isolatedPersistenceRoot,
+            managedBrowserInstanceService: ManagedBrowserInstanceService(),
+            processService: processService
+        )
         var project = Project(
             name: "portlens-workspace",
             path: projectRoot.path,
@@ -368,14 +475,16 @@ struct ProjectServiceStartupRecoveryTests {
     private func makeProjectService(persistenceRoot: URL) -> ProjectService {
         makeProjectService(
             persistenceRoot: persistenceRoot,
-            managedBrowserInstanceService: ManagedBrowserInstanceService()
+            managedBrowserInstanceService: ManagedBrowserInstanceService(),
+            processService: makeDefaultTestProcessService()
         )
     }
 
     @MainActor
     private func makeProjectService(
         persistenceRoot: URL,
-        managedBrowserInstanceService: ManagedBrowserInstanceService
+        managedBrowserInstanceService: ManagedBrowserInstanceService,
+        processService: ProcessService? = nil
     ) -> ProjectService {
         let configService = CommandConfigService(
             persistenceService: PersistenceService<CommandConfig>(
@@ -383,13 +492,59 @@ struct ProjectServiceStartupRecoveryTests {
                 root: .custom(persistenceRoot)
             )
         )
+        let resolvedProcessService = processService ?? makeDefaultTestProcessService()
 
         return ProjectService(
             commandConfigService: configService,
+            processService: resolvedProcessService,
             managedBrowserInstanceService: managedBrowserInstanceService,
             persistenceService: PersistenceService<Project>(
                 filename: "projects.json",
                 root: .custom(persistenceRoot)
+            )
+        )
+    }
+
+    private func makeDefaultTestProcessService() -> ProcessService {
+        ProcessService(
+            runtime: .init(
+                processSnapshots: { [] },
+                processGroupID: { pid in getpgid(pid) },
+                sendSignalToProcessGroup: { processGroupID, signal in
+                    kill(-processGroupID, signal)
+                },
+                sendSignalToProcess: { pid, signal in
+                    kill(pid, signal)
+                },
+                isProcessRunning: { pid in
+                    kill(pid, 0) == 0
+                },
+                sleep: { nanoseconds in
+                    try? await Task.sleep(nanoseconds: nanoseconds)
+                }
+            )
+        )
+    }
+
+    private func makeProjectScopedTestProcessService(
+        snapshots: [ProjectProcessSnapshot]
+    ) -> ProcessService {
+        ProcessService(
+            runtime: .init(
+                processSnapshots: { snapshots },
+                processGroupID: { pid in getpgid(pid) },
+                sendSignalToProcessGroup: { processGroupID, signal in
+                    kill(-processGroupID, signal)
+                },
+                sendSignalToProcess: { pid, signal in
+                    kill(pid, signal)
+                },
+                isProcessRunning: { pid in
+                    kill(pid, 0) == 0
+                },
+                sleep: { nanoseconds in
+                    try? await Task.sleep(nanoseconds: nanoseconds)
+                }
             )
         )
     }
@@ -471,6 +626,72 @@ private final class TestManagedBrowserSignalRecorder: @unchecked Sendable {
 private struct ManagedSignalEvent: Equatable {
     let pid: Int32
     let signal: Int32
+}
+
+private struct ProcessSignalEvent: Equatable {
+    let target: Int32
+    let signal: Int32
+}
+
+private final class TestProcessRuntimeRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    nonisolated(unsafe) private var aliveProcessIDs: Set<Int32>
+    private let processGroupIDs: [Int32: Int32]
+    nonisolated(unsafe) private var recordedGroupSignals: [ProcessSignalEvent] = []
+    nonisolated(unsafe) private var recordedProcessSignals: [ProcessSignalEvent] = []
+
+    init(aliveProcessIDs: Set<Int32>, processGroupIDs: [Int32: Int32]) {
+        self.aliveProcessIDs = aliveProcessIDs
+        self.processGroupIDs = processGroupIDs
+    }
+
+    nonisolated
+    func processGroupID(for pid: Int32) -> Int32 {
+        lock.lock()
+        defer { lock.unlock() }
+        return processGroupIDs[pid] ?? -1
+    }
+
+    nonisolated
+    func sendGroupSignal(groupID: Int32, signal: Int32) {
+        lock.lock()
+        defer { lock.unlock() }
+        recordedGroupSignals.append(ProcessSignalEvent(target: groupID, signal: signal))
+        if signal == SIGTERM || signal == SIGKILL {
+            aliveProcessIDs = Set(aliveProcessIDs.filter { processGroupIDs[$0] != groupID })
+        }
+    }
+
+    nonisolated
+    func sendProcessSignal(pid: Int32, signal: Int32) {
+        lock.lock()
+        defer { lock.unlock() }
+        recordedProcessSignals.append(ProcessSignalEvent(target: pid, signal: signal))
+        if signal == SIGTERM || signal == SIGKILL {
+            aliveProcessIDs.remove(pid)
+        }
+    }
+
+    nonisolated
+    func isRunning(pid: Int32) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return aliveProcessIDs.contains(pid)
+    }
+
+    nonisolated
+    func groupSignals() -> [ProcessSignalEvent] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedGroupSignals
+    }
+
+    nonisolated
+    func processSignals() -> [ProcessSignalEvent] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedProcessSignals
+    }
 }
 
 private final class NotificationRecorder: @unchecked Sendable {

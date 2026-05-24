@@ -112,9 +112,7 @@ final class DevServerParser: Sendable {
 
     /// 获取进程的完整命令行
     private nonisolated func getProcessCommandLine(pid: Int32) -> String {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/ps")
-        task.arguments = ["-p", "\(pid)", "-o", "command="]
+        let task = SystemProcessInspector.makeCommandLineTask(pid: pid)
 
         let pipe = Pipe()
         task.standardOutput = pipe
@@ -141,9 +139,9 @@ final class DevServerParser: Sendable {
 
     /// 提取项目路径
     private nonisolated func extractProjectPath(pid: Int32) -> String {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
-        task.arguments = ["-a", "-p", "\(pid)", "-d", "cwd", "-Fn"]
+        guard let task = SystemProcessInspector.makeCurrentWorkingDirectoryTask(pid: pid) else {
+            return ""
+        }
 
         let pipe = Pipe()
         task.standardOutput = pipe
@@ -158,13 +156,7 @@ final class DevServerParser: Sendable {
 
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8) {
-                // 输出格式: p<pid>\nfcwd\nn<path>
-                let lines = output.components(separatedBy: "\n")
-                for line in lines {
-                    if line.hasPrefix("n") {
-                        return String(line.dropFirst())
-                    }
-                }
+                return SystemProcessInspector.parseCurrentWorkingDirectories(from: output)[pid] ?? ""
             }
         } catch {
             // 不在这里调用 LogService，避免后台线程并发问题

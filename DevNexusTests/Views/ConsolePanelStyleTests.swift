@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import SwiftUI
 import Testing
@@ -256,6 +257,59 @@ struct ConsolePanelStyleTests {
 
     @MainActor
     @Test
+    func terminalPanelKeepsViewportWithinDocumentBoundsAfterLiveOutputUpdate() {
+        let model = ConsoleOutputModel(output: "Booting...")
+        let hostedView = makeHostedView(
+            rootView: StatefulTerminalPanel(model: model)
+                .frame(width: 480, height: 260),
+            frame: NSRect(x: 0, y: 0, width: 480, height: 260)
+        )
+
+        guard let scrollView = hostedView.firstDescendantScrollView(),
+              let documentView = scrollView.documentView else {
+            Issue.record("Expected terminal panel to host an NSScrollView with a document view.")
+            return
+        }
+
+        model.output = (0..<120).map { "line \($0)" }.joined(separator: "\n")
+        flushHostedView(hostedView)
+
+        let clipOriginY = scrollView.contentView.bounds.origin.y
+        let maxLegalOriginY = max(documentView.frame.height - scrollView.contentSize.height, 0)
+
+        #expect(clipOriginY <= maxLegalOriginY + 0.5)
+    }
+
+    @MainActor
+    @Test
+    func terminalPanelPreservesReaderPositionWhenUserScrolledAwayFromBottom() {
+        let model = ConsoleOutputModel(
+            output: (0..<120).map { "line \($0)" }.joined(separator: "\n")
+        )
+        let hostedView = makeHostedView(
+            rootView: StatefulTerminalPanel(model: model)
+                .frame(width: 480, height: 260),
+            frame: NSRect(x: 0, y: 0, width: 480, height: 260)
+        )
+
+        guard let scrollView = hostedView.firstDescendantScrollView() else {
+            Issue.record("Expected terminal panel to host an NSScrollView.")
+            return
+        }
+
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: 0))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        flushHostedView(hostedView)
+
+        let preservedOriginY = scrollView.contentView.bounds.origin.y
+        model.output += "\nnew line after manual scroll"
+        flushHostedView(hostedView)
+
+        #expect(abs(scrollView.contentView.bounds.origin.y - preservedOriginY) <= 0.5)
+    }
+
+    @MainActor
+    @Test
     func logViewStructuredListUsesOverlayAutohidingRegularScrollerChrome() {
         let logService = makeTestLogService(logs: (0..<40).map { index in
             LogEntry(level: .info, message: "Structured row \(index)", category: "ConsolePanelStyleTests")
@@ -331,10 +385,38 @@ struct ConsolePanelStyleTests {
     private func makeTestLogService(logs: [LogEntry]) -> LogService {
         LogService(initialLogs: logs)
     }
+
+    @MainActor
+    private func flushHostedView(_ hostedView: NSView) {
+        hostedView.layoutSubtreeIfNeeded()
+        hostedView.window?.layoutIfNeeded()
+        hostedView.window?.displayIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        hostedView.layoutSubtreeIfNeeded()
+    }
 }
 
 private final class RetainedHostingView<Content: View>: NSHostingView<Content> {
     var retainedWindow: NSWindow?
+}
+
+private final class ConsoleOutputModel: ObservableObject {
+    @Published var output: String
+
+    init(output: String) {
+        self.output = output
+    }
+}
+
+private struct StatefulTerminalPanel: View {
+    @ObservedObject var model: ConsoleOutputModel
+
+    var body: some View {
+        TerminalPanel(
+            output: model.output,
+            emptyText: "Empty"
+        )
+    }
 }
 
 private extension NSView {

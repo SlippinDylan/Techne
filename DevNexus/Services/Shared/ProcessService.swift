@@ -10,9 +10,22 @@ import Foundation
 /// 进程管理服务
 /// 提供统一的进程启动、停止、监控接口
 final class ProcessService: Sendable {
+    struct Runtime: Sendable {
+        let processSnapshots: @Sendable () async -> [ProjectProcessSnapshot]
+        let processGroupID: @Sendable (Int32) -> Int32
+        let sendSignalToProcessGroup: @Sendable (Int32, Int32) -> Void
+        let sendSignalToProcess: @Sendable (Int32, Int32) -> Void
+        let isProcessRunning: @Sendable (Int32) -> Bool
+        let sleep: @Sendable (UInt64) async -> Void
+    }
+
     nonisolated static let shared = ProcessService()
 
-    nonisolated private init() {}
+    private let runtime: Runtime
+
+    nonisolated init(runtime: Runtime = .live) {
+        self.runtime = runtime
+    }
 
     // MARK: - Public Methods
 
@@ -57,10 +70,8 @@ final class ProcessService: Sendable {
 
     /// 检查进程是否匹配关键词 (异步版本)
     nonisolated private func checkProcessMatchesKeywords(pid: String, keywords: [String]) async -> Bool {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/ps")
-        // 获取完整命令行内容
-        task.arguments = ["-p", pid, "-o", "command="]
+        guard let parsedPID = Int32(pid) else { return false }
+        let task = SystemProcessInspector.makeCommandLineTask(pid: parsedPID)
 
         let pipe = Pipe()
         task.standardOutput = pipe
@@ -91,90 +102,181 @@ final class ProcessService: Sendable {
 
     /// 停止进程（通过进程组高效停止）
     func stopProcess(pid: Int32) async -> Result<Void, ProjectServiceError> {
-        let pgid = getpgid(pid)
+        let pgid = runtime.processGroupID(pid)
         if pgid > 0 {
-            // 尝试柔和停止
-            kill(-pgid, SIGTERM)
-            
-            // 异步等待清理
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            
-            if isProcessStillRunning(pid: String(pid)) {
-                // 如果还活着，强制清理
-                kill(-pgid, SIGKILL)
-                try? await Task.sleep(nanoseconds: 200_000_000)
-            }
-            
-            // 物理校验：如果依然存活，报失败
-            if isProcessStillRunning(pid: String(pid)) {
-                return .failure(.processStopFailed("进程组 (\(pgid)) 强制停止无效，可能存在权限限制"))
-            }
-            return .success(())
-        } else {
-            kill(pid, SIGTERM)
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            if isProcessStillRunning(pid: String(pid)) {
-                kill(pid, SIGKILL)
-            }
-            
-            if isProcessStillRunning(pid: String(pid)) {
-                return .failure(.processStopFailed("进程 \(pid) 停止失败"))
-            }
-            return .success(())
+            return await stopProcessGroup(processGroupID: pgid, verificationPIDs: [pid])
         }
+
+        return await stopSingleProcess(pid: pid)
     }
 
-    /// 使用路径停止进程 (严格校验版)
-    func killProcessByPath(_ path: String) async -> Result<Void, ProjectServiceError> {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
-        task.arguments = ["-f", path]
-        let pipe = Pipe()
-        task.standardOutput = pipe
+    /// 使用项目根目录停止进程
+    func stopProjectProcesses(at projectRootPath: String) async -> Result<Void, ProjectServiceError> {
+        let processSnapshots = await runtime.processSnapshots()
+        let plan = ProjectRootProcessMatcher.stopPlan(
+            forProjectRootPath: projectRootPath,
+            processes: processSnapshots
+        )
 
-        do {
-            try task.run()
-            let status = await withCheckedContinuation { continuation in
-                task.terminationHandler = { p in continuation.resume(returning: p.terminationStatus) }
-            }
-
-            if status == 0 {
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
-                let pids = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                    .components(separatedBy: .newlines)
-                    .filter { !$0.isEmpty }
-
-                var failureMessage = ""
-                for pidString in pids {
-                    if let pid = Int32(pidString) {
-                        let res = await stopProcess(pid: pid)
-                        if case .failure(let error) = res {
-                            failureMessage += "\(pid): \(error.localizedDescription); "
-                        }
-                    }
-                }
-                
-                if !failureMessage.isEmpty {
-                    return .failure(.processStopFailed("部分进程停止失败: \(failureMessage)"))
-                }
-                return .success(())
-            }
-            return .failure(.processStopFailed("未找到匹配路径的进程"))
-        } catch {
-            return .failure(.processStopFailed(error.localizedDescription))
+        guard plan.isEmpty == false else {
+            return .failure(.processStopFailed("未找到匹配项目路径的运行进程"))
         }
+
+        var failureMessages: [String] = []
+
+        for processGroupID in plan.processGroupIDs {
+            let verificationPIDs = processSnapshots
+                .filter { $0.processGroupID == processGroupID }
+                .map(\.pid)
+            let result = await stopProcessGroup(
+                processGroupID: processGroupID,
+                verificationPIDs: verificationPIDs
+            )
+            if case .failure(let error) = result {
+                failureMessages.append("进程组 \(processGroupID): \(error.localizedDescription)")
+            }
+        }
+
+        for pid in plan.fallbackProcessIDs {
+            let result = await stopSingleProcess(pid: pid)
+            if case .failure(let error) = result {
+                failureMessages.append("进程 \(pid): \(error.localizedDescription)")
+            }
+        }
+
+        guard failureMessages.isEmpty else {
+            return .failure(.processStopFailed(failureMessages.joined(separator: "; ")))
+        }
+
+        return .success(())
+    }
+
+    /// 使用路径停止进程 (兼容旧调用，内部改为项目根目录范围)
+    func killProcessByPath(_ path: String) async -> Result<Void, ProjectServiceError> {
+        await stopProjectProcesses(at: path)
     }
 
     nonisolated private func isProcessStillRunning(pid: String) -> Bool {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/ps")
-        task.arguments = ["-p", pid]
-        task.standardOutput = Pipe()
+        guard let parsedPID = Int32(pid) else { return false }
+        return runtime.isProcessRunning(parsedPID)
+    }
+
+    private func stopProcessGroup(
+        processGroupID: Int32,
+        verificationPIDs: [Int32]
+    ) async -> Result<Void, ProjectServiceError> {
+        runtime.sendSignalToProcessGroup(processGroupID, SIGTERM)
+        await runtime.sleep(500_000_000)
+
+        if verificationPIDs.contains(where: runtime.isProcessRunning) {
+            runtime.sendSignalToProcessGroup(processGroupID, SIGKILL)
+            await runtime.sleep(200_000_000)
+        }
+
+        if verificationPIDs.contains(where: runtime.isProcessRunning) {
+            return .failure(.processStopFailed("进程组 (\(processGroupID)) 强制停止无效，可能存在权限限制"))
+        }
+
+        return .success(())
+    }
+
+    private func stopSingleProcess(pid: Int32) async -> Result<Void, ProjectServiceError> {
+        runtime.sendSignalToProcess(pid, SIGTERM)
+        await runtime.sleep(500_000_000)
+
+        if runtime.isProcessRunning(pid) {
+            runtime.sendSignalToProcess(pid, SIGKILL)
+            await runtime.sleep(200_000_000)
+        }
+
+        if runtime.isProcessRunning(pid) {
+            return .failure(.processStopFailed("进程 \(pid) 停止失败"))
+        }
+
+        return .success(())
+    }
+
+    nonisolated private static func loadProjectProcessSnapshots() async -> [ProjectProcessSnapshot] {
+        let currentWorkingDirectories = loadCurrentWorkingDirectories()
+        let task = SystemProcessInspector.makeProcessListTask()
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
         task.standardError = Pipe()
+
         do {
             let terminationStatus = try ProcessUtils.runAndWaitForTerminationSync(task, errorDomain: "ProcessService")
-            return terminationStatus == 0
-        } catch { return false }
+            guard terminationStatus == 0 else { return [] }
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let output = String(data: data, encoding: .utf8) else {
+                return []
+            }
+
+            return SystemProcessInspector.parseProcessSnapshots(
+                from: output,
+                currentWorkingDirectories: currentWorkingDirectories
+            )
+        } catch {
+            return []
+        }
     }
+
+    nonisolated private static func loadCurrentWorkingDirectories() -> [Int32: String] {
+        guard let task = SystemProcessInspector.makeCurrentWorkingDirectoryTask() else {
+            return [:]
+        }
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = Pipe()
+
+        do {
+            let terminationStatus = try ProcessUtils.runAndWaitForTerminationSync(task, errorDomain: "ProcessService")
+            guard terminationStatus == 0 else { return [:] }
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let output = String(data: data, encoding: .utf8) else {
+                return [:]
+            }
+
+            return SystemProcessInspector.parseCurrentWorkingDirectories(from: output)
+        } catch {
+            return [:]
+        }
+    }
+}
+
+extension ProcessService.Runtime {
+    nonisolated static let live = ProcessService.Runtime(
+        processSnapshots: {
+            await ProcessService.loadProjectProcessSnapshots()
+        },
+        processGroupID: { pid in
+            getpgid(pid)
+        },
+        sendSignalToProcessGroup: { processGroupID, signal in
+            kill(-processGroupID, signal)
+        },
+        sendSignalToProcess: { pid, signal in
+            kill(pid, signal)
+        },
+        isProcessRunning: { pid in
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/bin/ps")
+            task.arguments = ["-p", String(pid)]
+            task.standardOutput = Pipe()
+            task.standardError = Pipe()
+
+            do {
+                let terminationStatus = try ProcessUtils.runAndWaitForTerminationSync(task, errorDomain: "ProcessService")
+                return terminationStatus == 0
+            } catch {
+                return false
+            }
+        },
+        sleep: { nanoseconds in
+            try? await Task.sleep(nanoseconds: nanoseconds)
+        }
+    )
 }

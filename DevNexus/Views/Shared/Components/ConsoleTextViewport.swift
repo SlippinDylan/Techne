@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 
 struct ConsoleTextViewport: NSViewRepresentable {
+    private static let autoFollowTolerance: CGFloat = 24
+
     let text: String
     let isPlaceholder: Bool
     let padding: CGFloat
@@ -26,12 +28,22 @@ struct ConsoleTextViewport: NSViewRepresentable {
 
         context.coordinator.textView = textView
         context.coordinator.lastKnownWidth = max(scrollView.contentSize.width, 1)
+        let previousViewportState = viewportState(for: scrollView)
         let previousText = textView.string
         updateTextView(textView, using: context)
         textView.layoutSubtreeIfNeeded()
 
         if previousText != text {
-            scrollToBottom(in: scrollView)
+            let updatedViewportState = viewportState(for: scrollView)
+            if previousViewportState.shouldFollowOutput {
+                scrollToBottom(in: scrollView, viewportState: updatedViewportState)
+            } else {
+                restoreViewport(
+                    to: previousViewportState.originY,
+                    in: scrollView,
+                    viewportState: updatedViewportState
+                )
+            }
         }
     }
 
@@ -87,17 +99,58 @@ struct ConsoleTextViewport: NSViewRepresentable {
         )
     }
 
-    private func scrollToBottom(in scrollView: NSScrollView) {
-        let bottomPoint = NSPoint(x: 0, y: max(scrollView.documentView?.frame.height ?? 0, 0))
+    private func scrollToBottom(in scrollView: NSScrollView, viewportState: ViewportState) {
+        let bottomPoint = NSPoint(x: 0, y: viewportState.maxLegalOriginY)
         scrollView.contentView.scroll(to: bottomPoint)
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+    }
+
+    private func restoreViewport(
+        to previousOriginY: CGFloat,
+        in scrollView: NSScrollView,
+        viewportState: ViewportState
+    ) {
+        let clampedOriginY = min(max(previousOriginY, 0), viewportState.maxLegalOriginY)
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: clampedOriginY))
         scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
     private func updateDocumentFrame(for textView: NSTextView, proposedWidth: CGFloat, padding: CGFloat) {
         let width = max(proposedWidth, 1)
-        let textHeight = textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? 0
+        guard let textContainer = textView.textContainer,
+              let layoutManager = textView.layoutManager else {
+            textView.frame = NSRect(x: 0, y: 0, width: width, height: 1)
+            return
+        }
+
+        textContainer.containerSize = NSSize(
+            width: max(width - (padding * 2), 1),
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        layoutManager.ensureLayout(for: textContainer)
+
+        let textHeight = layoutManager.usedRect(for: textContainer).height
         let totalHeight = ceil(textHeight + (padding * 2))
         textView.frame = NSRect(x: 0, y: 0, width: width, height: max(totalHeight, 1))
+    }
+
+    private func viewportState(for scrollView: NSScrollView) -> ViewportState {
+        let viewportHeight = max(scrollView.contentSize.height, 0)
+        let documentHeight = max(scrollView.documentView?.frame.height ?? 0, 0)
+        let maxLegalOriginY = max(documentHeight - viewportHeight, 0)
+        let originY = min(max(scrollView.contentView.bounds.origin.y, 0), maxLegalOriginY)
+
+        return ViewportState(
+            originY: originY,
+            maxLegalOriginY: maxLegalOriginY,
+            shouldFollowOutput: (maxLegalOriginY - originY) <= Self.autoFollowTolerance
+        )
+    }
+
+    private struct ViewportState {
+        let originY: CGFloat
+        let maxLegalOriginY: CGFloat
+        let shouldFollowOutput: Bool
     }
 
     final class Coordinator {

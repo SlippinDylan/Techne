@@ -26,11 +26,11 @@ final class ProjectService {
     // MARK: - Dependencies
 
     private let gitService = GitService.shared
-    private let processService = ProcessService.shared
+    private let processService: ProcessService
     private let persistenceService: PersistenceService<Project>
     private let logService = LogService.shared
     private let operationsManager = ProjectOperationsManager()
-    private let processManager = ProcessManager()
+    private let processManager: ProcessManager
     private let terminalHandler = TerminalOutputHandler()
     private let commandConfigService: CommandConfigService
     private let managedBrowserInstanceService: ManagedBrowserInstanceService
@@ -44,10 +44,13 @@ final class ProjectService {
     @MainActor
     init(
         commandConfigService: CommandConfigService,
+        processService: ProcessService = .shared,
         managedBrowserInstanceService: ManagedBrowserInstanceService = ManagedBrowserInstanceService(),
         persistenceService: PersistenceService<Project> = PersistenceService(filename: "projects.json")
     ) {
         self.commandConfigService = commandConfigService
+        self.processService = processService
+        self.processManager = ProcessManager(processService: processService)
         self.managedBrowserInstanceService = managedBrowserInstanceService
         self.persistenceService = persistenceService
         loadProjects()
@@ -388,12 +391,9 @@ final class ProjectService {
     private func stopDevServerWithoutOutput(for project: Project, category: String, cleanCache: Bool) async -> Result<Void, ProjectServiceError> {
         appendSystemTerminalMessage("正在停止开发服务...", for: project.id)
 
-        let result: Result<Void, ProjectServiceError>
-        if let pid = project.runningProcessPID {
-            result = await processService.stopProcess(pid: pid)
-        } else {
-            result = await processService.killProcessByPath(project.path)
-        }
+        let result = await processService.stopProjectProcesses(
+            at: project.path
+        )
         
         if case .success = result {
             appendSystemTerminalMessage("开发服务已停止", for: project.id)
