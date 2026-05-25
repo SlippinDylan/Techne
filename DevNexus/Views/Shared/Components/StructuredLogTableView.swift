@@ -5,12 +5,20 @@ struct StructuredLogTableView: NSViewRepresentable {
     let logs: [LogEntry]
     @Binding var selection: Set<UUID>
 
+    private enum Layout {
+        static let minimumRowHeight: CGFloat = 24
+        static let horizontalPadding: CGFloat = 8
+        static let verticalPadding: CGFloat = 2
+        static let rowSpacing: CGFloat = 2
+        static let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+    }
+
     func makeCoordinator() -> Coordinator {
         Coordinator(selection: $selection)
     }
 
-    func makeNSView(context: Context) -> ConsoleViewportScrollView {
-        let scrollView = ConsoleViewportScrollView()
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = makeScrollView()
         let tableView = makeTableView(delegate: context.coordinator)
         context.coordinator.tableView = tableView
         context.coordinator.logs = logs
@@ -19,7 +27,7 @@ struct StructuredLogTableView: NSViewRepresentable {
         return scrollView
     }
 
-    func updateNSView(_ scrollView: ConsoleViewportScrollView, context: Context) {
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let tableView = context.coordinator.tableView ?? scrollView.documentView as? NSTableView else {
             return
         }
@@ -30,8 +38,21 @@ struct StructuredLogTableView: NSViewRepresentable {
         applySelection(on: tableView)
     }
 
-    private func makeTableView(delegate: Coordinator) -> NSTableView {
-        let tableView = NSTableView(frame: .zero)
+    private func makeScrollView() -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.backgroundColor = .clear
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.verticalScrollElasticity = .automatic
+        scrollView.horizontalScrollElasticity = .none
+        scrollView.automaticallyAdjustsContentInsets = false
+        return scrollView
+    }
+
+    private func makeTableView(delegate: Coordinator) -> StructuredLogNSTableView {
+        let tableView = StructuredLogNSTableView(frame: .zero)
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("log-line"))
         column.resizingMask = .autoresizingMask
         column.width = 600
@@ -43,11 +64,18 @@ struct StructuredLogTableView: NSViewRepresentable {
         tableView.allowsMultipleSelection = true
         tableView.allowsEmptySelection = true
         tableView.selectionHighlightStyle = .regular
-        tableView.intercellSpacing = NSSize(width: 0, height: 2)
-        tableView.rowHeight = 24
+        tableView.intercellSpacing = NSSize(width: 0, height: Layout.rowSpacing)
+        tableView.rowHeight = Layout.minimumRowHeight
         tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         tableView.delegate = delegate
         tableView.dataSource = delegate
+        tableView.onWidthDidChange = { [weak tableView] in
+            guard let tableView else {
+                return
+            }
+
+            tableView.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<tableView.numberOfRows))
+        }
         return tableView
     }
 
@@ -85,8 +113,10 @@ struct StructuredLogTableView: NSViewRepresentable {
             } else {
                 let textField = NSTextField(labelWithString: "")
                 textField.translatesAutoresizingMaskIntoConstraints = false
-                textField.lineBreakMode = .byTruncatingTail
-                textField.maximumNumberOfLines = 1
+                textField.lineBreakMode = .byWordWrapping
+                textField.maximumNumberOfLines = 0
+                textField.cell?.wraps = true
+                textField.cell?.usesSingleLineMode = false
                 textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
                 let view = NSTableCellView()
@@ -104,9 +134,24 @@ struct StructuredLogTableView: NSViewRepresentable {
 
             let log = logs[row]
             cellView.textField?.stringValue = log.formattedLine
-            cellView.textField?.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+            cellView.textField?.font = Layout.font
             cellView.textField?.textColor = color(for: log.level)
             return cellView
+        }
+
+        func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+            guard logs.indices.contains(row) else {
+                return Layout.minimumRowHeight
+            }
+
+            let availableWidth = max(contentWidth(for: tableView) - (Layout.horizontalPadding * 2), 1)
+            let boundingRect = (logs[row].formattedLine as NSString).boundingRect(
+                with: NSSize(width: availableWidth, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: [.font: Layout.font]
+            )
+
+            return max(Layout.minimumRowHeight, ceil(boundingRect.height) + (Layout.verticalPadding * 2))
         }
 
         func tableViewSelectionDidChange(_ notification: Notification) {
@@ -136,5 +181,31 @@ struct StructuredLogTableView: NSViewRepresentable {
                 return .systemRed
             }
         }
+
+        private func contentWidth(for tableView: NSTableView) -> CGFloat {
+            if let columnWidth = tableView.tableColumns.first?.width {
+                return columnWidth
+            }
+
+            return tableView.bounds.width
+        }
+    }
+}
+
+private final class StructuredLogNSTableView: NSTableView {
+    var onWidthDidChange: (() -> Void)?
+
+    private var lastMeasuredWidth: CGFloat = 0
+
+    override func layout() {
+        super.layout()
+
+        let currentWidth = bounds.width
+        guard abs(currentWidth - lastMeasuredWidth) > 0.5 else {
+            return
+        }
+
+        lastMeasuredWidth = currentWidth
+        onWidthDidChange?()
     }
 }

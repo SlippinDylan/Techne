@@ -33,7 +33,6 @@ struct ContentView: View {
                     .padding(.vertical, 4)
             }
             .listStyle(.sidebar)
-            .appScrollChrome(.mainContent)
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
             // 详情区域
@@ -163,11 +162,53 @@ struct ContentView: View {
 extension ContentView {
     @MainActor
     static func preview() -> some View {
-        let commandConfigService = CommandConfigService()
-        let projectService = ProjectService(commandConfigService: commandConfigService)
-        let navigationCoordinator = MainWindowNavigationCoordinator()
+        ContentViewPreviewEnvironment.make().makeView()
+    }
+}
 
-        return ContentView(
+struct ContentViewPreviewEnvironment {
+    private let previewPersistenceSession: PreviewPersistenceSession
+    let commandConfigService: CommandConfigService
+    let projectService: ProjectService
+    let navigationCoordinator: MainWindowNavigationCoordinator
+
+    var persistenceRoot: PersistenceRoot {
+        previewPersistenceSession.persistenceRoot
+    }
+
+    @MainActor
+    static func make(
+        fileManager: FileManager = .default,
+        navigationCoordinator: MainWindowNavigationCoordinator = MainWindowNavigationCoordinator()
+    ) -> ContentViewPreviewEnvironment {
+        let previewPersistenceSession = PreviewPersistenceSession(fileManager: fileManager)
+        let persistenceRoot = previewPersistenceSession.persistenceRoot
+        let commandConfigService = CommandConfigService(
+            persistenceService: PersistenceService<CommandConfig>(
+                filename: "commandconfigs.json",
+                root: persistenceRoot
+            )
+        )
+        let projectService = ProjectService(
+            commandConfigService: commandConfigService,
+            persistenceService: PersistenceService<Project>(
+                filename: "projects.json",
+                root: persistenceRoot
+            ),
+            startupBehavior: .empty
+        )
+
+        return ContentViewPreviewEnvironment(
+            previewPersistenceSession: previewPersistenceSession,
+            commandConfigService: commandConfigService,
+            projectService: projectService,
+            navigationCoordinator: navigationCoordinator
+        )
+    }
+
+    @MainActor
+    func makeView() -> some View {
+        ContentView(
             commandConfigService: commandConfigService,
             projectService: projectService
         )
@@ -266,7 +307,7 @@ struct SettingsContentView: View {
             .padding(AppConfig.UI.extraLargePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .appScrollChrome(.mainContent)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .fileExporter(
             isPresented: $exportingBackup,
             document: backupDocument,

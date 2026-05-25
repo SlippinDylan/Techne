@@ -8,6 +8,12 @@
 import Foundation
 import Observation
 
+enum ProjectServiceStartupBehavior: Sendable {
+    case restoreAndRefresh
+    case restoreWithoutRefresh
+    case empty
+}
+
 /// 统一的项目服务 (Step 4 任务熔断重构版)
 /// 
 /// 依据：
@@ -46,14 +52,15 @@ final class ProjectService {
         commandConfigService: CommandConfigService,
         processService: ProcessService = .shared,
         managedBrowserInstanceService: ManagedBrowserInstanceService = ManagedBrowserInstanceService(),
-        persistenceService: PersistenceService<Project> = PersistenceService(filename: "projects.json")
+        persistenceService: PersistenceService<Project> = PersistenceService(filename: "projects.json"),
+        startupBehavior: ProjectServiceStartupBehavior = .restoreAndRefresh
     ) {
         self.commandConfigService = commandConfigService
         self.processService = processService
         self.processManager = ProcessManager(processService: processService)
         self.managedBrowserInstanceService = managedBrowserInstanceService
         self.persistenceService = persistenceService
-        loadProjects()
+        applyStartupBehavior(startupBehavior)
     }
 
     // MARK: - Status Refresh (异步任务熔断架构)
@@ -661,11 +668,26 @@ final class ProjectService {
     private func getCategoryName(for type: ProjectType) -> String { return type == .devServer ? "开发项目" : "小程序" }
 
     @MainActor
-    private func loadProjects() {
+    private func applyStartupBehavior(_ startupBehavior: ProjectServiceStartupBehavior) {
+        switch startupBehavior {
+        case .restoreAndRefresh:
+            loadProjects(shouldRefresh: true)
+        case .restoreWithoutRefresh:
+            loadProjects(shouldRefresh: false)
+        case .empty:
+            projects = []
+            isLoading = false
+        }
+    }
+
+    @MainActor
+    private func loadProjects(shouldRefresh: Bool) {
         let loadedProjects = persistenceService.load()
         applyPersistenceMigration(projects: loadedProjects)
         synchronizeMonitorsWithProjects()
-        refreshAll()
+        if shouldRefresh {
+            refreshAll()
+        }
     }
 
     @MainActor

@@ -12,8 +12,8 @@ struct ConsoleTextViewport: NSViewRepresentable {
         Coordinator()
     }
 
-    func makeNSView(context: Context) -> ConsoleViewportScrollView {
-        let scrollView = ConsoleViewportScrollView()
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = makeScrollView()
         let textView = makeTextView(padding: padding)
         context.coordinator.textView = textView
         scrollView.documentView = textView
@@ -21,7 +21,7 @@ struct ConsoleTextViewport: NSViewRepresentable {
         return scrollView
     }
 
-    func updateNSView(_ scrollView: ConsoleViewportScrollView, context: Context) {
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = context.coordinator.textView ?? scrollView.documentView as? NSTextView else {
             return
         }
@@ -45,6 +45,19 @@ struct ConsoleTextViewport: NSViewRepresentable {
                 )
             }
         }
+    }
+
+    private func makeScrollView() -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.backgroundColor = .clear
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.verticalScrollElasticity = .automatic
+        scrollView.horizontalScrollElasticity = .none
+        scrollView.automaticallyAdjustsContentInsets = false
+        return scrollView
     }
 
     private func makeTextView(padding: CGFloat) -> NSTextView {

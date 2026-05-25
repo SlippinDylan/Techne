@@ -178,17 +178,6 @@ struct ConsolePanelStyleTests {
 
     @MainActor
     @Test
-    func consoleViewportScrollViewAppliesUnifiedConsoleScrollerChrome() {
-        let scrollView = ConsoleViewportScrollView()
-
-        #expect(scrollView.scrollerStyle == .overlay)
-        #expect(scrollView.autohidesScrollers)
-        #expect(scrollView.verticalScroller is ConsoleViewportScroller)
-        #expect(scrollView.verticalScroller?.controlSize == .regular)
-    }
-
-    @MainActor
-    @Test
     func emptyLogViewWithoutEntriesDoesNotRenderStructuredTable() {
         let logService = makeTestLogService(logs: [])
 
@@ -214,7 +203,7 @@ struct ConsolePanelStyleTests {
 
     @MainActor
     @Test
-    func terminalPanelScrollViewUsesOverlayAutohidingRegularScrollerChrome() {
+    func terminalPanelUsesNativeScrollViewHost() {
         let hostedView = makeHostedView(
             rootView: TerminalPanel(
                 output: Array(repeating: "Output line", count: 80).joined(separator: "\n"),
@@ -229,29 +218,7 @@ struct ConsolePanelStyleTests {
             return
         }
 
-        #expect(scrollView.scrollerStyle == .overlay)
-        #expect(scrollView.autohidesScrollers)
-        #expect(scrollView.verticalScroller?.controlSize == .regular)
-    }
-
-    @MainActor
-    @Test
-    func terminalPanelUsesExplicitConsoleViewportScrollViewHost() {
-        let hostedView = makeHostedView(
-            rootView: TerminalPanel(
-                output: Array(repeating: "Output line", count: 80).joined(separator: "\n"),
-                emptyText: "Empty"
-            )
-            .frame(width: 480, height: 260),
-            frame: NSRect(x: 0, y: 0, width: 480, height: 260)
-        )
-
-        guard let scrollView = hostedView.firstDescendantScrollView() else {
-            Issue.record("Expected terminal panel to host an NSScrollView.")
-            return
-        }
-
-        #expect(String(describing: type(of: scrollView)) == "ConsoleViewportScrollView")
+        expectStandardAppKitScrollView(scrollView)
         #expect(scrollView.containsDescendant(ofType: NSTextView.self))
     }
 
@@ -310,7 +277,7 @@ struct ConsolePanelStyleTests {
 
     @MainActor
     @Test
-    func logViewStructuredListUsesOverlayAutohidingRegularScrollerChrome() {
+    func logViewStructuredListUsesNativeScrollViewHost() {
         let logService = makeTestLogService(logs: (0..<40).map { index in
             LogEntry(level: .info, message: "Structured row \(index)", category: "ConsolePanelStyleTests")
         })
@@ -322,26 +289,37 @@ struct ConsolePanelStyleTests {
             return
         }
 
-        #expect(scrollView.scrollerStyle == .overlay)
-        #expect(scrollView.autohidesScrollers)
-        #expect(scrollView.verticalScroller?.controlSize == .regular)
+        expectStandardAppKitScrollView(scrollView)
     }
 
     @MainActor
     @Test
-    func logViewStructuredListUsesExplicitConsoleViewportScrollViewHost() {
-        let logService = makeTestLogService(logs: (0..<40).map { index in
-            LogEntry(level: .info, message: "Structured row \(index)", category: "ConsolePanelStyleTests")
-        })
+    func structuredLogRowsWrapLongEntriesInsteadOfTruncatingToSingleLine() {
+        let longMessage = Array(
+            repeating: "A long structured log message should remain fully readable in the viewport.",
+            count: 8
+        ).joined(separator: " ")
+        let logService = makeTestLogService(logs: [
+            LogEntry(level: .warning, message: longMessage, category: "ConsolePanelStyleTests")
+        ])
 
         let hostedView = makeHostedLogView(logService: logService)
-
-        guard let scrollView = hostedView.firstDescendantScrollView(containing: NSTableView.self) else {
-            Issue.record("Expected structured log list to host an NSScrollView backed by NSTableView.")
+        guard let tableView = hostedView.firstDescendant(ofType: NSTableView.self) else {
+            Issue.record("Expected structured log list to host an NSTableView.")
             return
         }
 
-        #expect(String(describing: type(of: scrollView)) == "ConsoleViewportScrollView")
+        flushHostedView(hostedView)
+
+        guard let cellView = tableView.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTableCellView,
+              let textField = cellView.textField else {
+            Issue.record("Expected structured log row to vend an NSTableCellView with a text field.")
+            return
+        }
+
+        #expect(tableView.rect(ofRow: 0).height > 24)
+        #expect(textField.maximumNumberOfLines != 1)
+        #expect(textField.lineBreakMode == .byWordWrapping)
     }
 
     @MainActor
@@ -394,6 +372,16 @@ struct ConsolePanelStyleTests {
         RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         hostedView.layoutSubtreeIfNeeded()
     }
+
+    @MainActor
+    private func expectStandardAppKitScrollView(_ scrollView: NSScrollView) {
+        #expect(type(of: scrollView) == NSScrollView.self)
+        #expect(scrollView.drawsBackground == false)
+        #expect(scrollView.borderType == .noBorder)
+        #expect(scrollView.hasVerticalScroller)
+        #expect(scrollView.hasHorizontalScroller == false)
+    }
+
 }
 
 private final class RetainedHostingView<Content: View>: NSHostingView<Content> {
@@ -420,6 +408,14 @@ private struct StatefulTerminalPanel: View {
 }
 
 private extension NSView {
+    func firstDescendant<T: NSView>(ofType type: T.Type) -> T? {
+        if let matchingView = self as? T {
+            return matchingView
+        }
+
+        return subviews.lazy.compactMap { $0.firstDescendant(ofType: type) }.first
+    }
+
     func firstDescendantScrollView() -> NSScrollView? {
         if let scrollView = self as? NSScrollView {
             return scrollView
@@ -455,6 +451,14 @@ private extension NSView {
         }
 
         return convert(bounds, to: ancestor)
+    }
+
+    func firstButton(titled title: String) -> NSButton? {
+        if let button = self as? NSButton, button.title == title {
+            return button
+        }
+
+        return subviews.lazy.compactMap { $0.firstButton(titled: title) }.first
     }
 }
 

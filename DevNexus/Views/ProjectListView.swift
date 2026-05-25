@@ -199,8 +199,9 @@ struct ProjectListView: View {
                 }
             }
             .padding(AppConfig.UI.extraLargePadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .appScrollChrome(.mainContent)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var discoveredServersSection: some View {

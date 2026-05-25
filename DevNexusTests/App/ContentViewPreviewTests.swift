@@ -6,15 +6,47 @@ import Testing
 struct ContentViewPreviewTests {
     @MainActor
     @Test
-    func previewInjectsMainWindowNavigationEnvironment() {
-        let hostingView = makeHostedView(rootView: ContentView.preview())
-
-        #expect(hostingView.window != nil)
+    func previewEnvironmentRetainsInjectedNavigationCoordinator() {
+        let navigationCoordinator = MainWindowNavigationCoordinator(
+            makeWindowCoordinator: { _ in
+                MainWindowCoordinator(
+                    activateApp: {},
+                    openWindow: {}
+                )
+            }
+        )
+        let environment = ContentViewPreviewEnvironment.make(
+            navigationCoordinator: navigationCoordinator
+        )
+        #expect(environment.navigationCoordinator === navigationCoordinator)
     }
 
     @MainActor
-    private func makeHostedView<Content: View>(rootView: Content) -> NSHostingView<Content> {
-        let hostingView = NSHostingView(rootView: rootView)
+    @Test
+    func previewEnvironmentUsesTemporaryPersistenceAndSkipsStartupRefresh() {
+        let environment = ContentViewPreviewEnvironment.make()
+
+        #expect(environment.persistenceRoot.directoryURL.path.hasPrefix(FileManager.default.temporaryDirectory.path))
+        #expect(environment.projectService.projects.isEmpty)
+        #expect(environment.projectService.isLoading == false)
+    }
+
+    @MainActor
+    @Test
+    func previewEnvironmentReleasesItsTemporaryPersistenceDirectory() {
+        var environment: ContentViewPreviewEnvironment? = ContentViewPreviewEnvironment.make()
+        let persistenceDirectory = try! #require(environment?.persistenceRoot.directoryURL)
+
+        #expect(FileManager.default.fileExists(atPath: persistenceDirectory.path))
+
+        environment = nil
+
+        #expect(FileManager.default.fileExists(atPath: persistenceDirectory.path) == false)
+    }
+
+    @MainActor
+    private func makeHostedWindow<Content: View>(rootView: Content) -> NSWindow {
+        let hostingController = NSHostingController(rootView: rootView)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -22,11 +54,13 @@ struct ContentViewPreviewTests {
             defer: true
         )
 
-        window.contentView = hostingView
-        hostingView.frame = window.contentView?.bounds ?? .zero
+        window.contentViewController = hostingController
+        _ = window.contentViewController?.view
+        window.makeKeyAndOrderFront(nil)
         window.layoutIfNeeded()
-        hostingView.layoutSubtreeIfNeeded()
+        window.displayIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
-        return hostingView
+        return window
     }
 }

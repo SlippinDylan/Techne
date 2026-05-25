@@ -78,8 +78,9 @@ struct BrowserInstancesSheet: View {
                 }
             }
             .padding(AppConfig.UI.extraLargePadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .appScrollChrome(.utilityPanel)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

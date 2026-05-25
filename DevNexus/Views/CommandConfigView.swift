@@ -77,8 +77,9 @@ struct CommandConfigView: View {
                 }
             }
             .padding(AppConfig.UI.extraLargePadding)
+            .frame(maxWidth: .infinity)
         }
-        .appScrollChrome(.utilityPanel)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Empty State View
