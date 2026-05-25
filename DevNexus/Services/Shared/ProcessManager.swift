@@ -193,7 +193,8 @@ class ProcessManager {
         onOutputUpdate(project.id, "\n\n[系统] 正在请求停止进程组...\n")
 
         let result = await processService.stopProjectProcesses(
-            at: project.path
+            at: project.path,
+            preferredPID: project.runningProcessPID
         )
 
         if case .success = result {

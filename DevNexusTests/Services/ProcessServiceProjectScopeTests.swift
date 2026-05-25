@@ -4,6 +4,111 @@ import Testing
 
 struct ProcessServiceProjectScopeTests {
     @Test
+    func preferredPIDMatchingManagedProjectStopsWithoutGlobalProcessSnapshotScan() async {
+        let recorder = ProcessServiceStopRecorder(
+            aliveProcessIDs: [99752, 99767],
+            processGroupIDs: [
+                99752: 99365,
+                99767: 99365
+            ],
+            currentWorkingDirectories: [
+                99752: "/Users/test/Portlens",
+                99767: "/Users/test/Portlens/app"
+            ]
+        )
+        let service = ProcessService(
+            runtime: .init(
+                processSnapshots: {
+                    recorder.recordSnapshotScan()
+                    return []
+                },
+                processSnapshotForPID: { pid in
+                    ProjectProcessSnapshot(
+                        pid: pid,
+                        processGroupID: recorder.processGroupID(for: pid),
+                        commandLine: "node ./scripts/workspace-next.mjs dev mock",
+                        currentWorkingDirectory: recorder.currentWorkingDirectory(for: pid)
+                    )
+                },
+                processIDsInGroup: { _ in [99752, 99767] },
+                processGroupID: recorder.processGroupID(for:),
+                sendSignalToProcessGroup: recorder.sendGroupSignal(groupID:signal:),
+                sendSignalToProcess: recorder.sendProcessSignal(pid:signal:),
+                isProcessRunning: { pid in recorder.isRunning(pid: pid) },
+                sleep: { _ in }
+            )
+        )
+
+        let result = await service.stopProjectProcesses(
+            at: "/Users/test/Portlens",
+            preferredPID: 99752
+        )
+
+        guard case .success = result else {
+            Issue.record("expected preferred PID stop to succeed")
+            return
+        }
+
+        #expect(recorder.snapshotScanCount() == 0)
+        #expect(recorder.groupSignals() == [ProcessSignalEvent(target: 99365, signal: SIGTERM)])
+        #expect(recorder.processSignals().isEmpty)
+    }
+
+    @Test
+    func preferredPIDPathFailsWhenSiblingInSameProcessGroupSurvivesSignals() async {
+        let recorder = ProcessServiceStopRecorder(
+            aliveProcessIDs: [99752, 99767],
+            processGroupIDs: [
+                99752: 99365,
+                99767: 99365
+            ],
+            currentWorkingDirectories: [
+                99752: "/Users/test/Portlens",
+                99767: "/Users/test/Portlens/app"
+            ],
+            groupSignalSurvivors: [99767]
+        )
+        let service = ProcessService(
+            runtime: .init(
+                processSnapshots: {
+                    recorder.recordSnapshotScan()
+                    return []
+                },
+                processSnapshotForPID: { pid in
+                    ProjectProcessSnapshot(
+                        pid: pid,
+                        processGroupID: recorder.processGroupID(for: pid),
+                        commandLine: "node ./scripts/workspace-next.mjs dev mock",
+                        currentWorkingDirectory: recorder.currentWorkingDirectory(for: pid)
+                    )
+                },
+                processIDsInGroup: { _ in [99752, 99767] },
+                processGroupID: recorder.processGroupID(for:),
+                sendSignalToProcessGroup: recorder.sendGroupSignal(groupID:signal:),
+                sendSignalToProcess: recorder.sendProcessSignal(pid:signal:),
+                isProcessRunning: { pid in recorder.isRunning(pid: pid) },
+                sleep: { _ in }
+            )
+        )
+
+        let result = await service.stopProjectProcesses(
+            at: "/Users/test/Portlens",
+            preferredPID: 99752
+        )
+
+        guard case .failure = result else {
+            Issue.record("expected stop to fail when a sibling process survives both group signals")
+            return
+        }
+
+        #expect(recorder.snapshotScanCount() == 0)
+        #expect(recorder.groupSignals() == [
+            ProcessSignalEvent(target: 99365, signal: SIGTERM),
+            ProcessSignalEvent(target: 99365, signal: SIGKILL)
+        ])
+    }
+
+    @Test
     func descendantWorkingDirectoryMatchesManagedProjectRoot() {
         let process = ProjectProcessSnapshot(
             pid: 99767,
@@ -166,5 +271,106 @@ struct ProcessServiceProjectScopeTests {
 
         #expect(scanTask?.arguments == ["-iTCP", "-sTCP:LISTEN", "-n", "-P"])
         #expect(portTask?.arguments == ["-i", ":3000", "-sTCP:LISTEN"])
+    }
+}
+
+private struct ProcessSignalEvent: Equatable {
+    let target: Int32
+    let signal: Int32
+}
+
+private final class ProcessServiceStopRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    nonisolated(unsafe) private var aliveProcessIDs: Set<Int32>
+    private let processGroupIDs: [Int32: Int32]
+    private let currentWorkingDirectories: [Int32: String]
+    private let groupSignalSurvivors: Set<Int32>
+    nonisolated(unsafe) private var recordedGroupSignals: [ProcessSignalEvent] = []
+    nonisolated(unsafe) private var recordedProcessSignals: [ProcessSignalEvent] = []
+    nonisolated(unsafe) private var snapshotScans = 0
+
+    init(
+        aliveProcessIDs: Set<Int32>,
+        processGroupIDs: [Int32: Int32],
+        currentWorkingDirectories: [Int32: String],
+        groupSignalSurvivors: Set<Int32> = []
+    ) {
+        self.aliveProcessIDs = aliveProcessIDs
+        self.processGroupIDs = processGroupIDs
+        self.currentWorkingDirectories = currentWorkingDirectories
+        self.groupSignalSurvivors = groupSignalSurvivors
+    }
+
+    nonisolated
+    func recordSnapshotScan() {
+        lock.lock()
+        defer { lock.unlock() }
+        snapshotScans += 1
+    }
+
+    nonisolated
+    func snapshotScanCount() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return snapshotScans
+    }
+
+    nonisolated
+    func processGroupID(for pid: Int32) -> Int32 {
+        lock.lock()
+        defer { lock.unlock() }
+        return processGroupIDs[pid] ?? -1
+    }
+
+    nonisolated
+    func isRunning(pid: Int32) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return aliveProcessIDs.contains(pid)
+    }
+
+    nonisolated
+    func currentWorkingDirectory(for pid: Int32) -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return currentWorkingDirectories[pid]
+    }
+
+    nonisolated
+    func sendGroupSignal(groupID: Int32, signal: Int32) {
+        lock.lock()
+        defer { lock.unlock() }
+        recordedGroupSignals.append(ProcessSignalEvent(target: groupID, signal: signal))
+        if signal == SIGTERM || signal == SIGKILL {
+            aliveProcessIDs = Set(
+                aliveProcessIDs.filter {
+                    processGroupIDs[$0] != groupID || groupSignalSurvivors.contains($0)
+                }
+            )
+        }
+    }
+
+    nonisolated
+    func sendProcessSignal(pid: Int32, signal: Int32) {
+        lock.lock()
+        defer { lock.unlock() }
+        recordedProcessSignals.append(ProcessSignalEvent(target: pid, signal: signal))
+        if signal == SIGTERM || signal == SIGKILL {
+            aliveProcessIDs.remove(pid)
+        }
+    }
+
+    nonisolated
+    func groupSignals() -> [ProcessSignalEvent] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedGroupSignals
+    }
+
+    nonisolated
+    func processSignals() -> [ProcessSignalEvent] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedProcessSignals
     }
 }

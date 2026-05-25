@@ -9,6 +9,12 @@ import Foundation
 import os
 
 enum ProcessUtils {
+    struct CaptureResult: Sendable {
+        let terminationStatus: Int32
+        let standardOutput: Data
+        let standardError: Data
+    }
+
     nonisolated static func runAndWaitForTerminationSync(_ process: Process, errorDomain: String = "ProcessUtils") throws -> Int32 {
         let semaphore = DispatchSemaphore(value: 0)
         let state = LockedResultBox<Int32>(errorDomain: errorDomain)
@@ -25,6 +31,27 @@ enum ProcessUtils {
 
         semaphore.wait()
         return try state.value.get()
+    }
+
+    nonisolated static func runAndCapture(_ process: Process) async throws -> CaptureResult {
+        let standardOutput = Pipe()
+        let standardError = Pipe()
+        process.standardOutput = standardOutput
+        process.standardError = standardError
+
+        async let stdoutData: Data = standardOutput.fileHandleForReading.bytes.reduce(into: Data()) { data, byte in
+            data.append(byte)
+        }
+        async let stderrData: Data = standardError.fileHandleForReading.bytes.reduce(into: Data()) { data, byte in
+            data.append(byte)
+        }
+        let terminationStatus = try await runAndWaitForTermination(process)
+
+        return try await CaptureResult(
+            terminationStatus: terminationStatus,
+            standardOutput: stdoutData,
+            standardError: stderrData
+        )
     }
 
     nonisolated static func runAndWaitForTermination(_ process: Process) async throws -> Int32 {

@@ -399,7 +399,8 @@ final class ProjectService {
         appendSystemTerminalMessage("正在停止开发服务...", for: project.id)
 
         let result = await processService.stopProjectProcesses(
-            at: project.path
+            at: project.path,
+            preferredPID: project.runningProcessPID
         )
         
         if case .success = result {

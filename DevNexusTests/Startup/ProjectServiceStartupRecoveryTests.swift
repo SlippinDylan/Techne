@@ -303,10 +303,42 @@ struct ProjectServiceStartupRecoveryTests {
                         )
                     ]
                 },
+                processSnapshotForPID: {
+                    let snapshotsByPID: [Int32: ProjectProcessSnapshot] = [
+                        111: ProjectProcessSnapshot(
+                            pid: 111,
+                            processGroupID: 111,
+                            commandLine: "node /tmp/other-project/dev.mjs",
+                            currentWorkingDirectory: "/tmp/other-project"
+                        ),
+                        99751: ProjectProcessSnapshot(
+                            pid: 99751,
+                            processGroupID: 99365,
+                            commandLine: "pnpm dev:mock",
+                            currentWorkingDirectory: "/Users/test/Portlens"
+                        ),
+                        99752: ProjectProcessSnapshot(
+                            pid: 99752,
+                            processGroupID: 99365,
+                            commandLine: "node ./scripts/workspace-next.mjs dev mock",
+                            currentWorkingDirectory: "/Users/test/Portlens"
+                        ),
+                        99767: ProjectProcessSnapshot(
+                            pid: 99767,
+                            processGroupID: 99365,
+                            commandLine: "next-server (v15.5.18)",
+                            currentWorkingDirectory: "/Users/test/Portlens/app"
+                        )
+                    ]
+                    return snapshotsByPID[$0]
+                },
+                processIDsInGroup: { processGroupID in
+                    processGroupID == 99365 ? [99751, 99752, 99767] : [111]
+                },
                 processGroupID: recorder.processGroupID(for:),
                 sendSignalToProcessGroup: recorder.sendGroupSignal(groupID:signal:),
                 sendSignalToProcess: recorder.sendProcessSignal(pid:signal:),
-                isProcessRunning: recorder.isRunning(pid:),
+                isProcessRunning: { pid in recorder.isRunning(pid: pid) },
                 sleep: { _ in }
             )
         )
@@ -509,6 +541,8 @@ struct ProjectServiceStartupRecoveryTests {
         ProcessService(
             runtime: .init(
                 processSnapshots: { [] },
+                processSnapshotForPID: { _ in nil },
+                processIDsInGroup: { _ in [] },
                 processGroupID: { pid in getpgid(pid) },
                 sendSignalToProcessGroup: { processGroupID, signal in
                     kill(-processGroupID, signal)
@@ -529,9 +563,20 @@ struct ProjectServiceStartupRecoveryTests {
     private func makeProjectScopedTestProcessService(
         snapshots: [ProjectProcessSnapshot]
     ) -> ProcessService {
-        ProcessService(
+        let snapshotsByPID = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.pid, $0) })
+        let processGroupMemberPIDs = Dictionary(grouping: snapshots, by: \.processGroupID)
+            .mapValues { groupSnapshots in
+                groupSnapshots.map(\.pid)
+            }
+        return ProcessService(
             runtime: .init(
                 processSnapshots: { snapshots },
+                processSnapshotForPID: { pid in
+                    snapshotsByPID[pid]
+                },
+                processIDsInGroup: { processGroupID in
+                    processGroupMemberPIDs[processGroupID] ?? []
+                },
                 processGroupID: { pid in getpgid(pid) },
                 sendSignalToProcessGroup: { processGroupID, signal in
                     kill(-processGroupID, signal)
