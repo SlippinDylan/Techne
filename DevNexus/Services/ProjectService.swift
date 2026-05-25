@@ -8,6 +8,12 @@
 import Foundation
 import Observation
 
+enum ProjectServiceStartupBehavior: Sendable {
+    case restoreAndRefresh
+    case restoreWithoutRefresh
+    case empty
+}
+
 /// 统一的项目服务 (Step 4 任务熔断重构版)
 /// 
 /// 依据：
@@ -26,11 +32,11 @@ final class ProjectService {
     // MARK: - Dependencies
 
     private let gitService = GitService.shared
-    private let processService = ProcessService.shared
+    private let processService: ProcessService
     private let persistenceService: PersistenceService<Project>
     private let logService = LogService.shared
     private let operationsManager = ProjectOperationsManager()
-    private let processManager = ProcessManager()
+    private let processManager: ProcessManager
     private let terminalHandler = TerminalOutputHandler()
     private let commandConfigService: CommandConfigService
     private let managedBrowserInstanceService: ManagedBrowserInstanceService
@@ -44,13 +50,17 @@ final class ProjectService {
     @MainActor
     init(
         commandConfigService: CommandConfigService,
+        processService: ProcessService = .shared,
         managedBrowserInstanceService: ManagedBrowserInstanceService = ManagedBrowserInstanceService(),
-        persistenceService: PersistenceService<Project> = PersistenceService(filename: "projects.json")
+        persistenceService: PersistenceService<Project> = PersistenceService(filename: "projects.json"),
+        startupBehavior: ProjectServiceStartupBehavior = .restoreAndRefresh
     ) {
         self.commandConfigService = commandConfigService
+        self.processService = processService
+        self.processManager = ProcessManager(processService: processService)
         self.managedBrowserInstanceService = managedBrowserInstanceService
         self.persistenceService = persistenceService
-        loadProjects()
+        applyStartupBehavior(startupBehavior)
     }
 
     // MARK: - Status Refresh (异步任务熔断架构)
@@ -271,6 +281,37 @@ final class ProjectService {
     }
 
     @MainActor
+    func switchStartupMode(for project: Project, to modeID: String) async -> Result<Void, ProjectServiceError> {
+        guard let index = projects.firstIndex(where: { $0.id == project.id }) else {
+            return .failure(.pathNotFound(project.path))
+        }
+        guard projects[index].availableStartupModes.contains(where: { $0.id == modeID }) else {
+            return .failure(.invalidConfiguration("无效的启动模式"))
+        }
+
+        let wasRunning = projects[index].isRunning || projects[index].runningProcessPID != nil
+        projects[index].selectStartupMode(id: modeID)
+        let updatedProject = projects[index]
+        saveProjects()
+        appendSystemTerminalMessage(
+            "已切换启动模式为 \(updatedProject.selectedStartupMode?.displayName ?? "默认")",
+            for: updatedProject.id
+        )
+
+        guard wasRunning else {
+            return .success(())
+        }
+
+        let stopResult = await stopServer(for: updatedProject, cleanCache: false)
+        guard case .success = stopResult else {
+            appendSystemTerminalMessage("启动模式切换已保存，但停止旧进程失败", for: updatedProject.id)
+            return stopResult
+        }
+
+        return startServer(for: projects[index])
+    }
+
+    @MainActor
     func startServer(for project: Project) -> Result<Void, ProjectServiceError> {
         let category = getCategoryName(for: project.type)
         switch project.type {
@@ -357,12 +398,10 @@ final class ProjectService {
     private func stopDevServerWithoutOutput(for project: Project, category: String, cleanCache: Bool) async -> Result<Void, ProjectServiceError> {
         appendSystemTerminalMessage("正在停止开发服务...", for: project.id)
 
-        let result: Result<Void, ProjectServiceError>
-        if let pid = project.runningProcessPID {
-            result = await processService.stopProcess(pid: pid)
-        } else {
-            result = await processService.killProcessByPath(project.path)
-        }
+        let result = await processService.stopProjectProcesses(
+            at: project.path,
+            preferredPID: project.runningProcessPID
+        )
         
         if case .success = result {
             appendSystemTerminalMessage("开发服务已停止", for: project.id)
@@ -554,13 +593,28 @@ final class ProjectService {
 
     @MainActor
     func reconcileDetectedDevServers(_ servers: [DevServer]) {
-        let normalizedServers = servers.map { server in
-            (server: server, normalizedPath: normalizedPath(for: server.projectPath))
-        }
+        let managedProjectPaths = projects
+            .filter { $0.type == .devServer }
+            .map(\.path)
 
         for index in projects.indices where projects[index].type == .devServer {
-            let projectPath = normalizedPath(for: projects[index].path)
-            let matchedServer = normalizedServers.first { $0.normalizedPath == projectPath }?.server
+            let normalizedProjectPath = DevServerProjectMatcher.normalize(projects[index].path)
+            let pidMatchedServer = projects[index].runningProcessPID.flatMap { pid in
+                servers.first { server in
+                    server.id == pid
+                        && DevServerProjectMatcher.bestMatchingProjectPath(
+                            for: server,
+                            managedProjectPaths: managedProjectPaths
+                        ) == normalizedProjectPath
+                }
+            }
+            let pathMatchedServer = servers.first { server in
+                DevServerProjectMatcher.bestMatchingProjectPath(
+                    for: server,
+                    managedProjectPaths: managedProjectPaths
+                ) == normalizedProjectPath
+            }
+            let matchedServer = pidMatchedServer ?? pathMatchedServer
 
             if let matchedServer {
                 projects[index].runningProcessPID = matchedServer.id
@@ -615,11 +669,26 @@ final class ProjectService {
     private func getCategoryName(for type: ProjectType) -> String { return type == .devServer ? "开发项目" : "小程序" }
 
     @MainActor
-    private func loadProjects() {
+    private func applyStartupBehavior(_ startupBehavior: ProjectServiceStartupBehavior) {
+        switch startupBehavior {
+        case .restoreAndRefresh:
+            loadProjects(shouldRefresh: true)
+        case .restoreWithoutRefresh:
+            loadProjects(shouldRefresh: false)
+        case .empty:
+            projects = []
+            isLoading = false
+        }
+    }
+
+    @MainActor
+    private func loadProjects(shouldRefresh: Bool) {
         let loadedProjects = persistenceService.load()
         applyPersistenceMigration(projects: loadedProjects)
         synchronizeMonitorsWithProjects()
-        refreshAll()
+        if shouldRefresh {
+            refreshAll()
+        }
     }
 
     @MainActor
@@ -636,10 +705,6 @@ final class ProjectService {
         if result.didChange {
             saveProjects()
         }
-    }
-
-    private func normalizedPath(for path: String) -> String {
-        URL(fileURLWithPath: path).resolvingSymlinksInPath().path
     }
 
     private func cleanCommand(for project: Project) -> String {

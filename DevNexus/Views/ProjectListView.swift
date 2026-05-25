@@ -199,7 +199,9 @@ struct ProjectListView: View {
                 }
             }
             .padding(AppConfig.UI.extraLargePadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var discoveredServersSection: some View {
@@ -245,6 +247,7 @@ struct ProjectListView: View {
                         onDiscardChanges: { _ = projectService.discardChanges(at: project.path) },
                         onStartServer: { startServer(for: project) },
                         onStopServer: { stopServer(for: project) },
+                        onSwitchStartupMode: { switchStartupMode(for: project, to: $0) },
                         onRefresh: { refreshProject(project) },
                         onKillServer: { 
                             if let server = findRelatedServer(for: project) {
@@ -270,36 +273,47 @@ struct ProjectListView: View {
     }
 
     private var unmanagedDiscoveredServers: [DevServer] {
-        let managedProjectPaths = Set(filteredProjects.map { normalizedPath(for: $0.path) })
+        let managedProjectPaths = filteredProjects.map(\.path)
 
         return devServerService.servers.filter { server in
-            let normalizedServerPath = normalizedPath(for: server.projectPath)
-            return !managedProjectPaths.contains(normalizedServerPath)
+            let ownedProjectPath = DevServerProjectMatcher.bestMatchingProjectPath(
+                for: server,
+                managedProjectPaths: managedProjectPaths
+            )
+            let isSuppressed = DevServerProjectMatcher.isSuppressed(
+                server: server,
+                suppressedProjectPaths: startupSuppressedProjectPaths
+            )
+
+            return ownedProjectPath == nil && isSuppressed == false
         }
     }
 
     private func findRelatedServer(for project: Project) -> DevServer? {
+        let managedProjectPaths = filteredProjects.map(\.path)
+        let normalizedProjectPath = normalizedPath(for: project.path)
+
         if let runningProcessPID = project.runningProcessPID,
-           let pidMatchedServer = devServerService.servers.first(where: { $0.id == runningProcessPID }) {
+           let pidMatchedServer = devServerService.servers.first(where: { server in
+               server.id == runningProcessPID
+                   && DevServerProjectMatcher.bestMatchingProjectPath(
+                       for: server,
+                       managedProjectPaths: managedProjectPaths
+                   ) == normalizedProjectPath
+           }) {
             return pidMatchedServer
         }
 
-        let normalizedProjectPath = normalizedPath(for: project.path)
         return devServerService.servers.first { server in
-            let normalizedServerPath = normalizedPath(for: server.projectPath)
-
-            if normalizedServerPath == normalizedProjectPath {
-                return true
-            }
-
-            let longerPath = normalizedServerPath.count >= normalizedProjectPath.count ? normalizedServerPath : normalizedProjectPath
-            let shorterPath = longerPath == normalizedServerPath ? normalizedProjectPath : normalizedServerPath
-            return longerPath.hasPrefix(shorterPath + "/")
+            DevServerProjectMatcher.bestMatchingProjectPath(
+                for: server,
+                managedProjectPaths: managedProjectPaths
+            ) == normalizedProjectPath
         }
     }
 
     private func normalizedPath(for path: String) -> String {
-        URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        DevServerProjectMatcher.normalize(path)
     }
 
     private func getRelatedInstances(for server: DevServer?) -> [ChromeInstance] {
@@ -340,6 +354,18 @@ struct ProjectListView: View {
         }
     }
 
+    private func switchStartupMode(for project: Project, to modeID: String) {
+        Task {
+            let result = await projectService.switchStartupMode(for: project, to: modeID)
+            if case .failure(let error) = result {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                }
+            }
+        }
+    }
+
     private func addDiscoveredServer(_ server: DevServer) {
         _ = projectService.addProject(
             path: server.projectPath,
@@ -358,13 +384,23 @@ struct ProjectListView: View {
     }
 
     private func clearResolvedSuppressedPaths() {
+        let managedProjectPaths = filteredProjects.map(\.path)
+
         let resolvedPaths = Set(
             filteredProjects.compactMap { project -> String? in
                 let normalizedProjectPath = normalizedPath(for: project.path)
-                guard devServerService.servers.contains(where: { normalizedPath(for: $0.projectPath) == normalizedProjectPath }) else {
+                let hasResolvedServer = devServerService.servers.contains { server in
+                    DevServerProjectMatcher.bestMatchingProjectPath(
+                        for: server,
+                        managedProjectPaths: managedProjectPaths
+                    ) == normalizedProjectPath
+                }
+
+                guard hasResolvedServer else {
                     return nil
                 }
-                return normalizedPath(for: project.path)
+
+                return normalizedProjectPath
             }
         )
 

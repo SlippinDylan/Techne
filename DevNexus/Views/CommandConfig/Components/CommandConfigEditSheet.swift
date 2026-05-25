@@ -148,7 +148,9 @@ struct CommandConfigEditSheet: View {
                 )
             }
             .padding(AppConfig.UI.extraLargePadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func commandField(title: String, placeholder: String, text: Binding<String>, description: String) -> some View {

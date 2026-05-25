@@ -78,7 +78,9 @@ struct BrowserInstancesSheet: View {
                 }
             }
             .padding(AppConfig.UI.extraLargePadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

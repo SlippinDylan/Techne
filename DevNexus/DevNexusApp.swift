@@ -15,6 +15,7 @@ struct DevNexusApp: App {
     @State private var launchSettings = LaunchSettings.shared
     @State private var commandConfigService: CommandConfigService
     @State private var projectService: ProjectService
+    @State private var mainWindowNavigationCoordinator = MainWindowNavigationCoordinator.shared
 
     init() {
         let commandConfigService = CommandConfigService()
@@ -24,18 +25,19 @@ struct DevNexusApp: App {
 
     var body: some Scene {
         // 主窗口
-        WindowGroup(id: "main") {
+        Window("DevNexus", id: "main") {
             ContentView(
                 commandConfigService: commandConfigService,
                 projectService: projectService
             )
-                .frame(minWidth: 1080, minHeight: 720)
+            .environment(mainWindowNavigationCoordinator)
+            .frame(minWidth: 1080, minHeight: 720)
         }
         .defaultSize(width: 1080, height: 720)
         .windowResizability(.contentMinSize)
         .commands {
-            // 移除默认的 Cmd+Q 行为，由 AppDelegate 处理双击退出
-            CommandGroup(replacing: .appTermination) { }
+            MainWindowNavigationCommands()
+            DevNexusAppCommands()
         }
 
         // 原生设置场景 (Cmd + ,)
@@ -65,10 +67,9 @@ struct DevNexusApp: App {
         MenuBarExtra("DevNexus", systemImage: "macbook.and.iphone") {
             MenuBarView()
                 .environment(launchSettings)
+                .environment(mainWindowNavigationCoordinator)
         }
-        .commands {
-            DevNexusAppCommands()
-        }
+        .menuBarExtraStyle(.menu)
     }
 }
 
@@ -105,5 +106,17 @@ struct DevNexusAppCommands: Commands {
             }
             .keyboardShortcut("l", modifiers: [.command, .shift])
         }
+    }
+}
+
+struct MainWindowNavigationCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        let _ = MainWindowNavigationCoordinator.shared.registerOpenMainWindowAction {
+            openWindow(id: "main")
+        }
+
+        CommandGroup(before: .appInfo) { }
     }
 }

@@ -16,10 +16,14 @@ enum ProjectStartupCompletion: Sendable, Equatable {
 /// 统一管理项目进程的启动、停止和监控
 @MainActor
 class ProcessManager {
-    private let processService = ProcessService.shared
+    private let processService: ProcessService
     private let gitService = GitService.shared
     private let logService = LogService.shared
     private let terminalHandler = TerminalOutputHandler()
+
+    init(processService: ProcessService = .shared) {
+        self.processService = processService
+    }
 
     // MARK: - Process Control
 
@@ -188,12 +192,10 @@ class ProcessManager {
         logService.info("停止开发服务器：\(project.name)", category: category)
         onOutputUpdate(project.id, "\n\n[系统] 正在请求停止进程组...\n")
 
-        let result: Result<Void, ProjectServiceError>
-        if let pid = project.runningProcessPID {
-            result = await processService.stopProcess(pid: pid)
-        } else {
-            result = await processService.killProcessByPath(project.path)
-        }
+        let result = await processService.stopProjectProcesses(
+            at: project.path,
+            preferredPID: project.runningProcessPID
+        )
 
         if case .success = result {
             logService.success("成功停止开发服务器：\(project.name)", category: category)

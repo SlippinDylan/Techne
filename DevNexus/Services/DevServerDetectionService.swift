@@ -86,9 +86,9 @@ final class DevServerDetectionService {
 
     /// 检测所有开发服务器（异步版本，在后台线程执行）
     private nonisolated func detectAllDevServersAsync() async -> [DevServer] {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
-        task.arguments = ["-iTCP", "-sTCP:LISTEN", "-n", "-P"]
+        guard let task = SystemProcessInspector.makeListeningTCPTask() else {
+            return []
+        }
 
         let pipe = Pipe()
         task.standardOutput = pipe

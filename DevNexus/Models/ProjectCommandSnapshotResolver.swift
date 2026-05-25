@@ -5,6 +5,8 @@ struct ProjectCommandSnapshot: Equatable, Sendable {
     static let defaultDiscardChangesCommand = "git restore . && git clean -fd"
 
     let startCommand: String
+    let startupModes: [ProjectStartupMode]
+    let selectedStartupModeID: String?
     let buildCommand: String
     let cleanCommand: String
     let installCommand: String
@@ -42,7 +44,9 @@ struct ProjectCommandSnapshotResolver {
             discardChangesCommand: snapshot.discardChangesCommand,
             commandProfileName: snapshot.commandProfileName,
             installStrategy: snapshot.installStrategy,
-            commandConfigId: commandConfigId
+            commandConfigId: commandConfigId,
+            availableStartupModes: snapshot.startupModes,
+            selectedStartupModeID: snapshot.selectedStartupModeID
         )
     }
 
@@ -58,8 +62,11 @@ struct ProjectCommandSnapshotResolver {
         }
 
         let legacy = snapshot(from: legacyConfig)
+        let startupSnapshot = preferredStartupSnapshot(primary: legacy, fallback: builtin)
         return ProjectCommandSnapshot(
-            startCommand: preferredCommand(primary: legacy.startCommand, fallback: builtin.startCommand),
+            startCommand: startupSnapshot.startCommand,
+            startupModes: startupSnapshot.startupModes,
+            selectedStartupModeID: startupSnapshot.selectedStartupModeID,
             buildCommand: preferredCommand(primary: legacy.buildCommand, fallback: builtin.buildCommand),
             cleanCommand: preferredCommand(primary: legacy.cleanCommand, fallback: builtin.cleanCommand),
             installCommand: preferredCommand(primary: legacy.installCommand, fallback: builtin.installCommand),
@@ -85,8 +92,16 @@ struct ProjectCommandSnapshotResolver {
     }
 
     private static func snapshot(from config: CommandConfig) -> ProjectCommandSnapshot {
-        ProjectCommandSnapshot(
+        let startupMode = ProjectStartupMode(
+            id: "default",
+            displayName: "默认",
             startCommand: config.startCommand,
+            source: .commandConfig
+        )
+        return ProjectCommandSnapshot(
+            startCommand: config.startCommand,
+            startupModes: [startupMode],
+            selectedStartupModeID: startupMode.id,
             buildCommand: config.buildCommand,
             cleanCommand: config.cleanCommand,
             installCommand: config.installCommand,
@@ -123,8 +138,12 @@ struct ProjectCommandSnapshotResolver {
         packageManager: ProjectPackageManager,
         manifest: PackageManifest?
     ) -> ProjectCommandSnapshot {
-        ProjectCommandSnapshot(
-            startCommand: commandForFirstScript(["dev", "start"], packageManager: packageManager, manifest: manifest) ?? packageManager.runCommand("dev"),
+        let startupModes = resolvedStartupModes(packageManager: packageManager, manifest: manifest)
+        let selectedMode = selectedStartupMode(from: startupModes)
+        return ProjectCommandSnapshot(
+            startCommand: selectedMode.startCommand,
+            startupModes: startupModes,
+            selectedStartupModeID: selectedMode.id,
             buildCommand: commandForFirstScript(["build"], packageManager: packageManager, manifest: manifest) ?? packageManager.runCommand("build"),
             cleanCommand: commandForScript("clean", packageManager: packageManager, manifest: manifest) ?? "rm -rf dist node_modules/.cache .vite",
             installCommand: packageManager.installCommand,
@@ -139,8 +158,12 @@ struct ProjectCommandSnapshotResolver {
         packageManager: ProjectPackageManager,
         manifest: PackageManifest?
     ) -> ProjectCommandSnapshot {
-        ProjectCommandSnapshot(
-            startCommand: commandForFirstScript(["dev", "start"], packageManager: packageManager, manifest: manifest) ?? packageManager.runCommand("dev"),
+        let startupModes = resolvedStartupModes(packageManager: packageManager, manifest: manifest)
+        let selectedMode = selectedStartupMode(from: startupModes)
+        return ProjectCommandSnapshot(
+            startCommand: selectedMode.startCommand,
+            startupModes: startupModes,
+            selectedStartupModeID: selectedMode.id,
             buildCommand: commandForFirstScript(["build"], packageManager: packageManager, manifest: manifest) ?? packageManager.runCommand("build"),
             cleanCommand: commandForScript("clean", packageManager: packageManager, manifest: manifest) ?? "rm -rf .next",
             installCommand: packageManager.installCommand,
@@ -155,8 +178,12 @@ struct ProjectCommandSnapshotResolver {
         packageManager: ProjectPackageManager,
         manifest: PackageManifest?
     ) -> ProjectCommandSnapshot {
-        ProjectCommandSnapshot(
-            startCommand: commandForFirstScript(["dev", "start"], packageManager: packageManager, manifest: manifest) ?? packageManager.runCommand("dev"),
+        let startupModes = resolvedStartupModes(packageManager: packageManager, manifest: manifest)
+        let selectedMode = selectedStartupMode(from: startupModes)
+        return ProjectCommandSnapshot(
+            startCommand: selectedMode.startCommand,
+            startupModes: startupModes,
+            selectedStartupModeID: selectedMode.id,
             buildCommand: commandForFirstScript(["build"], packageManager: packageManager, manifest: manifest) ?? packageManager.runCommand("build"),
             cleanCommand: commandForScript("clean", packageManager: packageManager, manifest: manifest) ?? "rm -rf dist .cache",
             installCommand: packageManager.installCommand,
@@ -171,8 +198,17 @@ struct ProjectCommandSnapshotResolver {
         packageManager: ProjectPackageManager,
         manifest: PackageManifest?
     ) -> ProjectCommandSnapshot {
-        ProjectCommandSnapshot(
-            startCommand: commandForFirstScript(["dev:mp-weixin", "dev:mp", "dev", "start"], packageManager: packageManager, manifest: manifest) ?? packageManager.runCommand("dev:mp-weixin"),
+        let startCommand = commandForFirstScript(["dev:mp-weixin", "dev:mp", "dev", "start"], packageManager: packageManager, manifest: manifest) ?? packageManager.runCommand("dev:mp-weixin")
+        let startupMode = ProjectStartupMode(
+            id: "default",
+            displayName: "默认",
+            startCommand: startCommand,
+            source: .autoDetected
+        )
+        return ProjectCommandSnapshot(
+            startCommand: startCommand,
+            startupModes: [startupMode],
+            selectedStartupModeID: startupMode.id,
             buildCommand: commandForFirstScript(["build:mp-weixin", "build:mp", "build"], packageManager: packageManager, manifest: manifest) ?? packageManager.runCommand("build:mp-weixin"),
             cleanCommand: commandForScript("clean", packageManager: packageManager, manifest: manifest) ?? "rm -rf dist",
             installCommand: packageManager.installCommand,
@@ -207,9 +243,64 @@ struct ProjectCommandSnapshotResolver {
         return packageManager.runCommand(name)
     }
 
+    private static func detectedStartupModes(
+        packageManager: ProjectPackageManager,
+        manifest: PackageManifest?
+    ) -> [ProjectStartupMode] {
+        let candidates: [(String, String)] = [
+            ("dev", "默认"),
+            ("dev:mock", "Mock"),
+            ("dev:live", "Live"),
+            ("mock", "Mock"),
+            ("start", "Start")
+        ]
+
+        return candidates.compactMap { scriptName, displayName in
+            guard manifest?.scripts?[scriptName] != nil else {
+                return nil
+            }
+            return ProjectStartupMode(
+                id: scriptName,
+                displayName: displayName,
+                startCommand: packageManager.runCommand(scriptName),
+                source: .autoDetected
+            )
+        }
+    }
+
+    private static func resolvedStartupModes(
+        packageManager: ProjectPackageManager,
+        manifest: PackageManifest?
+    ) -> [ProjectStartupMode] {
+        let detectedModes = detectedStartupModes(packageManager: packageManager, manifest: manifest)
+        if detectedModes.isEmpty {
+            return [
+                ProjectStartupMode(
+                    id: "default",
+                    displayName: "默认",
+                    startCommand: commandForFirstScript(["dev", "start"], packageManager: packageManager, manifest: manifest) ?? packageManager.runCommand("dev"),
+                    source: .autoDetected
+                )
+            ]
+        }
+        return detectedModes
+    }
+
+    private static func selectedStartupMode(from startupModes: [ProjectStartupMode]) -> ProjectStartupMode {
+        startupModes.first(where: { $0.id == "dev" }) ?? startupModes[0]
+    }
+
     private static func preferredCommand(primary: String, fallback: String) -> String {
         let trimmedPrimary = primary.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmedPrimary.isEmpty ? fallback : trimmedPrimary
+    }
+
+    private static func preferredStartupSnapshot(
+        primary: ProjectCommandSnapshot,
+        fallback: ProjectCommandSnapshot
+    ) -> ProjectCommandSnapshot {
+        let trimmedPrimaryStartCommand = primary.startCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedPrimaryStartCommand.isEmpty ? fallback : primary
     }
 
     private static func detectPackageManager(
@@ -379,7 +470,9 @@ struct ProjectPersistenceMigration {
             lhs.stopCommand != rhs.stopCommand ||
             lhs.discardChangesCommand != rhs.discardChangesCommand ||
             lhs.commandProfileName != rhs.commandProfileName ||
-            lhs.commandConfigId != rhs.commandConfigId
+            lhs.commandConfigId != rhs.commandConfigId ||
+            lhs.availableStartupModes != rhs.availableStartupModes ||
+            lhs.selectedStartupModeID != rhs.selectedStartupModeID
         }
     }
 

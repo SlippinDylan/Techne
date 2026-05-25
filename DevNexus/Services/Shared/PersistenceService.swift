@@ -28,6 +28,29 @@ struct PersistenceRoot: Sendable {
     }
 }
 
+/// 预览场景的临时持久化租约。
+/// 生命周期结束时自动清理隔离目录，避免测试和 Preview 累积垃圾目录。
+@MainActor
+final class PreviewPersistenceSession {
+    let persistenceRoot: PersistenceRoot
+
+    init(
+        fileManager: FileManager = .default,
+        sessionID: String = ProcessInfo.processInfo.globallyUniqueString
+    ) {
+        let directoryURL = fileManager.temporaryDirectory
+            .appendingPathComponent("DevNexus/Previews", isDirectory: true)
+            .appendingPathComponent(sessionID, isDirectory: true)
+
+        try? fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        self.persistenceRoot = .custom(directoryURL)
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: persistenceRoot.directoryURL)
+    }
+}
+
 /// 通用持久化服务
 /// 数据存放在 ~/Library/Application Support/<bundle-id>/
 struct PersistenceService<T: Codable & Sendable>: Sendable {

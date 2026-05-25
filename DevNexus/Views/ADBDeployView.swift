@@ -20,7 +20,8 @@ struct ADBDeployView: View {
             
             // 2. APK 部署操作区 + 实时输出
             deployOperationCard
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Spacer(minLength: 0)
         }
         .padding(24)
         .navigationTitle("安卓应用部署")
@@ -68,7 +69,14 @@ struct ADBDeployView: View {
     // MARK: - Combined Deploy Operation Card
     private var deployOperationCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("安装操作", systemImage: "paperplane")
+            HStack(alignment: .center, spacing: AppConfig.UI.mediumSpacing) {
+                sectionHeader("安装操作", systemImage: "paperplane")
+                Spacer()
+
+                if !viewModel.terminalOutput.isEmpty {
+                    consoleActions
+                }
+            }
 
             GroupBox {
                 VStack(spacing: 0) {
@@ -79,10 +87,10 @@ struct ADBDeployView: View {
                         .padding(.horizontal, AppConfig.UI.largePadding)
 
                     consoleSection
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(AppConfig.UI.largePadding)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
         }
     }
@@ -146,23 +154,25 @@ struct ADBDeployView: View {
 
     // MARK: - Console Section
     private var consoleSection: some View {
-        TerminalPanel(output: viewModel.terminalOutput, emptyText: "等待任务启动...") {
-            if !viewModel.terminalOutput.isEmpty {
-                HStack {
-                    Spacer()
+        EmbeddedConsoleSection(
+            output: viewModel.terminalOutput,
+            emptyText: "等待任务启动...",
+            outerPadding: 0
+        )
+    }
 
-                    Button("复制日志") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(viewModel.terminalOutput, forType: .string)
-                    }
-                    .adaptiveGlassButtonStyle()
-                    .controlSize(.small)
-
-                    Button("清除日志") { viewModel.clearTerminal() }
-                        .adaptiveGlassButtonStyle()
-                        .controlSize(.small)
-                }
+    private var consoleActions: some View {
+        HStack(spacing: AppConfig.UI.mediumSpacing) {
+            Button("复制日志") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(viewModel.terminalOutput, forType: .string)
             }
+            .adaptiveGlassButtonStyle()
+            .controlSize(.small)
+
+            Button("清除日志") { viewModel.clearTerminal() }
+                .adaptiveGlassButtonStyle()
+                .controlSize(.small)
         }
     }
 

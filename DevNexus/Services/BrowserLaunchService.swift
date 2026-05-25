@@ -24,10 +24,6 @@ enum BrowserLaunchError: LocalizedError {
 @MainActor
 final class BrowserLaunchService {
     private static var activeLaunchKeys: Set<String> = []
-    nonisolated private static let lsofExecutableCandidates = [
-        "/usr/sbin/lsof",
-        "/usr/bin/lsof"
-    ]
 
     private let instanceStore: BrowserInstanceStore
     private let workspace: NSWorkspace
@@ -146,13 +142,9 @@ final class BrowserLaunchService {
     /// - Returns: true 表示端口可用，false 表示端口被占用，nil 表示无法确定
     /// - Note: 这是一个 nonisolated 方法，可以在后台线程安全调用
     nonisolated func isPortAvailable(_ port: Int) -> Bool? {
-        guard let lsofExecutableURL = resolveLsofExecutableURL() else {
+        guard let task = SystemProcessInspector.makeListeningPortTask(port: port) else {
             return nil
         }
-
-        let task = Process()
-        task.executableURL = lsofExecutableURL
-        task.arguments = ["-i", ":\(port)", "-sTCP:LISTEN"]
 
         let pipe = Pipe()
         task.standardOutput = pipe
@@ -175,16 +167,6 @@ final class BrowserLaunchService {
         } catch {
             return nil
         }
-    }
-
-    private nonisolated func resolveLsofExecutableURL() -> URL? {
-        let fileManager = FileManager.default
-
-        for candidate in Self.lsofExecutableCandidates where fileManager.isExecutableFile(atPath: candidate) {
-            return URL(fileURLWithPath: candidate)
-        }
-
-        return nil
     }
 
     /// 查找可用端口

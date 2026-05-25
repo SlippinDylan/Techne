@@ -14,6 +14,7 @@ struct LogView: View {
     @State private var selectedLevel: LogLevel?
     @State private var searchText = ""
     @State private var selection = Set<UUID>()
+    private let consolePanelConfiguration = ConsolePanelStyle.configuration(for: .logWindow)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,6 +26,12 @@ struct LogView: View {
             logContentView
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            selection = Self.reconciledSelection(selection, visibleLogs: filteredLogs)
+        }
+        .onChange(of: filteredLogIDs) { _, _ in
+            selection = Self.reconciledSelection(selection, visibleLogs: filteredLogs)
+        }
     }
 
     // MARK: - Statistics Section
@@ -159,51 +166,48 @@ struct LogView: View {
     // MARK: - Log List Card
 
     private var logListCard: some View {
-        GroupBox {
-            if filteredLogs.isEmpty {
-                VStack(spacing: AppConfig.UI.mediumSpacing) {
-                    Image(systemName: "doc.text")
-                        .font(.system(size: 28))
-                        .foregroundStyle(.secondary)
-
-                    Text("No logs yet")
-                        .font(.system(size: AppConfig.UI.mediumFontSize, weight: .medium))
-
-                    Text("Logs will appear here")
-                        .font(.system(size: AppConfig.UI.smallFontSize))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(AppConfig.UI.extraLargePadding)
-            } else {
-                List(filteredLogs, selection: $selection) { log in
-                    Text(formatLogLine(log))
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(logColor(for: log.level))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 2)
-                }
-                .listStyle(.inset)
-            }
+        ConsolePanelContainer(configuration: consolePanelConfiguration) {
+            logViewport
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func formatLogLine(_ log: LogEntry) -> String {
-        "[\(log.formattedTimestamp)] [\(log.level.rawValue)] [\(log.category)] \(log.message)"
+    private var logViewport: some View {
+        Group {
+            if filteredLogs.isEmpty {
+                emptyLogViewport
+            } else {
+                structuredLogList
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(consolePanelConfiguration.palette.viewportBackground.resolvedColor)
+        .clipShape(RoundedRectangle(cornerRadius: consolePanelConfiguration.viewport.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: consolePanelConfiguration.viewport.cornerRadius)
+                .stroke(consolePanelConfiguration.palette.viewportBorder.resolvedColor, lineWidth: 1)
+        )
     }
 
-    private func logColor(for level: LogLevel) -> Color {
-        switch level {
-        case .info:
-            return .primary
-        case .success:
-            return .green
-        case .warning:
-            return .orange
-        case .error:
-            return .red
+    private var structuredLogList: some View {
+        StructuredLogTableView(logs: filteredLogs, selection: $selection)
+    }
+
+    private var emptyLogViewport: some View {
+        VStack(spacing: AppConfig.UI.mediumSpacing) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 28))
+                .foregroundStyle(.secondary)
+
+            Text("No logs yet")
+                .font(.system(size: AppConfig.UI.mediumFontSize, weight: .medium, design: .monospaced))
+
+            Text("Logs will appear here")
+                .font(.system(size: AppConfig.UI.smallFontSize, design: .monospaced))
+                .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(consolePanelConfiguration.viewport.padding)
     }
 
     // MARK: - Computed Properties
@@ -225,6 +229,10 @@ struct LogView: View {
         }
 
         return logs
+    }
+
+    private var filteredLogIDs: [UUID] {
+        filteredLogs.map(\.id)
     }
 
     private var successCount: Int {
@@ -251,12 +259,15 @@ struct LogView: View {
     }
 
     private func copyLogs(_ logs: [LogEntry]) {
-        let text = logs.map { log in
-            "[\(log.formattedTimestamp)] [\(log.level.rawValue)] [\(log.category)] \(log.message)"
-        }.joined(separator: "\n")
+        let text = logs.map(\.formattedLine).joined(separator: "\n")
 
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    static func reconciledSelection(_ currentSelection: Set<UUID>, visibleLogs: [LogEntry]) -> Set<UUID> {
+        let visibleLogIDs = Set(visibleLogs.map(\.id))
+        return currentSelection.intersection(visibleLogIDs)
     }
 }
 

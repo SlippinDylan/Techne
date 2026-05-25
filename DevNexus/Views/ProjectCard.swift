@@ -19,6 +19,7 @@ struct ProjectCard: View {
     let onDiscardChanges: () -> Void
     let onStartServer: () -> Void
     let onStopServer: () -> Void
+    let onSwitchStartupMode: (String) -> Void
     let onRefresh: () -> Void
     let onKillServer: () -> Void
     let onKillInstance: (ChromeInstance) -> Void
@@ -44,6 +45,7 @@ struct ProjectCard: View {
         onDiscardChanges: @escaping () -> Void,
         onStartServer: @escaping () -> Void,
         onStopServer: @escaping () -> Void,
+        onSwitchStartupMode: @escaping (String) -> Void,
         onRefresh: @escaping () -> Void,
         onKillServer: @escaping () -> Void,
         onKillInstance: @escaping (ChromeInstance) -> Void,
@@ -57,6 +59,7 @@ struct ProjectCard: View {
         self.onDiscardChanges = onDiscardChanges
         self.onStartServer = onStartServer
         self.onStopServer = onStopServer
+        self.onSwitchStartupMode = onSwitchStartupMode
         self.onRefresh = onRefresh
         self.onKillServer = onKillServer
         self.onKillInstance = onKillInstance
@@ -219,6 +222,15 @@ struct ProjectCard: View {
                 ProjectCommandDetailsPopover(project: project)
             }
 
+            if project.type == .devServer, project.availableStartupModes.count > 1 {
+                StartupModePicker(
+                    modes: project.availableStartupModes,
+                    selectedModeID: project.selectedStartupModeID,
+                    isDisabled: isTransitioning,
+                    onSelect: onSwitchStartupMode
+                )
+            }
+
             if let statusLabel = transitionStatusLabel {
                 Text(statusLabel)
                     .font(.system(size: AppConfig.UI.smallFontSize))
@@ -312,7 +324,7 @@ struct ProjectCard: View {
                 ProgressView()
                     .controlSize(.small)
                     .frame(width: 28, height: 28)
-            } else if relatedServer != nil || project.isRunning {
+            } else if isRunning {
                 ActionButton(
                     icon: "stop.fill",
                     action: onStopServer,
@@ -388,18 +400,23 @@ struct ProjectCard: View {
     // MARK: - Terminal Output View
 
     private var terminalOutputView: some View {
-        TerminalPanel(
+        EmbeddedConsoleSection(
             output: project.terminalOutput,
             emptyText: "等待任务启动...",
-            height: 200
+            height: ConsolePanelStyle.embeddedTerminalViewportHeight
         )
-        .padding(AppConfig.UI.largePadding)
     }
 
     // MARK: - Helper Properties
 
     private var isRunning: Bool {
         relatedServer != nil || project.isRunning
+    }
+
+    private var terminalVisibilityProject: Project {
+        var project = project
+        project.isRunning = isRunning
+        return project
     }
 
     private var isTransitioning: Bool {
@@ -411,7 +428,7 @@ struct ProjectCard: View {
     }
 
     private var shouldShowProjectTerminalToggle: Bool {
-        ProjectTerminalVisibility.showsToggle(for: project)
+        ProjectTerminalVisibility.showsToggle(for: terminalVisibilityProject)
     }
 
     private var shouldShowProjectTerminalSection: Bool {
@@ -517,6 +534,7 @@ struct ProjectCard: View {
         onDiscardChanges: {},
         onStartServer: {},
         onStopServer: {},
+        onSwitchStartupMode: { _ in },
         onRefresh: {},
         onKillServer: {},
         onKillInstance: { _ in },

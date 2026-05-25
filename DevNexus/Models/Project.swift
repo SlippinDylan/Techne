@@ -20,6 +20,19 @@ enum InstallStrategy: String, Codable, Sendable {
     case always
 }
 
+enum ProjectStartupModeSource: String, Codable, Sendable {
+    case autoDetected
+    case importedLegacy
+    case commandConfig
+}
+
+struct ProjectStartupMode: Identifiable, Codable, Equatable, Sendable {
+    let id: String
+    let displayName: String
+    let startCommand: String
+    let source: ProjectStartupModeSource
+}
+
 // MARK: - ProjectType Extension
 
 extension ProjectType {
@@ -53,6 +66,8 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
     var commandProfileName: String?
     var installStrategy: InstallStrategy
     var commandConfigId: UUID?
+    var availableStartupModes: [ProjectStartupMode]
+    var selectedStartupModeID: String?
     let addedDate: Date
 
     // MARK: - 运行时状态（不持久化）
@@ -79,14 +94,29 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         discardChangesCommand: String = "",
         commandProfileName: String? = nil,
         installStrategy: InstallStrategy = .ifMissing,
-        commandConfigId: UUID? = nil
+        commandConfigId: UUID? = nil,
+        availableStartupModes: [ProjectStartupMode] = [],
+        selectedStartupModeID: String? = nil
     ) {
         self.id = id
         self.name = name
         self.path = path
         self.type = type
         self.currentBranch = currentBranch
-        self.startCommand = startCommand ?? type.defaultStartCommand
+        let resolvedStartCommand = startCommand ?? type.defaultStartCommand
+        let preferredStartupModeSource = Self.preferredStartupModeSource(commandConfigId: commandConfigId)
+        let canonicalStartupConfiguration = Self.canonicalStartupConfiguration(
+            startCommand: resolvedStartCommand,
+            availableStartupModes: Self.resolvedStartupModes(
+                availableStartupModes,
+                fallbackStartCommand: resolvedStartCommand,
+                preferredSource: preferredStartupModeSource
+            ),
+            selectedStartupModeID: selectedStartupModeID,
+            preferredSource: preferredStartupModeSource
+        )
+
+        self.startCommand = canonicalStartupConfiguration.startCommand
         self.buildCommand = buildCommand
         self.cleanCommand = cleanCommand
         self.installCommand = installCommand
@@ -95,6 +125,8 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         self.commandProfileName = commandProfileName
         self.installStrategy = installStrategy
         self.commandConfigId = commandConfigId
+        self.availableStartupModes = canonicalStartupConfiguration.availableStartupModes
+        self.selectedStartupModeID = canonicalStartupConfiguration.selectedStartupModeID
         self.addedDate = Date()
 
         // 运行时状态初始化
@@ -143,6 +175,8 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         case commandProfileName
         case installStrategy
         case commandConfigId
+        case availableStartupModes
+        case selectedStartupModeID
         case addedDate
     }
 
@@ -163,7 +197,23 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         self.commandProfileName = try container.decodeIfPresent(String.self, forKey: .commandProfileName)
         self.installStrategy = try container.decodeIfPresent(InstallStrategy.self, forKey: .installStrategy) ?? .ifMissing
         self.commandConfigId = try container.decodeIfPresent(UUID.self, forKey: .commandConfigId)
+        let preferredStartupModeSource = Project.preferredStartupModeSource(commandConfigId: self.commandConfigId)
+        let decodedStartupModes = try container.decodeIfPresent([ProjectStartupMode].self, forKey: .availableStartupModes) ?? []
+        let decodedSelectedStartupModeID = try container.decodeIfPresent(String.self, forKey: .selectedStartupModeID)
+        let canonicalStartupConfiguration = Project.canonicalStartupConfiguration(
+            startCommand: self.startCommand,
+            availableStartupModes: Project.resolvedStartupModes(
+                decodedStartupModes,
+                fallbackStartCommand: self.startCommand,
+                preferredSource: preferredStartupModeSource
+            ),
+            selectedStartupModeID: decodedSelectedStartupModeID,
+            preferredSource: preferredStartupModeSource
+        )
+        self.availableStartupModes = canonicalStartupConfiguration.availableStartupModes
+        self.selectedStartupModeID = canonicalStartupConfiguration.selectedStartupModeID
         self.addedDate = try container.decode(Date.self, forKey: .addedDate)
+        self.startCommand = canonicalStartupConfiguration.startCommand
         
         // 初始化运行时状态
         self.isRunning = false
@@ -190,11 +240,103 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         try container.encodeIfPresent(commandProfileName, forKey: .commandProfileName)
         try container.encode(installStrategy, forKey: .installStrategy)
         try container.encodeIfPresent(commandConfigId, forKey: .commandConfigId)
+        try container.encode(availableStartupModes, forKey: .availableStartupModes)
+        try container.encodeIfPresent(selectedStartupModeID, forKey: .selectedStartupModeID)
         try container.encode(addedDate, forKey: .addedDate)
+    }
+
+    nonisolated private struct CanonicalStartupConfiguration {
+        let startCommand: String
+        let availableStartupModes: [ProjectStartupMode]
+        let selectedStartupModeID: String?
+    }
+
+    nonisolated private static func defaultStartupMode(
+        for startCommand: String,
+        source: ProjectStartupModeSource = .importedLegacy
+    ) -> ProjectStartupMode {
+        ProjectStartupMode(
+            id: "default",
+            displayName: "默认",
+            startCommand: startCommand,
+            source: source
+        )
+    }
+
+    nonisolated private static func resolvedStartupModes(
+        _ startupModes: [ProjectStartupMode],
+        fallbackStartCommand: String,
+        preferredSource: ProjectStartupModeSource
+    ) -> [ProjectStartupMode] {
+        startupModes.isEmpty ? [defaultStartupMode(for: fallbackStartCommand, source: preferredSource)] : startupModes
+    }
+
+    nonisolated private static func preferredStartupModeSource(
+        commandConfigId: UUID?
+    ) -> ProjectStartupModeSource {
+        return commandConfigId == nil ? .importedLegacy : .commandConfig
+    }
+
+    nonisolated private static func canonicalStartupConfiguration(
+        startCommand: String,
+        availableStartupModes: [ProjectStartupMode],
+        selectedStartupModeID: String?,
+        preferredSource: ProjectStartupModeSource
+    ) -> CanonicalStartupConfiguration {
+        let resolvedStartCommand = normalizedStartCommand(
+            startCommand,
+            availableStartupModes: availableStartupModes,
+            selectedStartupModeID: selectedStartupModeID
+        )
+
+        if let matchingMode = availableStartupModes.first(where: { $0.startCommand == resolvedStartCommand }) {
+            return CanonicalStartupConfiguration(
+                startCommand: matchingMode.startCommand,
+                availableStartupModes: availableStartupModes,
+                selectedStartupModeID: matchingMode.id
+            )
+        }
+
+        let fallbackMode = defaultStartupMode(for: resolvedStartCommand, source: preferredSource)
+        return CanonicalStartupConfiguration(
+            startCommand: fallbackMode.startCommand,
+            availableStartupModes: [fallbackMode],
+            selectedStartupModeID: fallbackMode.id
+        )
+    }
+
+    nonisolated private static func normalizedStartCommand(
+        _ startCommand: String,
+        availableStartupModes: [ProjectStartupMode],
+        selectedStartupModeID: String?
+    ) -> String {
+        let trimmedStartCommand = startCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedStartCommand.isEmpty == false {
+            return startCommand
+        }
+
+        if let selectedStartupModeID,
+           let selectedMode = availableStartupModes.first(where: { $0.id == selectedStartupModeID }) {
+            return selectedMode.startCommand
+        }
+
+        return availableStartupModes.first?.startCommand ?? startCommand
     }
 }
 
 extension Project {
+    var selectedStartupMode: ProjectStartupMode? {
+        availableStartupModes.first(where: { $0.id == selectedStartupModeID })
+    }
+
+    mutating func selectStartupMode(id: String) {
+        guard let mode = availableStartupModes.first(where: { $0.id == id }) else {
+            return
+        }
+        selectedStartupModeID = mode.id
+        startCommand = mode.startCommand
+    }
+
     init(
         name: String,
         path: String,
@@ -214,6 +356,7 @@ extension Project {
     func backfillingMissingCommandSnapshot(from snapshot: ProjectCommandSnapshot?) -> Project {
         guard let snapshot else { return self }
         var updated = self
+        let snapshotPrefersStartupModes = snapshot.startupModes.contains(where: { $0.source == .commandConfig })
 
         if updated.startCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             updated.startCommand = snapshot.startCommand
@@ -235,6 +378,25 @@ extension Project {
         }
         if updated.commandProfileName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
             updated.commandProfileName = snapshot.commandProfileName
+        }
+
+        if snapshotPrefersStartupModes {
+            updated.startCommand = snapshot.startCommand
+            updated.availableStartupModes = snapshot.startupModes
+            updated.selectedStartupModeID = snapshot.selectedStartupModeID
+        } else {
+            if updated.availableStartupModes.isEmpty {
+                updated.availableStartupModes = snapshot.startupModes
+            }
+            let canonicalStartupConfiguration = Project.canonicalStartupConfiguration(
+                startCommand: updated.startCommand,
+                availableStartupModes: updated.availableStartupModes,
+                selectedStartupModeID: updated.selectedStartupModeID ?? snapshot.selectedStartupModeID,
+                preferredSource: Project.preferredStartupModeSource(commandConfigId: updated.commandConfigId)
+            )
+            updated.startCommand = canonicalStartupConfiguration.startCommand
+            updated.availableStartupModes = canonicalStartupConfiguration.availableStartupModes
+            updated.selectedStartupModeID = canonicalStartupConfiguration.selectedStartupModeID
         }
 
         return updated
