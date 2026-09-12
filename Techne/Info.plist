@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Techne 需要权限来打开终端并切换到项目目录</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2025-2026 SlippinDylan Studio. All rights reserved.</string>
+	<key>NSSystemAdministrationUsageDescription</key>
+	<string>Techne 需要访问系统进程信息来检测和管理开发服务器及浏览器实例</string>
+</dict>
+</plist>

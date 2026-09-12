@@ -1,4 +1,4 @@
-# DevNexus - PR 合并前构建校验
+# Techne - PR 合并前构建校验
 #
 # 触发时机：向 main 分支发起 Pull Request
 # 目的：确认 PR 改动可以正常构建，作为合并门禁的 status check
@@ -24,11 +24,11 @@ jobs:
           sudo xcode-select -p
           xcodebuild -version
 
-      - name: Build DevNexus.app
+      - name: Build Techne.app
         run: |
           xcodebuild build \
-            -project "DevNexus.xcodeproj" \
-            -scheme "DevNexus" \
+            -project "Techne.xcodeproj" \
+            -scheme "Techne" \
             -configuration "Release" \
             -derivedDataPath "./build" \
             CODE_SIGNING_ALLOWED=NO \
@@ -41,9 +41,9 @@ jobs:
 
       - name: Verify build output
         run: |
-          APP_PATH="./build/Build/Products/Release/DevNexus.app"
+          APP_PATH="./build/Build/Products/Release/Techne.app"
           if [[ ! -d "$APP_PATH" ]]; then
-            echo "❌ 未找到 DevNexus.app"
+            echo "❌ 未找到 Techne.app"
             exit 1
           fi
           echo "✅ 构建成功: $(du -sh $APP_PATH | cut -f1)"
