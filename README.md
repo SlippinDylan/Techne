@@ -1,132 +1,103 @@
-# Techne
+<div align="center">
+  <img src="docs/images/readme/app-icon.png" width="160" height="160" alt="Techne app icon">
+  <h1>Techne</h1>
+  <p>A native macOS workspace for local development services, WeChat Mini Programs, and Android APK deployment.</p>
+  <p>
+    <a href="README.zh-CN.md">简体中文</a> ·
+    <a href="README.zh-TW.md">繁體中文</a> ·
+    <strong>English</strong> ·
+    <a href="README.ja.md">日本語</a> ·
+    <a href="README.ru.md">Русский</a>
+  </p>
+</div>
 
-**把本地开发的那些琐事挪到一个窗口里。**
+## What It Is
 
-写前端的时候老在切 terminal 看端口和进程、配 Chrome 调试参数、手动跑小程序构建、ADB 部署重复执行同一套命令——Techne 把这些零碎活儿收进一个地方，常用项目加进来之后，启动、切分支、开调试实例、看日志全都能点着做。
+Techne brings recurring local-development work into one native macOS app: tracked project Git state, running web servers and isolated Chrome debugging sessions, WeChat Mini Program commands, Android deployment, and operation logs. It keeps your existing project tooling in place while reducing terminal and app switching.
 
-<br>
+## Features
 
-## 它能干什么
+<table>
+  <tr>
+    <td width="32%">
+      <strong>Development environment</strong><br><br>
+      Track projects and their Git state, discover local development servers, and launch isolated Chrome profiles with remote-debugging ports for each server.
+    </td>
+    <td width="68%"><img src="docs/images/readme/development-environment.png" alt="Techne development environment with project and server status"></td>
+  </tr>
+  <tr>
+    <td>
+      <strong>WeChat Mini Program builds</strong><br><br>
+      Save a Mini Program project's build, clean, and stop commands, run them from one place, switch branches, and follow command output in the log panel.
+    </td>
+    <td><img src="docs/images/readme/mini-program-build.png" alt="Techne WeChat Mini Program build workspace"></td>
+  </tr>
+  <tr>
+    <td>
+      <strong>Android APK deployment</strong><br><br>
+      Select an APK, check the connected device, install it with ADB, and retain deployment output for troubleshooting.
+    </td>
+    <td><img src="docs/images/readme/android-deployment.png" alt="Techne Android APK deployment workspace"></td>
+  </tr>
+</table>
 
-### 开发服务与调试
+## Status
 
-这是 Techne 的核心模块，把 **项目管理 + 本地 dev server 探测 + Chrome 调试实例** 三件事捆在一起。
+> **Active development**
+>
+> The core workflows are implemented. Every push and pull request validates release automation, runs `TechneTests`, and builds an unsigned Release app. Version-gated Apple Development signing and DMG publishing are configured; the current release manifest has publishing disabled.
 
-**项目集中管理，Git 状态实时刷新**
+## Platform and System Requirements
 
-把常用项目加进来，每个卡片都能看到当前分支、未提交变更、服务运行状态。切分支直接在界面里选，不用打开 terminal。用的是 FSEvents 监听 `.git` 目录，所以你在外面用别的工具切分支、commit、rebase，Techne 这边会自动同步过来，不用手动点刷新。
+| Property | Value |
+|---|---|
+| Deployment target | macOS 15.0 (Sequoia) or later |
+| Source build | macOS 15.0 or later and Xcode 26 or later |
+| Current build architectures | `arm64` and `x86_64` (Apple Silicon and Intel) |
+| App type | Native, non-sandboxed macOS app with a menu-bar entry |
+| Distribution | Version-gated GitHub Releases with an Apple Development-signed, non-notarized DMG when publishing is enabled |
 
-**本地 dev server 自动发现**
+## Installation and Releases
 
-跑着跑着 vite、webpack、rspack、next，隔天就忘了哪个还活着、端口是几。Techne 会扫系统里正在监听的开发进程，自动把 server 对应到你加进来的项目上——端口、PID、工作目录一眼看清楚，关进程也不用去翻 `lsof`。扫到的 dev server 会直接挂到对应项目卡片下面，本来要在终端里 `lsof -i` 翻半天的活儿变成一眼就懂。
+Each GitHub Release contains one `Techne-<version>.dmg`. Open it and drag `Techne.app` into `Applications`. Releases are signed with an Apple Development certificate and are not notarized. Before the first launch, remove the download quarantine attribute as described in the release notes:
 
-**独立 Chrome 调试实例**
+```bash
+sudo xattr -rd com.apple.quarantine /Applications/Techne.app
+```
 
-给某个 dev server 一键开一个带 `--remote-debugging-port` 的 Chrome，每个实例用隔离 profile 目录。好处是：同时调试好几个前端项目不会 cookie/storage 互相污染，每个窗口都可以直接接 [chrome-devtools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) 这类外部调试工具。关掉窗口 Techne 会自动清理临时 profile 目录，不会堆垃圾。
+Every push and pull request runs release-automation checks, `TechneTests`, and an unsigned Release build. Release configuration lives in [`Config/Release/manifest.json`](Config/Release/manifest.json). The release workflow signs, packages, and publishes a DMG only after main CI succeeds, `release` is `true`, the version is unpublished, and [`CHANGELOG.md`](CHANGELOG.md) contains one unique, non-empty section with the exact same version.
 
-![开发服务与调试](docs/screenshots/dev-environment.png)
+Supported versions are `x.y.z`, `x.y.z-alpha.n`, and `x.y.z-beta.n`. Alpha and beta suffixes are used by the release, tag, DMG, and Changelog; the app's `CFBundleShortVersionString` uses the matching numeric `x.y.z` value.
 
-<br>
+The release workflow uses these GitHub Actions repository secrets:
 
-### 微信小程序构建
+- `CERTIFICATES_P12`: Base64-encoded Apple Development P12
+- `CERTIFICATES_PASSWORD`: P12 export password
+- `FEISHU_WEBHOOK`: Feishu custom bot webhook
+- `FEISHU_SECRET`: Feishu custom bot signing secret
 
-小程序项目的构建节奏和普通 web 不太一样——改完代码要跑一次构建、产物要放到小程序开发者工具里预览、出问题常常要清一次缓存再来一遍。Techne 里专门给小程序开了一个模块，保存项目路径、配置构建 / 清理 / 停止命令，一键跑构建、一键清缓存、一键切分支，不用每次都在终端和开发者工具之间反复横跳。
+## Key Design Decisions
 
-构建过程中的输出会实时流到日志面板，失败时能直接看到报错行，不用等命令执行完再往上翻终端 buffer。
+- **One local workspace**: project Git state, development-server discovery, Chrome debugging, Mini Program commands, Android deployment, and logs stay in the same app.
+- **Filesystem-driven Git updates**: FSEvents monitors each tracked Git workspace so branch and working-tree changes made outside Techne are reflected without a manual refresh.
+- **Isolated browser sessions**: each managed Chrome instance receives its own temporary profile directory and can use a remote-debugging port, avoiding cross-project browser-state conflicts.
+- **Reusable command templates**: project types can start from saved command configurations, while each project retains the commands it needs for its own workflow.
+- **Auditable operations**: key actions write timestamped logs, and Android deployment checks device connection and install results instead of treating command completion alone as success.
 
-![微信小程序构建](docs/screenshots/miniapp.png)
+## Data Locations
 
-<br>
-
-### 安卓应用部署
-
-面向本地 Android 联调流程：选好 APK、连上设备，一键跑 `adb install` + 日志抓取，部署状态直接在界面里看，不用一直挂一个终端窗口盯着 `adb logcat`。
-
-内置了设备连接检测、安装进度反馈和时间戳校验，避免出现"命令返回成功但其实设备上根本没装上"的假成功情况。日志面板会保留最近几次部署的完整输出，哪次出了问题可以回翻排查。
-
-![安卓应用部署](docs/screenshots/adb-deploy.png)
-
-<br>
-
-### 命令配置与日志
-
-不同项目启动 / 构建 / 清理 / 安装 / 停止的命令都不一样（vite 项目一套、rspack 项目一套、小程序一套）。Techne 支持按项目类型存一套模板，加项目的时候直接套用，不用每次新加项目都把相同的 `pnpm dev`、`pnpm build`、`rm -rf node_modules` 重敲一遍。
-
-所有关键操作（启动、停止、构建、部署、切分支）都会落日志，按时间倒序展示，排错可以翻历史。日志支持按分类筛选，不会一堆信息糊一起。
-
-<br>
-
-## 安装
-
-> **系统要求**：macOS 15.0 (Sequoia) 及以上
-
-1. 前往 [Releases](../../releases) 页面，下载最新的 `.dmg` 文件
-2. 双击挂载，把 **Techne.app** 拖到 Applications 文件夹
-3. 由于没有 Apple 公证，首次安装需要在终端执行一下：
-   ```bash
-   sudo xattr -rd com.apple.quarantine /Applications/Techne.app
-   ```
-4. 打开 Techne，菜单栏会出现一个图标，点击或用 `⌘1 / ⌘2 / ⌘3` 快速切到对应模块
-
-<br>
-
-## 自动化与发布
-
-所有 push 和 Pull Request 都会执行无签名 CI，包括自动化脚本测试、`TechneTests` 和 Release 配置构建验证。
-
-发布配置位于 [`Config/Release/manifest.json`](Config/Release/manifest.json)。只有 `main` 的 push CI 成功、`release` 为 `true`、版本尚未发布，并且 [`CHANGELOG.md`](CHANGELOG.md) 存在唯一、非空且完全同名的版本章节时，Release workflow 才会签名、打包并发布 DMG。
-
-支持 `x.y.z`、`x.y.z-alpha.n` 和 `x.y.z-beta.n`。Alpha/Beta 后缀用于 Release、tag、DMG 与 CHANGELOG；App 的 `CFBundleShortVersionString` 使用对应的纯数字 `x.y.z`。
-
-Release workflow 使用以下 GitHub Actions repository secrets：
-
-- `CERTIFICATES_P12`：Apple Development P12 的 Base64 内容
-- `CERTIFICATES_PASSWORD`：P12 导出密码
-- `FEISHU_WEBHOOK`：飞书自定义机器人的 Webhook
-- `FEISHU_SECRET`：飞书自定义机器人的签名密钥
-
-<br>
-
-## 从源码构建
-
-**环境要求**
-
-- macOS 15.0+
-- Xcode 16+
-- 一个 Apple ID（免费账号即可）
-
-**步骤**
-
-1. Clone 仓库
-   ```bash
-   git clone https://github.com/SlippinDylan/Techne.git
-   cd Techne
-   ```
-
-2. 用 Xcode 打开 `Techne.xcodeproj`
-
-3. 在 **Signing & Capabilities** 里把 Team 改成你自己的 Apple ID
-
-4. Build & Run
-
-<br>
-
-## 数据位置
-
-应用状态保存在：
+Application state is stored in:
 
 ```bash
 ~/Library/Application Support/studio.slippindylan.Techne/
 ```
 
-浏览器调试实例的临时信息保存在：
+Temporary information for managed browser instances is stored in:
 
 ```bash
 ~/.techne-browsers/
 ```
 
-<br>
-
 ## License
 
-[MIT](LICENSE) © 2025-2026 SlippinDylan Studio
+Copyright © 2025–2026 SlippinDylan Studio. Techne is licensed under the [Apache License 2.0](LICENSE).
