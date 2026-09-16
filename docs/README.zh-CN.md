@@ -45,7 +45,7 @@ Techne 把本地开发中反复出现的杂事收进一个原生 macOS 应用：
 
 > **持续开发中**
 >
-> 核心工作流已实现。每次 push 和 Pull Request 都会校验发布自动化、运行 `TechneTests`，并构建未签名的 Release 应用。按版本发布的 Apple Development 签名与 DMG 发布流程已经配置；当前发布清单关闭了发布。
+> 核心工作流已实现。每次 push 和 Pull Request 都会校验发布自动化、运行 `TechneTests`，并构建未签名的 Release 应用。当前发布清单将在 main CI 成功后发布 `0.1.0-beta.1`。
 
 ## 平台与系统要求
 

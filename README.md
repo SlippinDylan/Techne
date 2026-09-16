@@ -45,7 +45,7 @@ Techne brings recurring local-development work into one native macOS app: tracke
 
 > **Active development**
 >
-> The core workflows are implemented. Every push and pull request validates release automation, runs `TechneTests`, and builds an unsigned Release app. Version-gated Apple Development signing and DMG publishing are configured; the current release manifest has publishing disabled.
+> The core workflows are implemented. Every push and pull request validates release automation, runs `TechneTests`, and builds an unsigned Release app. The current release manifest is set to publish version `0.1.0-beta.1` after main CI succeeds.
 
 ## Platform and System Requirements
 
