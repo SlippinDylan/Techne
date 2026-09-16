@@ -13,21 +13,21 @@
 ## File Structure
 
 **Create**
-- `Apps/Views/Shared/Components/ConsolePanelStyle.swift`
+- `Techne/Views/Shared/Components/ConsolePanelStyle.swift`
   Pure role-based metrics and palette definitions for console-like surfaces.
-- `Apps/Views/Shared/Components/ConsolePanelContainer.swift`
+- `Techne/Views/Shared/Components/ConsolePanelContainer.swift`
   Shared SwiftUI shell for terminal/log panels with header, separator, and inner viewport support.
 - `TechneTests/Views/ConsolePanelStyleTests.swift`
   Unit tests for role-specific metrics so the visual system stays deterministic.
 
 **Modify**
-- `Apps/Views/Shared/Components/TerminalPanel.swift`
+- `Techne/Views/Shared/Components/TerminalPanel.swift`
   Move container chrome out of ad hoc modifiers and onto the shared console container.
-- `Apps/Views/ProjectCard.swift`
+- `Techne/Views/ProjectCard.swift`
   Keep project command output on `TerminalPanel`, but use the unified embedded-console role consistently.
-- `Apps/Views/ADBDeployView.swift`
+- `Techne/Views/ADBDeployView.swift`
   Keep Android deployment output on `TerminalPanel`, but align toolbar/content spacing with the shared console shell.
-- `Apps/Views/Log/LogView.swift`
+- `Techne/Views/Log/LogView.swift`
   Apply the same console shell to the structured log list while preserving filtering, selection, and copy actions.
 
 ## Scope Guardrails
@@ -47,7 +47,7 @@
 ### Task 1: Create The Shared Console Surface Style
 
 **Files:**
-- Create: `Apps/Views/Shared/Components/ConsolePanelStyle.swift`
+- Create: `Techne/Views/Shared/Components/ConsolePanelStyle.swift`
 - Create: `TechneTests/Views/ConsolePanelStyleTests.swift`
 
 - [ ] **Step 1: Write the failing tests for console panel metrics**
@@ -95,7 +95,7 @@ Expected: FAIL because `ConsolePanelStyle` does not exist yet.
 
 - [ ] **Step 3: Implement the style model**
 
-Create `Apps/Views/Shared/Components/ConsolePanelStyle.swift`:
+Create `Techne/Views/Shared/Components/ConsolePanelStyle.swift`:
 
 ```swift
 import Foundation
@@ -157,15 +157,15 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Apps/Views/Shared/Components/ConsolePanelStyle.swift TechneTests/Views/ConsolePanelStyleTests.swift
+git add Techne/Views/Shared/Components/ConsolePanelStyle.swift TechneTests/Views/ConsolePanelStyleTests.swift
 git commit -m "feat: add shared console panel style"
 ```
 
 ### Task 2: Build A Reusable Console Panel Container
 
 **Files:**
-- Create: `Apps/Views/Shared/Components/ConsolePanelContainer.swift`
-- Modify: `Apps/Views/Shared/Components/TerminalPanel.swift`
+- Create: `Techne/Views/Shared/Components/ConsolePanelContainer.swift`
+- Modify: `Techne/Views/Shared/Components/TerminalPanel.swift`
 - Test: `TechneTests/Views/ConsolePanelStyleTests.swift`
 
 - [ ] **Step 1: Extend tests with a regression for explicit role intent**
@@ -194,7 +194,7 @@ Expected: PASS.
 
 - [ ] **Step 3: Implement the shared container and refactor `TerminalPanel` onto it**
 
-Create `Apps/Views/Shared/Components/ConsolePanelContainer.swift`:
+Create `Techne/Views/Shared/Components/ConsolePanelContainer.swift`:
 
 ```swift
 import SwiftUI
@@ -248,7 +248,7 @@ extension ConsolePanelContainer where Header == EmptyView {
 }
 ```
 
-Refactor `Apps/Views/Shared/Components/TerminalPanel.swift` so the streaming text stays local but the shell moves to the container:
+Refactor `Techne/Views/Shared/Components/TerminalPanel.swift` so the streaming text stays local but the shell moves to the container:
 
 ```swift
 private var terminalBody: some View {
@@ -313,15 +313,15 @@ Expected: tests PASS, build succeeds.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Apps/Views/Shared/Components/ConsolePanelContainer.swift Apps/Views/Shared/Components/TerminalPanel.swift TechneTests/Views/ConsolePanelStyleTests.swift
+git add Techne/Views/Shared/Components/ConsolePanelContainer.swift Techne/Views/Shared/Components/TerminalPanel.swift TechneTests/Views/ConsolePanelStyleTests.swift
 git commit -m "feat: refactor terminal panel onto shared console shell"
 ```
 
 ### Task 3: Roll The Shared Console Shell Across Runtime Output Panels
 
 **Files:**
-- Modify: `Apps/Views/ProjectCard.swift`
-- Modify: `Apps/Views/ADBDeployView.swift`
+- Modify: `Techne/Views/ProjectCard.swift`
+- Modify: `Techne/Views/ADBDeployView.swift`
 - Test: `TechneTests/Views/ProjectTerminalVisibilityTests.swift`
 
 - [ ] **Step 1: Add a regression test that keeps runtime output visible after the panel refactor**
@@ -408,14 +408,14 @@ Expected: tests PASS, build succeeds.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Apps/Views/ProjectCard.swift Apps/Views/ADBDeployView.swift TechneTests/Views/ProjectTerminalVisibilityTests.swift
+git add Techne/Views/ProjectCard.swift Techne/Views/ADBDeployView.swift TechneTests/Views/ProjectTerminalVisibilityTests.swift
 git commit -m "feat: align runtime output panels"
 ```
 
 ### Task 4: Align The Log Window To The Same Console Family
 
 **Files:**
-- Modify: `Apps/Views/Log/LogView.swift`
+- Modify: `Techne/Views/Log/LogView.swift`
 - Test: `TechneTests/Views/ConsolePanelStyleTests.swift`
 
 - [ ] **Step 1: Add a regression test for the log-window role**
@@ -444,7 +444,7 @@ Expected: PASS.
 
 - [ ] **Step 3: Wrap the structured log list in the shared shell without replacing the `List`**
 
-Refactor `Apps/Views/Log/LogView.swift`:
+Refactor `Techne/Views/Log/LogView.swift`:
 
 ```swift
 private var logListCard: some View {
@@ -503,7 +503,7 @@ Expected: tests PASS, build succeeds.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Apps/Views/Log/LogView.swift TechneTests/Views/ConsolePanelStyleTests.swift
+git add Techne/Views/Log/LogView.swift TechneTests/Views/ConsolePanelStyleTests.swift
 git commit -m "feat: align log window console chrome"
 ```
 

@@ -23,9 +23,9 @@
 ### Task 2: Restore scroll-policy boundaries and log readability
 
 **Files:**
-- Modify: `Apps/Views/Shared/Scrolling/AppScrollerPolicy.swift`
-- Modify: `Apps/Views/Shared/Scrolling/AppScrollChrome.swift`
-- Modify: `Apps/Views/Shared/Components/StructuredLogTableView.swift`
+- Modify: `Techne/Views/Shared/Scrolling/AppScrollerPolicy.swift`
+- Modify: `Techne/Views/Shared/Scrolling/AppScrollChrome.swift`
+- Modify: `Techne/Views/Shared/Components/StructuredLogTableView.swift`
 
 - [ ] Restore the intended app-window overlay/autohide scroll policy for explicitly marked surfaces without reintroducing descendant scroll-view bleed.
 - [ ] Keep console-only scroller styling inside `ConsoleViewportScrollView`.
@@ -35,9 +35,9 @@
 ### Task 3: Build hermetic preview dependencies
 
 **Files:**
-- Modify: `Apps/ContentView.swift`
-- Modify: `Apps/Services/ProjectService.swift`
-- Modify: `Apps/Services/Shared/PersistenceService.swift` if a preview helper is needed there
+- Modify: `Techne/ContentView.swift`
+- Modify: `Techne/Services/ProjectService.swift`
+- Modify: `Techne/Services/Shared/PersistenceService.swift` if a preview helper is needed there
 
 - [ ] Introduce a preview dependency builder with isolated temporary persistence.
 - [ ] Add an explicit startup mode for `ProjectService` so preview construction does not load or refresh real state.

@@ -15,3 +15,4 @@
 - README 改为包含功能截图的多语言版本，并展示新的应用图标。
 - 项目许可证由 MIT License 改为 Apache License 2.0。
 - 应用源码目录由 `Techne/` 调整为 `Apps/`，产品名、target、scheme 和数据路径保持不变。
+- 主应用源码由 `Apps/` 归并到 `App/`，测试 target 移入 `Tests/TechneTests/`；target、scheme 和产品行为保持不变。

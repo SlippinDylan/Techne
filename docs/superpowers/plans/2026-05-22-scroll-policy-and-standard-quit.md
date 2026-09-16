@@ -13,33 +13,33 @@
 ## File Structure
 
 **Create**
-- `Apps/Views/Shared/Scrolling/AppScrollerPolicy.swift`
+- `Techne/Views/Shared/Scrolling/AppScrollerPolicy.swift`
   Maps high-level surface roles to concrete AppKit scroller configuration.
-- `Apps/Views/Shared/Scrolling/AppScrollChrome.swift`
+- `Techne/Views/Shared/Scrolling/AppScrollChrome.swift`
   SwiftUI modifier plus AppKit bridge that finds the underlying `NSScrollView` and applies policy.
 - `TechneTests/App/AppScrollerPolicyTests.swift`
   Unit tests for policy resolution and system-preference fallback behavior.
 
 **Modify**
-- `Apps/ContentView.swift`
+- `Techne/ContentView.swift`
   Apply standard scroll chrome to the sidebar `List` and settings `ScrollView`.
-- `Apps/Views/ProjectListView.swift`
+- `Techne/Views/ProjectListView.swift`
   Apply standard scroll chrome to the main project content area.
-- `Apps/Views/Log/LogView.swift`
+- `Techne/Views/Log/LogView.swift`
   Apply standard scroll chrome to the log `List`.
-- `Apps/Views/CommandConfigView.swift`
+- `Techne/Views/CommandConfigView.swift`
   Apply compact scroll chrome to the command-config collection.
-- `Apps/Views/CommandConfig/Components/CommandConfigEditSheet.swift`
+- `Techne/Views/CommandConfig/Components/CommandConfigEditSheet.swift`
   Apply compact scroll chrome to the edit sheet form.
-- `Apps/Views/DevEnvironment/Components/Sheets/BrowserInstancesSheet.swift`
+- `Techne/Views/DevEnvironment/Components/Sheets/BrowserInstancesSheet.swift`
   Apply compact scroll chrome to the browser-instance sheet.
-- `Apps/Views/Shared/Components/TerminalPanel.swift`
+- `Techne/Views/Shared/Components/TerminalPanel.swift`
   Apply compact scroll chrome to terminal output.
-- `Apps/TechneApp.swift`
+- `Techne/TechneApp.swift`
   Restore standard termination commands and pin the menu bar extra to menu style.
-- `Apps/Views/MenuBarView.swift`
+- `Techne/Views/MenuBarView.swift`
   Give the quit row an explicit `Cmd+Q` shortcut so the open menu handles quit immediately.
-- `Apps/AppDelegate.swift`
+- `Techne/AppDelegate.swift`
   Remove the custom `Cmd+Q` event monitor and keep only lifecycle responsibilities that still belong in the delegate.
 
 ## Implementation Notes
@@ -54,8 +54,8 @@
 ### Task 1: Introduce The Shared Scroller Policy
 
 **Files:**
-- Create: `Apps/Views/Shared/Scrolling/AppScrollerPolicy.swift`
-- Create: `Apps/Views/Shared/Scrolling/AppScrollChrome.swift`
+- Create: `Techne/Views/Shared/Scrolling/AppScrollerPolicy.swift`
+- Create: `Techne/Views/Shared/Scrolling/AppScrollChrome.swift`
 - Test: `TechneTests/App/AppScrollerPolicyTests.swift`
 
 - [ ] **Step 1: Write the failing tests for policy resolution**
@@ -104,7 +104,7 @@ Expected: FAIL because `AppScrollerPolicy` does not exist yet.
 
 - [ ] **Step 3: Implement the policy type and SwiftUI modifier**
 
-Create `Apps/Views/Shared/Scrolling/AppScrollerPolicy.swift`:
+Create `Techne/Views/Shared/Scrolling/AppScrollerPolicy.swift`:
 
 ```swift
 import AppKit
@@ -160,7 +160,7 @@ enum AppScrollerPolicy {
 }
 ```
 
-Create `Apps/Views/Shared/Scrolling/AppScrollChrome.swift`:
+Create `Techne/Views/Shared/Scrolling/AppScrollChrome.swift`:
 
 ```swift
 import SwiftUI
@@ -229,20 +229,20 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Apps/Views/Shared/Scrolling/AppScrollerPolicy.swift Apps/Views/Shared/Scrolling/AppScrollChrome.swift TechneTests/App/AppScrollerPolicyTests.swift
+git add Techne/Views/Shared/Scrolling/AppScrollerPolicy.swift Techne/Views/Shared/Scrolling/AppScrollChrome.swift TechneTests/App/AppScrollerPolicyTests.swift
 git commit -m "feat: add shared scroller policy"
 ```
 
 ### Task 2: Apply Scroll Chrome To All App-Owned Scroll Surfaces
 
 **Files:**
-- Modify: `Apps/ContentView.swift`
-- Modify: `Apps/Views/ProjectListView.swift`
-- Modify: `Apps/Views/Log/LogView.swift`
-- Modify: `Apps/Views/CommandConfigView.swift`
-- Modify: `Apps/Views/CommandConfig/Components/CommandConfigEditSheet.swift`
-- Modify: `Apps/Views/DevEnvironment/Components/Sheets/BrowserInstancesSheet.swift`
-- Modify: `Apps/Views/Shared/Components/TerminalPanel.swift`
+- Modify: `Techne/ContentView.swift`
+- Modify: `Techne/Views/ProjectListView.swift`
+- Modify: `Techne/Views/Log/LogView.swift`
+- Modify: `Techne/Views/CommandConfigView.swift`
+- Modify: `Techne/Views/CommandConfig/Components/CommandConfigEditSheet.swift`
+- Modify: `Techne/Views/DevEnvironment/Components/Sheets/BrowserInstancesSheet.swift`
+- Modify: `Techne/Views/Shared/Components/TerminalPanel.swift`
 - Test: `TechneTests/App/AppScrollerPolicyTests.swift`
 
 - [ ] **Step 1: Extend the tests with a regression for utility surfaces**
@@ -370,20 +370,20 @@ Expected: BUILD SUCCEEDED and all checklist items pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Apps/ContentView.swift Apps/Views/ProjectListView.swift Apps/Views/Log/LogView.swift Apps/Views/CommandConfigView.swift Apps/Views/CommandConfig/Components/CommandConfigEditSheet.swift Apps/Views/DevEnvironment/Components/Sheets/BrowserInstancesSheet.swift Apps/Views/Shared/Components/TerminalPanel.swift TechneTests/App/AppScrollerPolicyTests.swift
+git add Techne/ContentView.swift Techne/Views/ProjectListView.swift Techne/Views/Log/LogView.swift Techne/Views/CommandConfigView.swift Techne/Views/CommandConfig/Components/CommandConfigEditSheet.swift Techne/Views/DevEnvironment/Components/Sheets/BrowserInstancesSheet.swift Techne/Views/Shared/Components/TerminalPanel.swift TechneTests/App/AppScrollerPolicyTests.swift
 git commit -m "feat: unify app scroll chrome"
 ```
 
 ### Task 3: Restore Standard Quit Semantics And Menu Bar Shortcut Routing
 
 **Files:**
-- Modify: `Apps/TechneApp.swift`
-- Modify: `Apps/Views/MenuBarView.swift`
-- Modify: `Apps/AppDelegate.swift`
+- Modify: `Techne/TechneApp.swift`
+- Modify: `Techne/Views/MenuBarView.swift`
+- Modify: `Techne/AppDelegate.swift`
 
 - [ ] **Step 1: Remove the custom quit interceptor and restore standard app termination**
 
-In `Apps/TechneApp.swift`, remove the empty replacement of `.appTermination` and pin the menu bar extra to menu mode:
+In `Techne/TechneApp.swift`, remove the empty replacement of `.appTermination` and pin the menu bar extra to menu mode:
 
 ```swift
 .commands {
@@ -399,7 +399,7 @@ MenuBarExtra("Techne", systemImage: "macbook.and.iphone") {
 .menuBarExtraStyle(.menu)
 ```
 
-In `Apps/AppDelegate.swift`, delete:
+In `Techne/AppDelegate.swift`, delete:
 
 ```swift
 private var eventMonitor: Any?
@@ -419,7 +419,7 @@ Keep only launch-mode handling, reopen handling, and cleanup that still exists a
 
 - [ ] **Step 2: Make the menu bar menu advertise and handle `Cmd+Q` directly**
 
-Update `Apps/Views/MenuBarView.swift`:
+Update `Techne/Views/MenuBarView.swift`:
 
 ```swift
 Button("退出 Techne") {
@@ -450,7 +450,7 @@ Expected: BUILD SUCCEEDED and all checklist items pass.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add Apps/TechneApp.swift Apps/Views/MenuBarView.swift Apps/AppDelegate.swift
+git add Techne/TechneApp.swift Techne/Views/MenuBarView.swift Techne/AppDelegate.swift
 git commit -m "feat: restore standard quit behavior"
 ```
 

@@ -13,20 +13,20 @@
 ## File Structure
 
 **Modify**
-- `Apps/Views/ADBDeployView.swift`
-- `Apps/Views/ProjectCard.swift`
-- `Apps/Services/ProjectService.swift`
-- `Apps/Services/ChromeDetectionService.swift`
+- `Techne/Views/ADBDeployView.swift`
+- `Techne/Views/ProjectCard.swift`
+- `Techne/Services/ProjectService.swift`
+- `Techne/Services/ChromeDetectionService.swift`
 
 **Create**
-- `Apps/Views/Shared/Components/InteractivePathField.swift`
-- `Apps/Views/Shared/Components/TerminalPanel.swift`
-- `Apps/Services/ManagedBrowserInstanceService.swift`
+- `Techne/Views/Shared/Components/InteractivePathField.swift`
+- `Techne/Views/Shared/Components/TerminalPanel.swift`
+- `Techne/Services/ManagedBrowserInstanceService.swift`
 - `TechneTests/Browser/ManagedBrowserInstanceServiceTests.swift`
 
 **Maybe Modify If Extraction Scope Expands**
-- `Apps/Views/AddProjectSheet.swift`
-- `Apps/Views/CommandConfig/Components/CommandConfigEditSheet.swift`
+- `Techne/Views/AddProjectSheet.swift`
+- `Techne/Views/CommandConfig/Components/CommandConfigEditSheet.swift`
 
 ## Design Decisions
 
@@ -51,11 +51,11 @@
 ## Task 1: Extract Shared UI Surfaces
 
 **Files:**
-- Create: `Apps/Views/Shared/Components/InteractivePathField.swift`
-- Create: `Apps/Views/Shared/Components/TerminalPanel.swift`
-- Modify: `Apps/Views/AddProjectSheet.swift`
-- Modify: `Apps/Views/ADBDeployView.swift`
-- Modify: `Apps/Views/ProjectCard.swift`
+- Create: `Techne/Views/Shared/Components/InteractivePathField.swift`
+- Create: `Techne/Views/Shared/Components/TerminalPanel.swift`
+- Modify: `Techne/Views/AddProjectSheet.swift`
+- Modify: `Techne/Views/ADBDeployView.swift`
+- Modify: `Techne/Views/ProjectCard.swift`
 
 - [ ] Build `InteractivePathField` as a reusable container for click-to-select and drag-target scenarios.
   It should expose:
@@ -104,9 +104,9 @@
 ## Task 2: Add Managed Browser Lifecycle Service
 
 **Files:**
-- Create: `Apps/Services/ManagedBrowserInstanceService.swift`
-- Modify: `Apps/Services/ChromeDetectionService.swift`
-- Modify: `Apps/Services/ProjectService.swift`
+- Create: `Techne/Services/ManagedBrowserInstanceService.swift`
+- Modify: `Techne/Services/ChromeDetectionService.swift`
+- Modify: `Techne/Services/ProjectService.swift`
 - Test: `TechneTests/Browser/ManagedBrowserInstanceServiceTests.swift`
 
 - [ ] Introduce `ManagedBrowserInstanceService` as the service that owns termination of tracked browser instances.
@@ -145,7 +145,7 @@
 ## Task 3: Mini App Terminal Visibility and Collapse Behavior
 
 **Files:**
-- Modify: `Apps/Views/ProjectCard.swift`
+- Modify: `Techne/Views/ProjectCard.swift`
 
 - [ ] Add local view state for the mini app terminal expansion flag.
   Recommended property:
@@ -179,9 +179,9 @@
 **Files:**
 - Test: `TechneTests/Browser/ManagedBrowserInstanceServiceTests.swift`
 - Manual verification against:
-  - `Apps/Views/ADBDeployView.swift`
-  - `Apps/Views/ProjectCard.swift`
-  - `Apps/Services/ProjectService.swift`
+  - `Techne/Views/ADBDeployView.swift`
+  - `Techne/Views/ProjectCard.swift`
+  - `Techne/Services/ProjectService.swift`
 
 - [ ] Add unit tests for path-based instance selection.
   Cases:
@@ -222,11 +222,11 @@
 
 ## Implementation Notes
 
-- The current ADB input surface in [ADBDeployView.swift](/Users/dylanwang/Repo/Apps.Private/Techne/Apps/Views/ADBDeployView.swift:90) is a custom button shell and should be replaced by the shared field surface.
-- The current mini app terminal surface in [ProjectCard.swift](/Users/dylanwang/Repo/Apps.Private/Techne/Apps/Views/ProjectCard.swift:342) is the visual reference for the new shared terminal panel.
-- The current add-project path field in [AddProjectSheet.swift](/Users/dylanwang/Repo/Apps.Private/Techne/Apps/Views/AddProjectSheet.swift:70) is the visual reference for the shared path field.
-- The current dev server stop path in [ProjectService.swift](/Users/dylanwang/Repo/Apps.Private/Techne/Apps/Services/ProjectService.swift:282) does not coordinate browser shutdown and is the required integration point.
-- The current browser close logic in [ChromeDetectionService.swift](/Users/dylanwang/Repo/Apps.Private/Techne/Apps/Services/ChromeDetectionService.swift:57) is UI-driven and should not remain the only browser termination entry point.
+- The current ADB input surface in [ADBDeployView.swift](/Users/dylanwang/Repo/Apps.Private/Techne/Techne/Views/ADBDeployView.swift:90) is a custom button shell and should be replaced by the shared field surface.
+- The current mini app terminal surface in [ProjectCard.swift](/Users/dylanwang/Repo/Apps.Private/Techne/Techne/Views/ProjectCard.swift:342) is the visual reference for the new shared terminal panel.
+- The current add-project path field in [AddProjectSheet.swift](/Users/dylanwang/Repo/Apps.Private/Techne/Techne/Views/AddProjectSheet.swift:70) is the visual reference for the shared path field.
+- The current dev server stop path in [ProjectService.swift](/Users/dylanwang/Repo/Apps.Private/Techne/Techne/Services/ProjectService.swift:282) does not coordinate browser shutdown and is the required integration point.
+- The current browser close logic in [ChromeDetectionService.swift](/Users/dylanwang/Repo/Apps.Private/Techne/Techne/Services/ChromeDetectionService.swift:57) is UI-driven and should not remain the only browser termination entry point.
 
 ## Outcome
 
