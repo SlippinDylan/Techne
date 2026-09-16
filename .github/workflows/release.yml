@@ -101,6 +101,29 @@ jobs:
       TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
 
     steps:
+      - name: Dispatch packaging notification
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq -n \
+            --arg version "$VERSION" \
+            --argjson prerelease "$PRERELEASE" \
+            --arg dmg_name "$DMG_NAME" \
+            --arg sha "$TESTED_SHA" \
+            --arg run_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            '{
+              event_type: "release_started",
+              client_payload: {
+                version: $version,
+                prerelease: $prerelease,
+                dmg_name: $dmg_name,
+                sha: $sha,
+                run_url: $run_url
+              }
+            }' \
+            | gh api --method POST "repos/${GITHUB_REPOSITORY}/dispatches" --input -
+
       - name: Checkout tested commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
