@@ -22,20 +22,11 @@ struct AboutView: View {
 
             VStack(spacing: AppConfig.UI.extraLargeSpacing) {
                 // 应用图标
-                if let appIcon = NSImage(named: "AppIcon") {
-                    Image(nsImage: appIcon)
-                        .resizable()
-                        .frame(width: 128, height: 128)
-                        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
-                        .shadow(radius: 10)
-                } else {
-                    Image(systemName: "percent")
-                        .font(.system(size: 64))
-                        .foregroundStyle(.blue)
-                        .frame(width: 128, height: 128)
-                        .background(.blue.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
-                }
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable()
+                    .frame(width: 128, height: 128)
+                    .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
+                    .shadow(radius: 10)
 
                 VStack(spacing: AppConfig.UI.mediumSpacing) {
                     Text("Techne")
