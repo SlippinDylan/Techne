@@ -205,7 +205,7 @@ function buildWorkflowRun(event) {
   if (action === 'requested') {
     if (run.name !== 'CI') return null;
     return {
-      title: `${productName(event)} CI 已开始`,
+      title: `${productName(event)} CI 已触发`,
       details: commonDetails(event, [
         `分支：${run.head_branch ?? '未知'}`,
         `提交：${shortSha(run.head_sha)}`,
