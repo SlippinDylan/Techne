@@ -70,6 +70,23 @@
 
 <br>
 
+## 自动化与发布
+
+所有 push 和 Pull Request 都会执行无签名 CI，包括自动化脚本测试、`TechneTests` 和 Release 配置构建验证。
+
+发布配置位于 [`Config/Release/manifest.json`](Config/Release/manifest.json)。只有 `main` 的 push CI 成功、`release` 为 `true`、版本尚未发布，并且 [`CHANGELOG.md`](CHANGELOG.md) 存在唯一、非空且完全同名的版本章节时，Release workflow 才会签名、打包并发布 DMG。
+
+支持 `x.y.z`、`x.y.z-alpha.n` 和 `x.y.z-beta.n`。Alpha/Beta 后缀用于 Release、tag、DMG 与 CHANGELOG；App 的 `CFBundleShortVersionString` 使用对应的纯数字 `x.y.z`。
+
+Release workflow 使用以下 GitHub Actions repository secrets：
+
+- `CERTIFICATES_P12`：Apple Development P12 的 Base64 内容
+- `CERTIFICATES_PASSWORD`：P12 导出密码
+- `FEISHU_WEBHOOK`：飞书自定义机器人的 Webhook
+- `FEISHU_SECRET`：飞书自定义机器人的签名密钥
+
+<br>
+
 ## 从源码构建
 
 **环境要求**

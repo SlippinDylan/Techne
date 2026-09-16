@@ -28,6 +28,44 @@ struct ProjectListView: View {
     @State private var startupSuppressedProjectPaths: Set<String> = []
 
     var body: some View {
+        presentedContent
+            .onReceive(NotificationCenter.default.publisher(for: .addDevProject)) { _ in
+                if projectType == .devServer { showingAddSheet = true }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .addMiniAppProject)) { _ in
+                if projectType == .miniApp { showingAddSheet = true }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .devServerProcessStarted)) { notification in
+                guard projectType == .devServer else { return }
+                guard let userInfo = notification.userInfo,
+                      let pid = userInfo["pid"] as? Int32,
+                      let path = userInfo["path"] as? String else { return }
+                suppressDiscoveredServer(for: path)
+                devServerService.refreshUntilServerDetected(pid: pid)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .devServerStopped)) { _ in
+                guard projectType == .devServer else { return }
+                devServerService.refresh()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .browserDidOpen)) { _ in
+                guard projectType == .devServer else { return }
+                chromeService.refresh()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .browserInstancesChanged)) { _ in
+                guard projectType == .devServer else { return }
+                chromeService.refresh()
+            }
+            .onChange(of: devServerService.servers.map(\.id)) { _, _ in
+                projectService.reconcileDetectedDevServers(devServerService.servers)
+                clearResolvedSuppressedPaths()
+            }
+            .task {
+                guard projectType == .devServer else { return }
+                browserDetectionService.refreshIfNeeded()
+            }
+    }
+
+    private var projectContent: some View {
         VStack(spacing: 0) {
             // 固定的统计卡片区域
             statisticsSection
@@ -40,6 +78,10 @@ struct ProjectListView: View {
                 contentView
             }
         }
+    }
+
+    private var presentedContent: some View {
+        projectContent
         .sheet(isPresented: $showingAddSheet) {
             AddProjectSheet(projectType: projectType) { path in
                 _ = projectService.addProject(path: path, type: projectType)
@@ -87,39 +129,6 @@ struct ProjectListView: View {
             }
         } message: {
             Text("确定要关闭所有 \(allBrowserInstances.count) 个浏览器实例吗？此操作不可撤销。")
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .addDevProject)) { _ in
-            if projectType == .devServer { showingAddSheet = true }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .addMiniAppProject)) { _ in
-            if projectType == .miniApp { showingAddSheet = true }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .devServerProcessStarted)) { notification in
-            guard projectType == .devServer,
-                  let pid = notification.userInfo?["pid"] as? Int32,
-                  let path = notification.userInfo?["path"] as? String else { return }
-            suppressDiscoveredServer(for: path)
-            devServerService.refreshUntilServerDetected(pid: pid)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .devServerStopped)) { _ in
-            guard projectType == .devServer else { return }
-            devServerService.refresh()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .browserDidOpen)) { _ in
-            guard projectType == .devServer else { return }
-            chromeService.refresh()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .browserInstancesChanged)) { _ in
-            guard projectType == .devServer else { return }
-            chromeService.refresh()
-        }
-        .onChange(of: devServerService.servers.map(\.id)) { _, _ in
-            projectService.reconcileDetectedDevServers(devServerService.servers)
-            clearResolvedSuppressedPaths()
-        }
-        .task {
-            guard projectType == .devServer else { return }
-            browserDetectionService.refreshIfNeeded()
         }
     }
 

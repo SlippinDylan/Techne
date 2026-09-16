@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-check:
+    name: Build Check
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+
+      - name: Report toolchain
+        run: |
+          xcodebuild -version
+          node --version
+
+      - name: Validate automation
+        run: |
+          bash -n Scripts/create-dmg.sh
+          Scripts/create-dmg.sh --help >/dev/null
+          node .github/scripts/release-manifest.mjs validate
+          node --test .github/scripts/*.test.mjs
+
+      - name: Test Techne
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Techne.xcodeproj \
+            -scheme Techne \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData-Tests \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Build unsigned app
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Techne.xcodeproj \
+            -scheme Techne \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build/DerivedData-Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Verify artifact contract
+        run: |
+          app='build/DerivedData-Release/Build/Products/Release/Techne.app'
+          binary="$app/Contents/MacOS/Techne"
+          test -x "$binary"

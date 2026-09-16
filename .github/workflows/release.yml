@@ -1,0 +1,350 @@
+name: Release
+
+on: # zizmor: ignore[dangerous-triggers] The job accepts only successful push CI from this repository's main branch.
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Plan release
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      publish: ${{ steps.plan.outputs.publish || 'false' }}
+      version: ${{ steps.manifest.outputs.version }}
+      marketing_version: ${{ steps.manifest.outputs.marketing_version }}
+      tag: ${{ steps.manifest.outputs.tag }}
+      prerelease: ${{ steps.manifest.outputs.prerelease }}
+      dmg_name: ${{ steps.manifest.outputs.dmg_name }}
+
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Read release manifest
+        id: manifest
+        run: node .github/scripts/release-manifest.mjs validate
+
+      - name: Check existing release
+        if: steps.manifest.outputs.release == 'true'
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.manifest.outputs.tag }}
+        run: |
+          if is_draft="$(gh release view "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json isDraft \
+            --jq '.isDraft' 2>/dev/null)"; then
+            if [[ "$is_draft" == 'true' ]]; then
+              echo 'exists=false' >> "$GITHUB_OUTPUT"
+              echo 'draft=true' >> "$GITHUB_OUTPUT"
+              echo "Draft release $TAG exists; the run will rebuild and finish it."
+            else
+              echo 'exists=true' >> "$GITHUB_OUTPUT"
+              echo 'draft=false' >> "$GITHUB_OUTPUT"
+              echo "Published release $TAG already exists; packaging is not required."
+            fi
+          else
+            echo 'exists=false' >> "$GITHUB_OUTPUT"
+            echo 'draft=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate release request
+        if: steps.manifest.outputs.release == 'true' && steps.existing.outputs.exists == 'false'
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_TAG: ${{ steps.manifest.outputs.tag }}
+        run: |
+          all_tags="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq '.[] | select(.draft == false) | .tag_name')"
+          published_tags="$(awk -v current="$CURRENT_TAG" '$0 != current' <<< "$all_tags")"
+          PUBLISHED_RELEASE_TAGS="$published_tags" \
+            node .github/scripts/release-manifest.mjs plan
+
+  release:
+    name: Build and publish DMG
+    needs: plan
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      MARKETING_VERSION: ${{ needs.plan.outputs.marketing_version }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      PRERELEASE: ${{ needs.plan.outputs.prerelease }}
+      DMG_NAME: ${{ needs.plan.outputs.dmg_name }}
+      TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TESTED_SHA }}
+          persist-credentials: false
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+
+      - name: Prepare release notes
+        run: |
+          release_notes_path="$RUNNER_TEMP/release-notes.md"
+          node .github/scripts/release-manifest.mjs notes > "$release_notes_path"
+          {
+            echo
+            echo '## 安装'
+            echo
+            echo '1. 打开 DMG，将 `Techne.app` 拖到 `Applications`。'
+            echo '2. 移除下载隔离属性：'
+            echo
+            echo '   ```bash'
+            echo '   sudo xattr -rd com.apple.quarantine /Applications/Techne.app'
+            echo '   ```'
+            echo
+            echo '> 此版本使用 Apple Development 签名，未经 Apple 公证。'
+          } >> "$release_notes_path"
+
+      - name: Install Apple Development certificate
+        id: signing
+        env:
+          CERTIFICATES_P12: ${{ secrets.CERTIFICATES_P12 }}
+          CERTIFICATES_PASSWORD: ${{ secrets.CERTIFICATES_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${CERTIFICATES_P12:?Missing CERTIFICATES_P12 secret}"
+          : "${CERTIFICATES_PASSWORD:?Missing CERTIFICATES_PASSWORD secret}"
+
+          certificate_path="$RUNNER_TEMP/apple-development.p12"
+          signing_keychain_path="$RUNNER_TEMP/techne-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 24)"
+          umask 077
+
+          printf '%s' "$CERTIFICATES_P12" | base64 --decode > "$certificate_path"
+          test -s "$certificate_path"
+          security create-keychain -p "$keychain_password" "$signing_keychain_path"
+          security set-keychain-settings -lut 21600 "$signing_keychain_path"
+          security unlock-keychain -p "$keychain_password" "$signing_keychain_path"
+          security import "$certificate_path" \
+            -P "$CERTIFICATES_PASSWORD" \
+            -f pkcs12 \
+            -k "$signing_keychain_path" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$signing_keychain_path"
+          security list-keychains -d user -s "$signing_keychain_path"
+
+          identity_line="$(security find-identity -v -p codesigning "$signing_keychain_path" \
+            | awk '/"Apple Development:/ && !found { print; found = 1 }')"
+          test -n "$identity_line"
+          signing_identity="$(awk '{ print $2 }' <<< "$identity_line")"
+          certificate_name="$(sed -E 's/^[^"]*"([^"]+)".*$/\1/' <<< "$identity_line")"
+          team_id="$(security find-certificate \
+            -c "$certificate_name" \
+            -p \
+            "$signing_keychain_path" \
+            | openssl x509 -noout -subject -nameopt RFC2253 \
+            | tr ',' '\n' \
+            | awk -F= '$1 == "OU" && !found { print $2; found = 1 }')"
+          [[ "$signing_identity" =~ ^[0-9A-Fa-f]{40}$ ]]
+          [[ "$team_id" =~ ^[A-Z0-9]{10}$ ]]
+
+          {
+            echo "identity=$signing_identity"
+            echo "team_id=$team_id"
+          } >> "$GITHUB_OUTPUT"
+          rm -f "$certificate_path"
+
+      - name: Build signed app
+        env:
+          SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
+          SIGNING_TEAM_ID: ${{ steps.signing.outputs.team_id }}
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Techne.xcodeproj \
+            -scheme Techne \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            MARKETING_VERSION="$MARKETING_VERSION" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
+            DEVELOPMENT_TEAM="$SIGNING_TEAM_ID" \
+            PROVISIONING_PROFILE_SPECIFIER='' \
+            OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/techne-signing.keychain-db"
+
+      - name: Verify signed app
+        run: |
+          app="$RUNNER_TEMP/DerivedData/Build/Products/Release/Techne.app"
+          test -x "$app/Contents/MacOS/Techne"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$MARKETING_VERSION"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")" = '${{ github.run_number }}'
+          codesign --verify --strict --all-architectures --verbose=2 "$app"
+
+          signature_details="$RUNNER_TEMP/codesign-details.txt"
+          codesign --display --verbose=4 "$app" > /dev/null 2> "$signature_details"
+          cat "$signature_details"
+          grep -Fq 'Authority=Apple Development:' "$signature_details"
+          grep -Fq "TeamIdentifier=${{ steps.signing.outputs.team_id }}" "$signature_details"
+
+      - name: Package drag-to-install DMG
+        run: |
+          app="$RUNNER_TEMP/DerivedData/Build/Products/Release/Techne.app"
+          Scripts/create-dmg.sh "$app" "$RUNNER_TEMP/$DMG_NAME" "Techne $VERSION"
+
+      - name: Verify DMG
+        run: |
+          mount_point="$RUNNER_TEMP/TechneDMG"
+          dmg_path="$RUNNER_TEMP/$DMG_NAME"
+          mkdir -p "$mount_point"
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount_point" "$dmg_path"
+          cleanup_mount() { hdiutil detach "$mount_point" >/dev/null; }
+          trap cleanup_mount EXIT
+          test -d "$mount_point/Techne.app"
+          test "$(readlink "$mount_point/Applications")" = '/Applications'
+          codesign --verify --strict --all-architectures "$mount_point/Techne.app"
+          cleanup_mount
+          trap - EXIT
+
+      - name: Recheck release availability
+        id: availability
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo 'draft=false' >> "$GITHUB_OUTPUT"
+          if is_draft="$(gh release view "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json isDraft \
+            --jq '.isDraft' 2>/dev/null)"; then
+            if [[ "$is_draft" != 'true' ]]; then
+              echo "Published release $TAG was created while this run was queued." >&2
+              exit 1
+            fi
+            tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.sha')"
+            if [[ "$tag_sha" != "$TESTED_SHA" ]]; then
+              echo "Draft release $TAG targets $tag_sha instead of tested commit $TESTED_SHA." >&2
+              exit 1
+            fi
+            echo 'draft=true' >> "$GITHUB_OUTPUT"
+          elif tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.sha' 2>/dev/null)"; then
+            if [[ "$tag_sha" != "$TESTED_SHA" ]]; then
+              echo "Existing tag $TAG targets $tag_sha instead of tested commit $TESTED_SHA." >&2
+              exit 1
+            fi
+          fi
+
+      - name: Create draft GitHub Release
+        if: steps.availability.outputs.draft != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          arguments=(
+            release create "$TAG"
+            --repo "$GITHUB_REPOSITORY"
+            --target "$TESTED_SHA"
+            --title "$VERSION"
+            --notes-file "$RUNNER_TEMP/release-notes.md"
+            --draft
+          )
+          if [[ "$PRERELEASE" == 'true' ]]; then
+            arguments+=(--prerelease)
+          fi
+          arguments+=("$RUNNER_TEMP/$DMG_NAME#$DMG_NAME")
+          gh "${arguments[@]}"
+
+      - name: Refresh existing draft GitHub Release
+        if: steps.availability.outputs.draft == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber \
+            "$RUNNER_TEMP/$DMG_NAME#$DMG_NAME"
+          gh release edit "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$VERSION" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --prerelease="$PRERELEASE"
+
+      - name: Verify draft GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')" = 'true'
+          asset_names="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          if [[ "$asset_names" != "$DMG_NAME" ]]; then
+            echo "Draft release assets must contain only $DMG_NAME; found: $asset_names" >&2
+            exit 1
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+
+      - name: Dispatch release notification
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          changelog="$(node .github/scripts/release-manifest.mjs notes)"
+          jq -n \
+            --arg version "$VERSION" \
+            --argjson prerelease "$PRERELEASE" \
+            --arg dmg_name "$DMG_NAME" \
+            --arg changelog "$changelog" \
+            --arg release_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}" \
+            --arg download_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${TAG}/${DMG_NAME}" \
+            '{
+              event_type: "release_published",
+              client_payload: {
+                version: $version,
+                prerelease: $prerelease,
+                dmg_name: $dmg_name,
+                changelog: $changelog,
+                release_url: $release_url,
+                download_url: $download_url
+              }
+            }' \
+            | gh api --method POST "repos/${GITHUB_REPOSITORY}/dispatches" --input -
+
+      - name: Remove signing keychain
+        if: always()
+        run: |
+          signing_keychain_path="$RUNNER_TEMP/techne-signing.keychain-db"
+          if [[ -f "$signing_keychain_path" ]]; then
+            security delete-keychain "$signing_keychain_path" || true
+          fi
+          rm -f "$RUNNER_TEMP/apple-development.p12"
