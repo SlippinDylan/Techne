@@ -3,11 +3,11 @@
   <h1>Techne</h1>
   <p>A native macOS workspace for local development services, WeChat Mini Programs, and Android APK deployment.</p>
   <p>
-    <a href="README.zh-CN.md">简体中文</a> ·
-    <a href="README.zh-TW.md">繁體中文</a> ·
+    <a href="docs/README.zh-CN.md">简体中文</a> ·
+    <a href="docs/README.zh-TW.md">繁體中文</a> ·
     <strong>English</strong> ·
-    <a href="README.ja.md">日本語</a> ·
-    <a href="README.ru.md">Русский</a>
+    <a href="docs/README.ja.md">日本語</a> ·
+    <a href="docs/README.ru.md">Русский</a>
   </p>
 </div>
 

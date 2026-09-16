@@ -1,11 +1,11 @@
 <div align="center">
-  <img src="docs/images/readme/app-icon.png" width="160" height="160" alt="Значок приложения Techne">
+  <img src="images/readme/app-icon.png" width="160" height="160" alt="Значок приложения Techne">
   <h1>Techne</h1>
   <p>Нативное приложение macOS для локальной разработки, сборки мини-приложений WeChat и развёртывания Android с доступом из строки меню.</p>
   <p>
     <a href="README.zh-CN.md">简体中文</a> ·
     <a href="README.zh-TW.md">繁體中文</a> ·
-    <a href="README.md">English</a> ·
+    <a href="../README.md">English</a> ·
     <a href="README.ja.md">日本語</a> ·
     <strong>Русский</strong>
   </p>
@@ -23,21 +23,21 @@ Techne собирает повседневные локальные задачи
       <strong>Среда разработки и отладка</strong><br><br>
       Добавляйте часто используемые проекты и сразу видьте текущую ветку, незакоммиченные изменения и состояние сервера. Techne обнаруживает локальные dev-серверы, сопоставляет их с проектами и открывает Chrome с портом удалённой отладки и изолированным профилем для каждого экземпляра.
     </td>
-    <td width="68%"><img src="docs/images/readme/development-environment.png" alt="Среда разработки и отладка в Techne"></td>
+    <td width="68%"><img src="images/readme/development-environment.png" alt="Среда разработки и отладка в Techne"></td>
   </tr>
   <tr>
     <td>
       <strong>Сборка мини-приложений WeChat</strong><br><br>
       Сохраняйте путь к проекту и команды сборки, очистки и остановки. Запускайте сборку, очищайте кэш и переключайте ветки из приложения, а вывод команд просматривайте в журнале в реальном времени.
     </td>
-    <td><img src="docs/images/readme/mini-program-build.png" alt="Сборка мини-приложения в Techne"></td>
+    <td><img src="images/readme/mini-program-build.png" alt="Сборка мини-приложения в Techne"></td>
   </tr>
   <tr>
     <td>
       <strong>Развёртывание Android</strong><br><br>
       Выберите APK и подключённое устройство, затем установите приложение через ADB и просматривайте его журналы. Techne проверяет подключение устройства, показывает ход установки и сверяет отметки времени развёртывания.
     </td>
-    <td><img src="docs/images/readme/android-deployment.png" alt="Развёртывание Android через ADB в Techne"></td>
+    <td><img src="images/readme/android-deployment.png" alt="Развёртывание Android через ADB в Techne"></td>
   </tr>
 </table>
 
@@ -65,7 +65,7 @@ Techne собирает повседневные локальные задачи
 sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 ```
 
-Манифест выпуска находится в [`Config/Release/manifest.json`](Config/Release/manifest.json). Поддерживаются версии `x.y.z`, `x.y.z-alpha.n` и `x.y.z-beta.n`. Суффикс Alpha или Beta используется в Release, теге, DMG и CHANGELOG, а `CFBundleShortVersionString` приложения получает только числовую часть `x.y.z`.
+Манифест выпуска находится в [`Config/Release/manifest.json`](../Config/Release/manifest.json). Поддерживаются версии `x.y.z`, `x.y.z-alpha.n` и `x.y.z-beta.n`. Суффикс Alpha или Beta используется в Release, теге, DMG и [CHANGELOG.md](../CHANGELOG.md), а `CFBundleShortVersionString` приложения получает только числовую часть `x.y.z`.
 
 ## Основные решения
 
@@ -90,4 +90,4 @@ sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 
 ## Лицензия
 
-Copyright © 2025–2026 SlippinDylan Studio. Techne распространяется по лицензии [Apache License 2.0](LICENSE).
+Copyright © 2025–2026 SlippinDylan Studio. Techne распространяется по лицензии [Apache License 2.0](../LICENSE).

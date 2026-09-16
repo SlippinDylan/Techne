@@ -1,11 +1,11 @@
 <div align="center">
-  <img src="docs/images/readme/app-icon.png" width="160" height="160" alt="Techne 应用图标">
+  <img src="images/readme/app-icon.png" width="160" height="160" alt="Techne 应用图标">
   <h1>Techne</h1>
   <p>面向本地开发服务、微信小程序和 Android APK 部署的原生 macOS 工作台。</p>
   <p>
     <strong>简体中文</strong> ·
     <a href="README.zh-TW.md">繁體中文</a> ·
-    <a href="README.md">English</a> ·
+    <a href="../README.md">English</a> ·
     <a href="README.ja.md">日本語</a> ·
     <a href="README.ru.md">Русский</a>
   </p>
@@ -23,21 +23,21 @@ Techne 把本地开发中反复出现的杂事收进一个原生 macOS 应用：
       <strong>开发环境</strong><br><br>
       集中管理项目及其 Git 状态，发现本地开发服务，并为每个服务启动带远程调试端口的独立 Chrome 配置文件。
     </td>
-    <td width="68%"><img src="docs/images/readme/development-environment.png" alt="Techne 开发环境中的项目与服务状态"></td>
+    <td width="68%"><img src="images/readme/development-environment.png" alt="Techne 开发环境中的项目与服务状态"></td>
   </tr>
   <tr>
     <td>
       <strong>微信小程序构建</strong><br><br>
       保存小程序项目的构建、清理和停止命令，在同一处执行、切换分支，并在日志面板查看命令输出。
     </td>
-    <td><img src="docs/images/readme/mini-program-build.png" alt="Techne 微信小程序构建工作区"></td>
+    <td><img src="images/readme/mini-program-build.png" alt="Techne 微信小程序构建工作区"></td>
   </tr>
   <tr>
     <td>
       <strong>Android APK 部署</strong><br><br>
       选择 APK，检查已连接设备，通过 ADB 安装，并保留部署输出以便排查问题。
     </td>
-    <td><img src="docs/images/readme/android-deployment.png" alt="Techne Android APK 部署工作区"></td>
+    <td><img src="images/readme/android-deployment.png" alt="Techne Android APK 部署工作区"></td>
   </tr>
 </table>
 
@@ -65,7 +65,7 @@ Techne 把本地开发中反复出现的杂事收进一个原生 macOS 应用：
 sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 ```
 
-每次 push 和 Pull Request 都会运行发布自动化检查、`TechneTests` 和未签名的 Release 构建。发布配置位于 [`Config/Release/manifest.json`](Config/Release/manifest.json)。只有 main 分支的 CI 成功、`release` 为 `true`、版本尚未发布，并且 [`CHANGELOG.md`](CHANGELOG.md) 存在唯一、非空且与版本完全同名的章节时，发布工作流才会签名、打包并发布 DMG。
+每次 push 和 Pull Request 都会运行发布自动化检查、`TechneTests` 和未签名的 Release 构建。发布配置位于 [`Config/Release/manifest.json`](../Config/Release/manifest.json)。只有 main 分支的 CI 成功、`release` 为 `true`、版本尚未发布，并且 [`CHANGELOG.md`](../CHANGELOG.md) 存在唯一、非空且与版本完全同名的章节时，发布工作流才会签名、打包并发布 DMG。
 
 支持的版本格式为 `x.y.z`、`x.y.z-alpha.n` 和 `x.y.z-beta.n`。Alpha 和 Beta 后缀用于 Release、tag、DMG 与 Changelog；应用的 `CFBundleShortVersionString` 使用对应的纯数字 `x.y.z`。
 
@@ -100,4 +100,4 @@ sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 
 ## 许可证
 
-Copyright © 2025–2026 SlippinDylan Studio。Techne 使用 [Apache License 2.0](LICENSE) 授权。
+Copyright © 2025–2026 SlippinDylan Studio。Techne 使用 [Apache License 2.0](../LICENSE) 授权。
