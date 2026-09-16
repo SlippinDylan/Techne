@@ -13,7 +13,7 @@
 ### Task 1: Extract a single dev-server ownership matcher with deterministic nested-path rules
 
 **Files:**
-- Create: `Techne/Models/DevServerProjectMatcher.swift`
+- Create: `Apps/Models/DevServerProjectMatcher.swift`
 - Test: `TechneTests/Models/DevServerProjectMatcherTests.swift`
 
 - [ ] **Step 1: Write the failing matcher tests**
@@ -111,7 +111,7 @@ Expected: FAIL because `DevServerProjectMatcher` does not exist yet.
 
 - [ ] **Step 3: Implement a pure matcher with one normalized ownership rule**
 
-Create `Techne/Models/DevServerProjectMatcher.swift`:
+Create `Apps/Models/DevServerProjectMatcher.swift`:
 
 ```swift
 import Foundation
@@ -171,15 +171,15 @@ Expected: PASS for nested child-path ownership, sibling rejection, most-specific
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Techne/Models/DevServerProjectMatcher.swift TechneTests/Models/DevServerProjectMatcherTests.swift
+git add Apps/Models/DevServerProjectMatcher.swift TechneTests/Models/DevServerProjectMatcherTests.swift
 git commit -m "test: codify nested dev server ownership rules"
 ```
 
 ### Task 2: Route project state reconciliation and discovered-server filtering through the shared matcher
 
 **Files:**
-- Modify: `Techne/Services/ProjectService.swift`
-- Modify: `Techne/Views/ProjectListView.swift`
+- Modify: `Apps/Services/ProjectService.swift`
+- Modify: `Apps/Views/ProjectListView.swift`
 - Test: `TechneTests/Startup/ProjectServiceStartupRecoveryTests.swift`
 - Modify: `TechneTests/Models/DevServerProjectMatcherTests.swift`
 
@@ -274,7 +274,7 @@ Expected: FAIL because `ProjectService.reconcileDetectedDevServers(_:)` still on
 
 - [ ] **Step 3: Replace the duplicated path heuristics with the shared matcher**
 
-Update `Techne/Services/ProjectService.swift` inside `reconcileDetectedDevServers(_:)`:
+Update `Apps/Services/ProjectService.swift` inside `reconcileDetectedDevServers(_:)`:
 
 ```swift
     @MainActor
@@ -315,7 +315,7 @@ Update `Techne/Services/ProjectService.swift` inside `reconcileDetectedDevServer
     }
 ```
 
-Update `Techne/Views/ProjectListView.swift`:
+Update `Apps/Views/ProjectListView.swift`:
 
 ```swift
     private var unmanagedDiscoveredServers: [DevServer] {
@@ -401,6 +401,6 @@ Expected: PASS. Serial execution is acceptable if `ProjectServiceStartupRecovery
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Techne/Models/DevServerProjectMatcher.swift Techne/Views/ProjectListView.swift Techne/Services/ProjectService.swift TechneTests/Models/DevServerProjectMatcherTests.swift TechneTests/Startup/ProjectServiceStartupRecoveryTests.swift
+git add Apps/Models/DevServerProjectMatcher.swift Apps/Views/ProjectListView.swift Apps/Services/ProjectService.swift TechneTests/Models/DevServerProjectMatcherTests.swift TechneTests/Startup/ProjectServiceStartupRecoveryTests.swift
 git commit -m "fix: align dev server ownership across list and startup state"
 ```

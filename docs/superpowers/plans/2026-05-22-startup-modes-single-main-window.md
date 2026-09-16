@@ -13,9 +13,9 @@
 ### Task 1: Model explicit startup modes and migrate persisted projects safely
 
 **Files:**
-- Modify: `Techne/Models/Project.swift`
-- Modify: `Techne/Models/ProjectCommandSnapshotResolver.swift`
-- Modify: `Techne/Views/ProjectCommandDetailsPopover.swift`
+- Modify: `Apps/Models/Project.swift`
+- Modify: `Apps/Models/ProjectCommandSnapshotResolver.swift`
+- Modify: `Apps/Views/ProjectCommandDetailsPopover.swift`
 - Test: `TechneTests/Models/ProjectSnapshotMigrationTests.swift`
 
 - [ ] **Step 1: Write the failing model and migration tests**
@@ -122,7 +122,7 @@ Expected: FAIL with compiler errors for missing `ProjectStartupMode`, missing `a
 
 - [ ] **Step 3: Implement the persisted startup mode model and resolver updates**
 
-Update `Techne/Models/Project.swift` with a focused model that preserves `startCommand` as the compatibility mirror:
+Update `Apps/Models/Project.swift` with a focused model that preserves `startCommand` as the compatibility mirror:
 
 ```swift
 enum ProjectStartupModeSource: String, Codable, Sendable {
@@ -151,7 +151,7 @@ extension Project {
 }
 ```
 
-Update the persisted `Project` shape in `Techne/Models/Project.swift`:
+Update the persisted `Project` shape in `Apps/Models/Project.swift`:
 
 ```swift
     var availableStartupModes: [ProjectStartupMode]
@@ -174,7 +174,7 @@ Initialize and decode them with backward-compatible defaults:
         }
 ```
 
-Update `Techne/Models/ProjectCommandSnapshotResolver.swift` so the snapshot carries startup mode candidates:
+Update `Apps/Models/ProjectCommandSnapshotResolver.swift` so the snapshot carries startup mode candidates:
 
 ```swift
 struct ProjectCommandSnapshot: Equatable, Sendable {
@@ -240,7 +240,7 @@ Use that detector in `viteSnapshot`, `nextSnapshot`, and `genericDevServerSnapsh
         )
 ```
 
-Update `Techne/Views/ProjectCommandDetailsPopover.swift` to show the currently selected startup mode label and all available startup commands:
+Update `Apps/Views/ProjectCommandDetailsPopover.swift` to show the currently selected startup mode label and all available startup commands:
 
 ```swift
             Section(title: "当前启动模式", value: project.selectedStartupMode?.displayName ?? "默认"),
@@ -264,17 +264,17 @@ Expected: PASS for the new startup mode detection, legacy migration, and compati
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Techne/Models/Project.swift Techne/Models/ProjectCommandSnapshotResolver.swift Techne/Views/ProjectCommandDetailsPopover.swift TechneTests/Models/ProjectSnapshotMigrationTests.swift
+git add Apps/Models/Project.swift Apps/Models/ProjectCommandSnapshotResolver.swift Apps/Views/ProjectCommandDetailsPopover.swift TechneTests/Models/ProjectSnapshotMigrationTests.swift
 git commit -m "feat: persist project startup modes"
 ```
 
 ### Task 2: Expose startup modes in add-project preview and project cards without bloating the card
 
 **Files:**
-- Modify: `Techne/Views/AddProjectSheet.swift`
-- Create: `Techne/Views/Shared/Components/StartupModePicker.swift`
-- Modify: `Techne/Views/ProjectCard.swift`
-- Modify: `Techne/Views/ProjectListView.swift`
+- Modify: `Apps/Views/AddProjectSheet.swift`
+- Create: `Apps/Views/Shared/Components/StartupModePicker.swift`
+- Modify: `Apps/Views/ProjectCard.swift`
+- Modify: `Apps/Views/ProjectListView.swift`
 - Test: `TechneTests/Models/ProjectSnapshotMigrationTests.swift`
 
 - [ ] **Step 1: Write the failing presentation tests**
@@ -325,7 +325,7 @@ Expected: FAIL if the resolver still emits unlabeled or incomplete startup modes
 
 - [ ] **Step 3: Implement a dedicated startup mode picker and wire it into the two entry points**
 
-Create `Techne/Views/Shared/Components/StartupModePicker.swift`:
+Create `Apps/Views/Shared/Components/StartupModePicker.swift`:
 
 ```swift
 import SwiftUI
@@ -366,7 +366,7 @@ struct StartupModePicker: View {
 }
 ```
 
-Update `Techne/Views/AddProjectSheet.swift` so the preview lists every detected startup mode instead of only the single selected command:
+Update `Apps/Views/AddProjectSheet.swift` so the preview lists every detected startup mode instead of only the single selected command:
 
 ```swift
             if let snapshot = snapshotPreview {
@@ -380,7 +380,7 @@ Update `Techne/Views/AddProjectSheet.swift` so the preview lists every detected 
             }
 ```
 
-Update `Techne/Views/ProjectCard.swift` so the title row includes the new picker beside the command snapshot badge:
+Update `Apps/Views/ProjectCard.swift` so the title row includes the new picker beside the command snapshot badge:
 
 ```swift
             if project.type == .devServer, project.availableStartupModes.count > 1 {
@@ -418,15 +418,15 @@ Expected: PASS, confirming the mode list and labels are stable enough for the UI
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Techne/Views/AddProjectSheet.swift Techne/Views/Shared/Components/StartupModePicker.swift Techne/Views/ProjectCard.swift Techne/Views/ProjectListView.swift TechneTests/Models/ProjectSnapshotMigrationTests.swift
+git add Apps/Views/AddProjectSheet.swift Apps/Views/Shared/Components/StartupModePicker.swift Apps/Views/ProjectCard.swift Apps/Views/ProjectListView.swift TechneTests/Models/ProjectSnapshotMigrationTests.swift
 git commit -m "feat: expose startup mode selection in project cards"
 ```
 
 ### Task 3: Make startup mode changes durable and restart running projects immediately
 
 **Files:**
-- Modify: `Techne/Services/ProjectService.swift`
-- Modify: `Techne/Views/ProjectListView.swift`
+- Modify: `Apps/Services/ProjectService.swift`
+- Modify: `Apps/Views/ProjectListView.swift`
 - Test: `TechneTests/Startup/ProjectServiceStartupRecoveryTests.swift`
 
 - [ ] **Step 1: Write the failing service tests**
@@ -543,7 +543,7 @@ Expected: FAIL because `ProjectService` does not yet expose `switchStartupMode(f
 
 - [ ] **Step 3: Implement durable mode switching with immediate restart semantics**
 
-Add this API to `Techne/Services/ProjectService.swift`:
+Add this API to `Apps/Services/ProjectService.swift`:
 
 ```swift
     @MainActor
@@ -576,7 +576,7 @@ Add this API to `Techne/Services/ProjectService.swift`:
     }
 ```
 
-Update `Techne/Views/ProjectListView.swift` with a thin forwarding helper instead of embedding service logic in the view body:
+Update `Apps/Views/ProjectListView.swift` with a thin forwarding helper instead of embedding service logic in the view body:
 
 ```swift
     private func switchStartupMode(for project: Project, to modeID: String) {
@@ -607,19 +607,19 @@ Expected: PASS for stopped-mode persistence and running-mode restart coverage.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Techne/Services/ProjectService.swift Techne/Views/ProjectListView.swift TechneTests/Startup/ProjectServiceStartupRecoveryTests.swift
+git add Apps/Services/ProjectService.swift Apps/Views/ProjectListView.swift TechneTests/Startup/ProjectServiceStartupRecoveryTests.swift
 git commit -m "feat: restart running projects on startup mode changes"
 ```
 
 ### Task 4: Enforce a singleton main window and route Cmd+1/Cmd+2/Cmd+3 to the existing window
 
 **Files:**
-- Create: `Techne/Services/Shared/MainWindowCoordinator.swift`
-- Modify: `Techne/TechneApp.swift`
-- Modify: `Techne/Views/MenuBarView.swift`
-- Modify: `Techne/ContentView.swift`
-- Modify: `Techne/AppDelegate.swift`
-- Modify: `Techne/Services/Shared/WindowManager.swift`
+- Create: `Apps/Services/Shared/MainWindowCoordinator.swift`
+- Modify: `Apps/TechneApp.swift`
+- Modify: `Apps/Views/MenuBarView.swift`
+- Modify: `Apps/ContentView.swift`
+- Modify: `Apps/AppDelegate.swift`
+- Modify: `Apps/Services/Shared/WindowManager.swift`
 - Test: `TechneTests/App/MainWindowCoordinatorTests.swift`
 
 - [ ] **Step 1: Write the failing coordinator tests**
@@ -681,7 +681,7 @@ Expected: FAIL because `MainWindowCoordinator` does not exist yet.
 
 - [ ] **Step 3: Implement the singleton main-window route**
 
-Create `Techne/Services/Shared/MainWindowCoordinator.swift`:
+Create `Apps/Services/Shared/MainWindowCoordinator.swift`:
 
 ```swift
 import AppKit
@@ -730,7 +730,7 @@ struct MainWindowCoordinator {
 }
 ```
 
-Update `Techne/TechneApp.swift` to replace the multi-instance scene:
+Update `Apps/TechneApp.swift` to replace the multi-instance scene:
 
 ```swift
         Window("Techne", id: "main") {
@@ -742,7 +742,7 @@ Update `Techne/TechneApp.swift` to replace the multi-instance scene:
         }
 ```
 
-Update `Techne/Views/MenuBarView.swift` so `Cmd+1` / `Cmd+2` / `Cmd+3` ask the coordinator to reuse the existing main window instead of always calling `openWindow(id: "main")` first:
+Update `Apps/Views/MenuBarView.swift` so `Cmd+1` / `Cmd+2` / `Cmd+3` ask the coordinator to reuse the existing main window instead of always calling `openWindow(id: "main")` first:
 
 ```swift
     private func openAndFocusWindow() {
@@ -750,7 +750,7 @@ Update `Techne/Views/MenuBarView.swift` so `Cmd+1` / `Cmd+2` / `Cmd+3` ask the c
     }
 ```
 
-Update `Techne/Services/Shared/WindowManager.swift` to delegate to the same focus rules instead of duplicating them:
+Update `Apps/Services/Shared/WindowManager.swift` to delegate to the same focus rules instead of duplicating them:
 
 ```swift
     static func showMainWindow(identifier: String = "main") {
@@ -761,7 +761,7 @@ Update `Techne/Services/Shared/WindowManager.swift` to delegate to the same focu
     }
 ```
 
-Update `Techne/AppDelegate.swift` to restore the singleton main window when the app is reopened from the dock or menu-bar flow:
+Update `Apps/AppDelegate.swift` to restore the singleton main window when the app is reopened from the dock or menu-bar flow:
 
 ```swift
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -795,6 +795,6 @@ Expected: PASS for startup mode persistence, restart orchestration, and singleto
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Techne/Services/Shared/MainWindowCoordinator.swift Techne/TechneApp.swift Techne/Views/MenuBarView.swift Techne/ContentView.swift Techne/AppDelegate.swift Techne/Services/Shared/WindowManager.swift TechneTests/App/MainWindowCoordinatorTests.swift
+git add Apps/Services/Shared/MainWindowCoordinator.swift Apps/TechneApp.swift Apps/Views/MenuBarView.swift Apps/ContentView.swift Apps/AppDelegate.swift Apps/Services/Shared/WindowManager.swift TechneTests/App/MainWindowCoordinatorTests.swift
 git commit -m "fix: reuse existing main window from menu bar shortcuts"
 ```

@@ -13,7 +13,7 @@
 ### Task 1: Stabilize the shared console viewport
 
 **Files:**
-- Modify: `Techne/Views/Shared/Components/ConsoleTextViewport.swift`
+- Modify: `Apps/Views/Shared/Components/ConsoleTextViewport.swift`
 - Test: `TechneTests/Views/ConsolePanelStyleTests.swift`
 
 - [ ] Add failing tests that prove the shared terminal viewport keeps its clip view within the legal bottom range after output updates.
@@ -24,10 +24,10 @@
 ### Task 2: Stop processes by managed project root instead of one remembered PID
 
 **Files:**
-- Create: `Techne/Services/Shared/ProjectRootProcessMatcher.swift`
-- Modify: `Techne/Services/Shared/ProcessService.swift`
-- Modify: `Techne/Services/Shared/ProcessManager.swift`
-- Modify: `Techne/Services/ProjectService.swift`
+- Create: `Apps/Services/Shared/ProjectRootProcessMatcher.swift`
+- Modify: `Apps/Services/Shared/ProcessService.swift`
+- Modify: `Apps/Services/Shared/ProcessManager.swift`
+- Modify: `Apps/Services/ProjectService.swift`
 - Test: `TechneTests/Startup/ProjectServiceStartupRecoveryTests.swift`
 - Test: `TechneTests/Services/ProcessServiceProjectScopeTests.swift`
 

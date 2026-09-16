@@ -162,10 +162,10 @@ The iteration is not done when the app merely compiles or when the visible featu
 **Files:**
 - Create: `TechneTests/Backup/TechneBackupDocumentTests.swift`
 - Create: `TechneTests/Models/ProjectSnapshotMigrationTests.swift`
-- Create: `Techne/Models/Backup/TechneBackupPayload.swift`
-- Create: `Techne/Models/Backup/TechneBackupDocument.swift`
+- Create: `Apps/Models/Backup/TechneBackupPayload.swift`
+- Create: `Apps/Models/Backup/TechneBackupDocument.swift`
 - Modify: `Techne.xcodeproj/project.pbxproj`
-- Modify: `Techne/Models/Project.swift`
+- Modify: `Apps/Models/Project.swift`
 
 - [x] **Step 1: Create the test target folder structure and add the test target entries**
 
@@ -286,7 +286,7 @@ Expected: build or test failure because `TechneBackupPayload`, `TechneBackupDocu
 
 - [x] **Step 5: Implement the minimal backup models and project snapshot fields**
 
-Create `Techne/Models/Backup/TechneBackupPayload.swift`:
+Create `Apps/Models/Backup/TechneBackupPayload.swift`:
 
 ```swift
 import Foundation
@@ -300,7 +300,7 @@ struct TechneBackupPayload: Codable, Sendable {
 }
 ```
 
-Create `Techne/Models/Backup/TechneBackupDocument.swift`:
+Create `Apps/Models/Backup/TechneBackupDocument.swift`:
 
 ```swift
 import SwiftUI
@@ -332,7 +332,7 @@ struct TechneBackupDocument: FileDocument {
 }
 ```
 
-Update `Techne/Models/Project.swift` to add:
+Update `Apps/Models/Project.swift` to add:
 
 ```swift
 enum InstallStrategy: String, Codable, Sendable {
@@ -379,17 +379,17 @@ Expected: PASS
 - [x] **Step 7: Commit**
 
 ```bash
-git add Techne.xcodeproj/project.pbxproj Techne/Models/Backup/TechneBackupPayload.swift Techne/Models/Backup/TechneBackupDocument.swift Techne/Models/Project.swift TechneTests/Backup/TechneBackupDocumentTests.swift TechneTests/Models/ProjectSnapshotMigrationTests.swift
+git add Techne.xcodeproj/project.pbxproj Apps/Models/Backup/TechneBackupPayload.swift Apps/Models/Backup/TechneBackupDocument.swift Apps/Models/Project.swift TechneTests/Backup/TechneBackupDocumentTests.swift TechneTests/Models/ProjectSnapshotMigrationTests.swift
 git commit -m "feat: add backup document foundation and project command snapshot model"
 ```
 
 ### Task 2: Add backup export and import to settings
 
 **Files:**
-- Create: `Techne/Services/BackupService.swift`
-- Modify: `Techne/ContentView.swift`
-- Modify: `Techne/Services/ProjectService.swift`
-- Modify: `Techne/Services/CommandConfigService.swift`
+- Create: `Apps/Services/BackupService.swift`
+- Modify: `Apps/ContentView.swift`
+- Modify: `Apps/Services/ProjectService.swift`
+- Modify: `Apps/Services/CommandConfigService.swift`
 - Test: `TechneTests/Backup/BackupServiceMergeTests.swift`
 
 - [x] **Step 1: Write the failing merge import test**
@@ -456,7 +456,7 @@ Expected: FAIL because `BackupService` does not exist.
 
 - [x] **Step 3: Implement the backup service**
 
-Create `Techne/Services/BackupService.swift`:
+Create `Apps/Services/BackupService.swift`:
 
 ```swift
 import AppKit
@@ -512,7 +512,7 @@ final class BackupService {
 
 - [x] **Step 4: Expose import/export hooks from services**
 
-Add these methods to `Techne/Services/ProjectService.swift`:
+Add these methods to `Apps/Services/ProjectService.swift`:
 
 ```swift
 @MainActor
@@ -534,7 +534,7 @@ func mergeImportedProjects(_ imported: [Project]) {
 }
 ```
 
-Add these methods to `Techne/Services/CommandConfigService.swift`:
+Add these methods to `Apps/Services/CommandConfigService.swift`:
 
 ```swift
 func replaceConfigsForImport(_ configs: [CommandConfig]) {
@@ -552,7 +552,7 @@ func mergeImportedConfigs(_ configs: [CommandConfig]) {
 
 - [x] **Step 5: Add settings export and import UI**
 
-Extend `MainSettingsView` in `Techne/ContentView.swift` with state:
+Extend `MainSettingsView` in `Apps/ContentView.swift` with state:
 
 ```swift
 @Environment(ProjectService.self) private var projectService
@@ -630,17 +630,17 @@ Expected: PASS
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Techne/Services/BackupService.swift Techne/ContentView.swift Techne/Services/ProjectService.swift Techne/Services/CommandConfigService.swift TechneTests/Backup/BackupServiceMergeTests.swift
+git add Apps/Services/BackupService.swift Apps/ContentView.swift Apps/Services/ProjectService.swift Apps/Services/CommandConfigService.swift TechneTests/Backup/BackupServiceMergeTests.swift
 git commit -m "feat: add backup export and import settings flow"
 ```
 
 ### Task 3: Move command visibility into project cards and project creation
 
 **Files:**
-- Create: `Techne/Views/ProjectCommandDetailsPopover.swift`
-- Modify: `Techne/Views/ProjectCard.swift`
-- Modify: `Techne/Views/AddProjectSheet.swift`
-- Modify: `Techne/Services/ProjectService.swift`
+- Create: `Apps/Views/ProjectCommandDetailsPopover.swift`
+- Modify: `Apps/Views/ProjectCard.swift`
+- Modify: `Apps/Views/AddProjectSheet.swift`
+- Modify: `Apps/Services/ProjectService.swift`
 - Test: `TechneTests/Models/ProjectCommandSnapshotTests.swift`
 
 - [ ] **Step 1: Write the failing project command snapshot test**
@@ -697,7 +697,7 @@ Expected: FAIL because `addProject` still only copies `startCommand`.
 
 - [ ] **Step 3: Copy command snapshots into projects on add**
 
-Update `ProjectService.addProject(...)` in `Techne/Services/ProjectService.swift` so the selected config populates the full project snapshot:
+Update `ProjectService.addProject(...)` in `Apps/Services/ProjectService.swift` so the selected config populates the full project snapshot:
 
 ```swift
 let selectedConfig = configId.flatMap { commandConfigService.getConfig(by: $0) }
@@ -720,7 +720,7 @@ let project = Project(
 
 - [ ] **Step 4: Add the command details popover**
 
-Create `Techne/Views/ProjectCommandDetailsPopover.swift`:
+Create `Apps/Views/ProjectCommandDetailsPopover.swift`:
 
 ```swift
 import SwiftUI
@@ -760,7 +760,7 @@ struct ProjectCommandDetailsPopover: View {
 
 - [ ] **Step 5: Add the tag and popover to project cards**
 
-In `Techne/Views/ProjectCard.swift`, add state:
+In `Apps/Views/ProjectCard.swift`, add state:
 
 ```swift
 @State private var showingCommandDetails = false
@@ -808,17 +808,17 @@ Expected: PASS
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Techne/Services/ProjectService.swift Techne/Views/ProjectCard.swift Techne/Views/ProjectCommandDetailsPopover.swift Techne/Views/AddProjectSheet.swift TechneTests/Models/ProjectCommandSnapshotTests.swift
+git add Apps/Services/ProjectService.swift Apps/Views/ProjectCard.swift Apps/Views/ProjectCommandDetailsPopover.swift Apps/Views/AddProjectSheet.swift TechneTests/Models/ProjectCommandSnapshotTests.swift
 git commit -m "feat: show project command details from project-owned snapshots"
 ```
 
 ### Task 4: Add optional dependency installation before start
 
 **Files:**
-- Create: `Techne/Services/ProjectStartupCoordinator.swift`
-- Modify: `Techne/Services/ProjectService.swift`
-- Modify: `Techne/Services/Shared/ProcessManager.swift`
-- Modify: `Techne/Models/Project.swift`
+- Create: `Apps/Services/ProjectStartupCoordinator.swift`
+- Modify: `Apps/Services/ProjectService.swift`
+- Modify: `Apps/Services/Shared/ProcessManager.swift`
+- Modify: `Apps/Models/Project.swift`
 - Test: `TechneTests/Startup/ProjectStartupCoordinatorTests.swift`
 
 - [ ] **Step 1: Write the failing startup coordinator test**
@@ -870,7 +870,7 @@ Expected: FAIL because `ProjectStartupCoordinator` does not exist.
 
 - [ ] **Step 3: Implement the startup coordinator**
 
-Create `Techne/Services/ProjectStartupCoordinator.swift`:
+Create `Apps/Services/ProjectStartupCoordinator.swift`:
 
 ```swift
 import Foundation
@@ -936,7 +936,7 @@ When install is needed, prepend visible log lines:
 
 - [ ] **Step 5: Add a dedicated transition state**
 
-Extend `ProjectTransitionState` in `Techne/Models/Project.swift`:
+Extend `ProjectTransitionState` in `Apps/Models/Project.swift`:
 
 ```swift
 case installing
@@ -964,22 +964,22 @@ Expected: PASS
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Techne/Services/ProjectStartupCoordinator.swift Techne/Services/ProjectService.swift Techne/Services/Shared/ProcessManager.swift Techne/Models/Project.swift TechneTests/Startup/ProjectStartupCoordinatorTests.swift
+git add Apps/Services/ProjectStartupCoordinator.swift Apps/Services/ProjectService.swift Apps/Services/Shared/ProcessManager.swift Apps/Models/Project.swift TechneTests/Startup/ProjectStartupCoordinatorTests.swift
 git commit -m "feat: install dependencies before start when required"
 ```
 
 ### Task 5: Rebuild browser discovery and stable launch behavior
 
 **Files:**
-- Create: `Techne/Models/BrowserLaunchRequest.swift`
-- Modify: `Techne/Models/Browser.swift`
-- Modify: `Techne/Services/BrowserDetectionService.swift`
-- Modify: `Techne/Services/BrowserLaunchService.swift`
-- Modify: `Techne/Services/ChromeDetectionService.swift`
-- Modify: `Techne/Views/ProjectCard.swift`
-- Modify: `Techne/Views/DevEnvironment/Components/Cards/ServerCardWithInstances.swift`
-- Modify: `Techne/Views/DevEnvironment/Components/Cards/DiscoveredServerCard.swift`
-- Modify: `Techne/Views/DevEnvironment/Components/Sheets/BrowserSelectorSheet.swift`
+- Create: `Apps/Models/BrowserLaunchRequest.swift`
+- Modify: `Apps/Models/Browser.swift`
+- Modify: `Apps/Services/BrowserDetectionService.swift`
+- Modify: `Apps/Services/BrowserLaunchService.swift`
+- Modify: `Apps/Services/ChromeDetectionService.swift`
+- Modify: `Apps/Views/ProjectCard.swift`
+- Modify: `Apps/Views/DevEnvironment/Components/Cards/ServerCardWithInstances.swift`
+- Modify: `Apps/Views/DevEnvironment/Components/Cards/DiscoveredServerCard.swift`
+- Modify: `Apps/Views/DevEnvironment/Components/Sheets/BrowserSelectorSheet.swift`
 - Test: `TechneTests/Browser/BrowserDetectionServiceTests.swift`
 
 - [ ] **Step 1: Write the failing browser discovery test**
@@ -1013,7 +1013,7 @@ Expected: PASS for the catalog basics, but the manual code review at this step s
 
 - [ ] **Step 3: Introduce a launch request model**
 
-Create `Techne/Models/BrowserLaunchRequest.swift`:
+Create `Apps/Models/BrowserLaunchRequest.swift`:
 
 ```swift
 import Foundation
@@ -1031,7 +1031,7 @@ struct BrowserLaunchRequest: Sendable {
 
 - [ ] **Step 4: Replace hard-coded browser executable lookup with NSWorkspace lookup**
 
-In `Techne/Models/Browser.swift`, change `Browser` to store `appURL` instead of a raw executable path:
+In `Apps/Models/Browser.swift`, change `Browser` to store `appURL` instead of a raw executable path:
 
 ```swift
 struct Browser: Identifiable, Hashable {
@@ -1106,9 +1106,9 @@ return await withCheckedContinuation { continuation in
 
 Update these call sites to build the same request shape:
 
-- `Techne/Views/ProjectCard.swift`
-- `Techne/Views/DevEnvironment/Components/Cards/ServerCardWithInstances.swift`
-- `Techne/Views/DevEnvironment/Components/Cards/DiscoveredServerCard.swift`
+- `Apps/Views/ProjectCard.swift`
+- `Apps/Views/DevEnvironment/Components/Cards/ServerCardWithInstances.swift`
+- `Apps/Views/DevEnvironment/Components/Cards/DiscoveredServerCard.swift`
 
 For attached dev-server launches, use:
 
@@ -1172,16 +1172,16 @@ Expected:
 - [ ] **Step 9: Commit**
 
 ```bash
-git add Techne/Models/BrowserLaunchRequest.swift Techne/Models/Browser.swift Techne/Services/BrowserDetectionService.swift Techne/Services/BrowserLaunchService.swift Techne/Services/ChromeDetectionService.swift Techne/Views/ProjectCard.swift Techne/Views/DevEnvironment/Components/Cards/ServerCardWithInstances.swift Techne/Views/DevEnvironment/Components/Cards/DiscoveredServerCard.swift Techne/Views/DevEnvironment/Components/Sheets/BrowserSelectorSheet.swift TechneTests/Browser/BrowserDetectionServiceTests.swift
+git add Apps/Models/BrowserLaunchRequest.swift Apps/Models/Browser.swift Apps/Services/BrowserDetectionService.swift Apps/Services/BrowserLaunchService.swift Apps/Services/ChromeDetectionService.swift Apps/Views/ProjectCard.swift Apps/Views/DevEnvironment/Components/Cards/ServerCardWithInstances.swift Apps/Views/DevEnvironment/Components/Cards/DiscoveredServerCard.swift Apps/Views/DevEnvironment/Components/Sheets/BrowserSelectorSheet.swift TechneTests/Browser/BrowserDetectionServiceTests.swift
 git commit -m "feat: stabilize browser discovery and launch flows"
 ```
 
 ### Task 6: Add manual browser instance launch
 
 **Files:**
-- Create: `Techne/Views/ManualBrowserLaunchSheet.swift`
-- Modify: `Techne/Views/ProjectListView.swift`
-- Modify: `Techne/Services/ChromeDetectionService.swift`
+- Create: `Apps/Views/ManualBrowserLaunchSheet.swift`
+- Modify: `Apps/Views/ProjectListView.swift`
+- Modify: `Apps/Services/ChromeDetectionService.swift`
 - Test: `TechneTests/Browser/ManualBrowserLaunchRequestTests.swift`
 
 - [ ] **Step 1: Write the failing manual launch request test**
@@ -1229,7 +1229,7 @@ Expected: FAIL until the new launch model is present and compiled in the test ta
 
 - [ ] **Step 3: Add the manual browser launch sheet**
 
-Create `Techne/Views/ManualBrowserLaunchSheet.swift`:
+Create `Apps/Views/ManualBrowserLaunchSheet.swift`:
 
 ```swift
 import SwiftUI
@@ -1357,7 +1357,7 @@ Expected:
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Techne/Views/ManualBrowserLaunchSheet.swift Techne/Views/ProjectListView.swift Techne/Services/ChromeDetectionService.swift TechneTests/Browser/ManualBrowserLaunchRequestTests.swift
+git add Apps/Views/ManualBrowserLaunchSheet.swift Apps/Views/ProjectListView.swift Apps/Services/ChromeDetectionService.swift TechneTests/Browser/ManualBrowserLaunchRequestTests.swift
 git commit -m "feat: add manual browser instance launch"
 ```
 
