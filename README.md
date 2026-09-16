@@ -45,7 +45,7 @@ Techne brings recurring local-development work into one native macOS app: tracke
 
 > **Active development**
 >
-> The core workflows are implemented. Every push and pull request validates release automation, runs `TechneTests`, and builds an unsigned Release app. The current release manifest is set to publish version `0.1.0-beta.1` after main CI succeeds.
+> The core workflows are implemented. Pushes to main and pull requests run lightweight automation checks. Changes limited to `README.md`, `docs/`, `LICENSE`, or `AGENTS.md` skip the macOS build unless publishing is enabled; all other changes run `TechneTests` and build an unsigned Release app. Publishing is currently disabled in the release manifest.
 
 ## Platform and System Requirements
 
@@ -65,7 +65,7 @@ Each GitHub Release contains one `Techne-<version>.dmg`. Open it and drag `Techn
 sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 ```
 
-Every push and pull request runs release-automation checks, `TechneTests`, and an unsigned Release build. Release configuration lives in [`Config/Release/manifest.json`](Config/Release/manifest.json). The release workflow signs, packages, and publishes a DMG only after main CI succeeds, `release` is `true`, the version is unpublished, and [`CHANGELOG.md`](CHANGELOG.md) contains one unique, non-empty section with the exact same version.
+Pushes to main and pull requests always run lightweight release-automation checks. Changes outside `README.md`, `docs/`, `LICENSE`, and `AGENTS.md` additionally run `TechneTests` and an unsigned Release build; enabling publishing also forces this full check. Release configuration lives in [`Config/Release/manifest.json`](Config/Release/manifest.json). The release workflow signs, packages, and publishes a DMG only after main CI succeeds, `release` is `true`, the version is unpublished, and [`CHANGELOG.md`](CHANGELOG.md) contains one unique, non-empty section with the exact same version.
 
 Supported versions are `x.y.z`, `x.y.z-alpha.n`, and `x.y.z-beta.n`. Alpha and beta suffixes are used by the release, tag, DMG, and Changelog; the app's `CFBundleShortVersionString` uses the matching numeric `x.y.z` value.
 

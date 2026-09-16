@@ -45,7 +45,7 @@ Techne 把本地开发中反复出现的杂事收进一个原生 macOS 应用：
 
 > **持续开发中**
 >
-> 核心工作流已实现。每次 push 和 Pull Request 都会校验发布自动化、运行 `TechneTests`，并构建未签名的 Release 应用。当前发布清单将在 main CI 成功后发布 `0.1.0-beta.1`。
+> 核心工作流已实现。main push 和 Pull Request 都会运行轻量自动化检查；仅修改 `README.md`、`docs/`、`LICENSE` 或 `AGENTS.md` 时跳过 macOS 构建，但启用发布时仍会执行完整检查。其他变更会运行 `TechneTests` 并构建未签名的 Release 应用。当前发布清单关闭了发布。
 
 ## 平台与系统要求
 
@@ -65,7 +65,7 @@ Techne 把本地开发中反复出现的杂事收进一个原生 macOS 应用：
 sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 ```
 
-每次 push 和 Pull Request 都会运行发布自动化检查、`TechneTests` 和未签名的 Release 构建。发布配置位于 [`Config/Release/manifest.json`](../Config/Release/manifest.json)。只有 main 分支的 CI 成功、`release` 为 `true`、版本尚未发布，并且 [`CHANGELOG.md`](../CHANGELOG.md) 存在唯一、非空且与版本完全同名的章节时，发布工作流才会签名、打包并发布 DMG。
+main push 和 Pull Request 始终运行轻量发布自动化检查。修改 `README.md`、`docs/`、`LICENSE` 和 `AGENTS.md` 以外的内容时，还会运行 `TechneTests` 和未签名的 Release 构建；启用发布也会强制执行这项完整检查。发布配置位于 [`Config/Release/manifest.json`](../Config/Release/manifest.json)。只有 main 分支的 CI 成功、`release` 为 `true`、版本尚未发布，并且 [`CHANGELOG.md`](../CHANGELOG.md) 存在唯一、非空且与版本完全同名的章节时，发布工作流才会签名、打包并发布 DMG。
 
 支持的版本格式为 `x.y.z`、`x.y.z-alpha.n` 和 `x.y.z-beta.n`。Alpha 和 Beta 后缀用于 Release、tag、DMG 与 Changelog；应用的 `CFBundleShortVersionString` 使用对应的纯数字 `x.y.z`。
 

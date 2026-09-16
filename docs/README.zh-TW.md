@@ -45,7 +45,7 @@ Techne 將前端本機開發常見的零散工作集中在一個地方：管理�
 
 > **持續開發中**
 
-核心工作流程已經完成。所有 push 與 Pull Request 都會執行自動化腳本測試、`TechneTests` 與未簽署的 Release 建置；目前的發布清單會在 main CI 成功後發布 `0.1.0-beta.1`。
+核心工作流程已經完成。main push 與 Pull Request 都會執行輕量自動化檢查；僅修改 `README.md`、`docs/`、`LICENSE` 或 `AGENTS.md` 時會略過 macOS 建置，但啟用發布時仍會執行完整檢查。其他變更會執行 `TechneTests` 與未簽署的 Release 建置。目前的發布清單已關閉發布。
 
 ## 平台需求
 
