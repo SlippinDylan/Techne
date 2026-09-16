@@ -202,7 +202,7 @@ function buildWorkflowRun(event) {
   const action = String(event.action ?? '').toLowerCase();
   const conclusion = String(run.conclusion ?? '').toLowerCase();
 
-  if (action === 'in_progress') {
+  if (action === 'requested') {
     if (run.name !== 'CI') return null;
     return {
       title: `${productName(event)} CI 已开始`,

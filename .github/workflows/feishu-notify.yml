@@ -28,7 +28,7 @@ on: # zizmor: ignore[dangerous-triggers] Every privileged event executes only th
       - CI
       - Release
     types:
-      - in_progress
+      - requested
       - completed
   release:
     types:

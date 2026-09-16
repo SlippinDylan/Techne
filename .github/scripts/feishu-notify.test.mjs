@@ -108,11 +108,11 @@ test('reports main CI success and release workflow failure', () => {
   assert.equal(releaseFailure.color, 'red');
 });
 
-test('reports CI start and suppresses Release planning start', () => {
+test('reports a requested CI run and suppresses a requested Release run', () => {
   const sha = 'a'.repeat(40);
   const ciStarted = buildNotification('workflow_run', {
     repository,
-    action: 'in_progress',
+    action: 'requested',
     workflow_run: {
       name: 'CI',
       event: 'pull_request',
@@ -128,7 +128,7 @@ test('reports CI start and suppresses Release planning start', () => {
 
   assert.equal(buildNotification('workflow_run', {
     repository,
-    action: 'in_progress',
+    action: 'requested',
     workflow_run: { name: 'Release', head_branch: 'main' },
   }), null);
 });
