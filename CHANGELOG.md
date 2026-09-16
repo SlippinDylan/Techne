@@ -11,6 +11,8 @@
 
 ### 调整
 
+- 最低支持版本提升至 macOS 26.0，并在 CI 与发布流程中校验构建产物的最低系统版本。
+- CI 与发布制品统一为 Apple Silicon（`arm64`），不再生成 Intel slice。
 - 所有 push 和 Pull Request 统一执行测试与无签名构建检查，main 仅在 CI 成功后进入发布判定。
 - README 改为包含功能截图的多语言版本，并展示新的应用图标。
 - 项目许可证由 MIT License 改为 Apache License 2.0。

@@ -70,43 +70,48 @@ struct ContentView: View {
                 }
             }
             .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    let item = selectedItem ?? .devEnvironment
-                    if item == .devEnvironment || item == .miniApp {
-                        HStack(spacing: 12) {
-                            if projectService.isLoading {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .frame(width: 28, height: 28)
-                            } else {
-                                Button(action: { refreshCurrentSidebarItem(item) }) {
-                                    Image(systemName: "arrow.clockwise")
-                                }
-                                .adaptiveGlassButtonStyle()
-                                .help("刷新状态 (Cmd+R)")
-                                .keyboardShortcut("r", modifiers: .command)
+                let item = selectedItem ?? .devEnvironment
+                if item == .devEnvironment || item == .miniApp {
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        if projectService.isLoading {
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(width: 28, height: 28)
+                        } else {
+                            Button(action: { refreshCurrentSidebarItem(item) }) {
+                                Label("刷新状态", systemImage: "arrow.clockwise")
+                                    .labelStyle(.iconOnly)
                             }
-
-                            if item == .devEnvironment {
-                                Button(action: presentManualBrowserLaunch) {
-                                    Image(systemName: "globe.badge.chevron.backward")
-                                }
-                                .adaptiveGlassButtonStyle()
-                                .help("新建浏览器实例")
-                            }
-
-                            Button(action: {
-                                if item == .devEnvironment {
-                                    NotificationCenter.default.post(name: .addDevProject, object: nil)
-                                } else if item == .miniApp {
-                                    NotificationCenter.default.post(name: .addMiniAppProject, object: nil)
-                                }
-                            }) {
-                                Image(systemName: "plus")
-                            }
-                            .adaptiveGlassButtonStyle()
-                            .help(item == .devEnvironment ? "添加服务" : "添加项目")
+                            .help("刷新状态 (Cmd+R)")
+                            .keyboardShortcut("r", modifiers: .command)
                         }
+
+                        if item == .devEnvironment {
+                            Button(action: presentManualBrowserLaunch) {
+                                Label("新建浏览器实例", systemImage: "globe.badge.chevron.backward")
+                                    .labelStyle(.iconOnly)
+                            }
+                            .help("新建浏览器实例")
+                        }
+                    }
+
+                    ToolbarSpacer(.fixed, placement: .primaryAction)
+
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: {
+                            if item == .devEnvironment {
+                                NotificationCenter.default.post(name: .addDevProject, object: nil)
+                            } else if item == .miniApp {
+                                NotificationCenter.default.post(name: .addMiniAppProject, object: nil)
+                            }
+                        }) {
+                            Label(
+                                item == .devEnvironment ? "添加服务" : "添加项目",
+                                systemImage: "plus"
+                            )
+                            .labelStyle(.iconOnly)
+                        }
+                        .help(item == .devEnvironment ? "添加服务" : "添加项目")
                     }
                 }
             }

@@ -139,7 +139,7 @@ struct ADBDeployView: View {
                         Spacer()
                         if case .failure = viewModel.status {
                             Button("重置") { viewModel.status = .idle }
-                                .adaptiveGlassButtonStyle()
+                                .buttonStyle(.glass)
                                 .controlSize(.small)
                         }
                     }
@@ -167,11 +167,11 @@ struct ADBDeployView: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(viewModel.terminalOutput, forType: .string)
             }
-            .adaptiveGlassButtonStyle()
+            .buttonStyle(.glass)
             .controlSize(.small)
 
             Button("清除日志") { viewModel.clearTerminal() }
-                .adaptiveGlassButtonStyle()
+                .buttonStyle(.glass)
                 .controlSize(.small)
         }
     }

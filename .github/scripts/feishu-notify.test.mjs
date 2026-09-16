@@ -116,7 +116,7 @@ test('extracts at most three release highlights', () => {
   ]);
 });
 
-test('builds a release card with a DMG download action and no architecture claim', () => {
+test('builds an arm64 release card with a DMG download action', () => {
   const notification = buildNotification('release', {
     repository,
     sender,
@@ -134,7 +134,7 @@ test('builds a release card with a DMG download action and no architecture claim
   const card = buildCard(notification);
   assert.equal(card.header.template, 'green');
   assert.equal(card.elements[1].actions.length, 2);
-  assert.ok(!notification.details.some((detail) => detail.startsWith('架构：')));
+  assert.ok(notification.details.includes('架构：arm64'));
 });
 
 test('builds an automated release dispatch card', () => {
@@ -153,7 +153,7 @@ test('builds an automated release dispatch card', () => {
   const card = buildCard(notification);
   assert.equal(notification.title, 'Techne 0.1.0-beta.1 发布成功');
   assert.equal(card.elements[1].actions.length, 2);
-  assert.ok(!notification.details.some((detail) => detail.startsWith('架构：')));
+  assert.ok(notification.details.includes('架构：arm64'));
 });
 
 test('retries transient Feishu responses and accepts a successful response', async () => {

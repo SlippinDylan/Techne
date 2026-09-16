@@ -1,5 +1,7 @@
 # Console Panel Unification Implementation Plan
 
+> **Historical plan:** This document retains macOS 15 references as implementation history. The current product baseline is macOS 26.0 or later.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Unify the visual chrome and interaction behavior of all in-app command/output panels across dev services, mini-apps, Android deployment, and the log window without collapsing different data models into one component.

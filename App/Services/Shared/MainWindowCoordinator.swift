@@ -17,7 +17,7 @@ struct MainWindowCoordinator {
             if NSApp.activationPolicy() != .regular {
                 NSApp.setActivationPolicy(.regular)
             }
-            NSRunningApplication.current.activate(options: [.activateAllWindows])
+            NSApp.activate()
         },
         openWindow: @escaping () -> Void,
         focusWindow: @escaping (NSWindow) -> Void = { window in

@@ -151,14 +151,14 @@ struct AddProjectSheet: View {
             Button("取消") {
                 dismiss()
             }
-            .adaptiveGlassButtonStyle()
+            .buttonStyle(.glass)
             .buttonBorderShape(.capsule)
             .controlSize(.extraLarge)
 
             Button("添加") {
                 onAdd(projectPath)
             }
-            .adaptiveGlassProminentButtonStyle()
+            .buttonStyle(.glassProminent)
             .buttonBorderShape(.capsule)
             .controlSize(.extraLarge)
             .disabled(projectPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

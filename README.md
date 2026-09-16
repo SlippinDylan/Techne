@@ -51,9 +51,9 @@ Techne brings recurring local-development work into one native macOS app: tracke
 
 | Property | Value |
 |---|---|
-| Deployment target | macOS 15.0 (Sequoia) or later |
-| Source build | macOS 15.0 or later and Xcode 26 or later |
-| Current build architectures | `arm64` and `x86_64` (Apple Silicon and Intel) |
+| Deployment target | macOS 26.0 (Tahoe) or later |
+| Source build | macOS 26.0 or later and Xcode 26 or later |
+| Release architecture | Apple Silicon (`arm64`) |
 | App type | Native, non-sandboxed macOS app with a menu-bar entry |
 | Distribution | Version-gated GitHub Releases with an Apple Development-signed, non-notarized DMG when publishing is enabled |
 

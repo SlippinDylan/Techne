@@ -167,7 +167,7 @@ struct DiscoveredServerCard: View {
                     .font(.system(size: AppConfig.UI.mediumFontSize, weight: .medium))
             }
         }
-        .adaptiveGlassProminentButtonStyle()
+        .buttonStyle(.glassProminent)
         .buttonBorderShape(.capsule)
     }
 

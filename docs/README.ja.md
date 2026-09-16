@@ -51,9 +51,9 @@ Techne は、フロントエンドのローカル開発で発生する作業を�
 
 | 項目 | 内容 |
 |---|---|
-| 最低 OS | macOS 15.0 Sequoia |
-| ソースからのビルド | macOS 15.0 以降と Xcode 26 以降 |
-| 現在のビルドアーキテクチャ | `arm64` と `x86_64`（Apple Silicon と Intel） |
+| 最低 OS | macOS 26.0 Tahoe |
+| ソースからのビルド | macOS 26.0 以降と Xcode 26 以降 |
+| リリースアーキテクチャ | Apple Silicon（`arm64`） |
 | アプリ形式 | サンドボックスを使用しないネイティブ macOS アプリ。メニューバーから操作可能 |
 | ローカル開発 | ローカル開発サービスの検出と、隔離された Chrome デバッグインスタンスの起動に対応 |
 | 配布形式 | Apple Development 署名済み、未公証の DMG を GitHub Releases で配布 |

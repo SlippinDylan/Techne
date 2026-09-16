@@ -44,7 +44,7 @@ struct ManualBrowserLaunchSheet: View {
                 Button("取消") {
                     dismiss()
                 }
-                .adaptiveGlassButtonStyle()
+                .buttonStyle(.glass)
                 .buttonBorderShape(.capsule)
                 .controlSize(.extraLarge)
                 .disabled(isLaunching)
@@ -52,7 +52,7 @@ struct ManualBrowserLaunchSheet: View {
                 Button("启动") {
                     launch()
                 }
-                .adaptiveGlassProminentButtonStyle()
+                .buttonStyle(.glassProminent)
                 .buttonBorderShape(.capsule)
                 .controlSize(.extraLarge)
                 .disabled(selectedBrowserID == nil || isLaunching)

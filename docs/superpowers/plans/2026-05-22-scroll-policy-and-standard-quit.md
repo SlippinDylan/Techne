@@ -1,5 +1,7 @@
 # Scroll Policy And Standard Quit Implementation Plan
 
+> **Historical plan:** This document retains macOS 15 verification steps as implementation history. The current product baseline is macOS 26.0 or later.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Unify scroll indicator behavior behind a single macOS-aware policy layer and restore standard `Cmd+Q` quitting behavior, including when the menu bar menu is open.

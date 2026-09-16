@@ -1,5 +1,7 @@
 # Techne Next Iteration Implementation Plan
 
+> **Historical plan:** This document records the former macOS 15 compatibility baseline. Techne now targets macOS 26.0 or later; do not reintroduce its platform fallback requirements.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add backup and restore, project-level command visibility, optional dependency installation before start, stable browser launch behavior, and manual browser instance launch for the dev server and mini app workflows.

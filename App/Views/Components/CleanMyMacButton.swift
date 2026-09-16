@@ -32,9 +32,9 @@ struct CleanMyMacButton: View {
         }
         .modify { view in
             if style == .primary {
-                view.adaptiveGlassProminentButtonStyle()
+                view.buttonStyle(.glassProminent)
             } else {
-                view.adaptiveGlassButtonStyle()
+                view.buttonStyle(.glass)
             }
         }
         .buttonBorderShape(.capsule)

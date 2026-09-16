@@ -240,6 +240,7 @@ function buildRelease(event) {
     details: commonDetails(event, [
       `类型：${release.prerelease ? 'Pre-release' : 'Stable'}`,
       asset?.name ? `制品：${asset.name}` : '',
+      '架构：arm64',
       '签名：Apple Development（未公证）',
       ...highlights,
     ]),
@@ -260,6 +261,7 @@ function buildReleaseDispatch(event) {
     details: commonDetails(event, [
       `类型：${payload.prerelease ? 'Pre-release' : 'Stable'}`,
       payload.dmg_name ? `制品：${payload.dmg_name}` : '',
+      '架构：arm64',
       '签名：Apple Development（未公证）',
       ...highlights,
     ]),

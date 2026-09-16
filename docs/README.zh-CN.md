@@ -51,9 +51,9 @@ Techne 把本地开发中反复出现的杂事收进一个原生 macOS 应用：
 
 | 属性 | 值 |
 |---|---|
-| 最低系统版本 | macOS 15.0（Sequoia）及以上 |
-| 从源码构建 | macOS 15.0 及以上，Xcode 26 及以上 |
-| 当前构建架构 | `arm64` 和 `x86_64`（Apple Silicon 和 Intel） |
+| 最低系统版本 | macOS 26.0（Tahoe）及以上 |
+| 从源码构建 | macOS 26.0 及以上，Xcode 26 及以上 |
+| 发布架构 | Apple Silicon（`arm64`） |
 | 应用形态 | 带菜单栏入口的原生 macOS 应用 |
 | 分发方式 | 启用发布时，通过 GitHub Releases 提供按版本发布、Apple Development 签名但未经公证的 DMG |
 

@@ -183,7 +183,7 @@ struct CommandConfigEditSheet: View {
             Button("取消") {
                 dismiss()
             }
-            .adaptiveGlassButtonStyle()
+            .buttonStyle(.glass)
             .buttonBorderShape(.capsule)
             .keyboardShortcut(.cancelAction)
 
@@ -192,7 +192,7 @@ struct CommandConfigEditSheet: View {
             Button("保存") {
                 saveConfig()
             }
-            .adaptiveGlassProminentButtonStyle()
+            .buttonStyle(.glassProminent)
             .buttonBorderShape(.capsule)
             .keyboardShortcut(.defaultAction)
             .disabled(name.isEmpty)

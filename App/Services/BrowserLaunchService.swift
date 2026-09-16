@@ -5,7 +5,6 @@ enum BrowserLaunchError: LocalizedError {
     case launchAlreadyInProgress
     case debugPortUnavailable
     case missingTrackingDirectory
-    case applicationDidNotReturnRunningInstance
 
     var errorDescription: String? {
         switch self {
@@ -15,8 +14,6 @@ enum BrowserLaunchError: LocalizedError {
             return "未找到可用的浏览器调试端口"
         case .missingTrackingDirectory:
             return "浏览器实例目录创建失败"
-        case .applicationDidNotReturnRunningInstance:
-            return "浏览器已收到启动请求，但未返回运行中的应用实例"
         }
     }
 }
@@ -55,7 +52,6 @@ final class BrowserLaunchService {
                 resolvedDebugPort: resolvedDebugPort
             )
             let app = try await open(plan: plan)
-            app.activate(options: [.activateAllWindows])
 
             if request.tracksInstance {
                 guard let profileDirectoryURL else {
@@ -118,23 +114,18 @@ final class BrowserLaunchService {
         configuration.createsNewApplicationInstance = plan.createsNewApplicationInstance
         configuration.arguments = plan.arguments
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let completion: @Sendable (NSRunningApplication?, Error?) -> Void = { app, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let app {
-                    continuation.resume(returning: app)
-                } else {
-                    continuation.resume(throwing: BrowserLaunchError.applicationDidNotReturnRunningInstance)
-                }
-            }
-
-            if plan.urlsToOpen.isEmpty {
-                workspace.openApplication(at: plan.applicationURL, configuration: configuration, completionHandler: completion)
-            } else {
-                workspace.open(plan.urlsToOpen, withApplicationAt: plan.applicationURL, configuration: configuration, completionHandler: completion)
-            }
+        if plan.urlsToOpen.isEmpty {
+            return try await workspace.openApplication(
+                at: plan.applicationURL,
+                configuration: configuration
+            )
         }
+
+        return try await workspace.open(
+            plan.urlsToOpen,
+            withApplicationAt: plan.applicationURL,
+            configuration: configuration
+        )
     }
 
     /// 检查端口是否可用

@@ -51,9 +51,9 @@ Techne 將前端本機開發常見的零散工作集中在一個地方：管理�
 
 | 項目 | 需求 |
 |---|---|
-| 最低系統 | macOS 15.0 Sequoia |
-| 從原始碼建置 | macOS 15.0 以上與 Xcode 26+ |
-| 目前建置架構 | `arm64` 與 `x86_64`（Apple Silicon 與 Intel） |
+| 最低系統 | macOS 26.0 Tahoe |
+| 從原始碼建置 | macOS 26.0 以上與 Xcode 26+ |
+| 發佈架構 | Apple Silicon（`arm64`） |
 | App 類型 | 非沙盒的原生 macOS App，提供選單列入口 |
 | 本機開發 | 可偵測本機開發服務，並啟動隔離的 Chrome 偵錯執行個體 |
 | 發佈方式 | GitHub Releases 提供由 Apple Development 簽署、未經公證的 DMG |

@@ -47,13 +47,13 @@ jobs:
           xcodebuild test \
             -project Techne.xcodeproj \
             -scheme Techne \
-            -destination 'platform=macOS' \
+            -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath build/DerivedData-Tests \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
 
-      - name: Build unsigned app
+      - name: Build unsigned arm64 app
         run: |
           set -o pipefail
           xcodebuild build \
@@ -62,6 +62,8 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=macOS' \
             -derivedDataPath build/DerivedData-Release \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
@@ -71,3 +73,6 @@ jobs:
           app='build/DerivedData-Release/Build/Products/Release/Techne.app'
           binary="$app/Contents/MacOS/Techne"
           test -x "$binary"
+          test "$(lipo -archs "$binary")" = 'arm64'
+          test "$(vtool -show-build "$binary" | grep -c 'minos 26.0')" -eq 1
+          test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist")" = '26.0'

@@ -182,7 +182,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           rm -f "$certificate_path"
 
-      - name: Build signed app
+      - name: Build signed arm64 app
         env:
           SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
           SIGNING_TEAM_ID: ${{ steps.signing.outputs.team_id }}
@@ -194,6 +194,8 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             CODE_SIGNING_ALLOWED=YES \
@@ -207,9 +209,13 @@ jobs:
       - name: Verify signed app
         run: |
           app="$RUNNER_TEMP/DerivedData/Build/Products/Release/Techne.app"
-          test -x "$app/Contents/MacOS/Techne"
+          binary="$app/Contents/MacOS/Techne"
+          test -x "$binary"
+          test "$(lipo -archs "$binary")" = 'arm64'
+          test "$(vtool -show-build "$binary" | grep -c 'minos 26.0')" -eq 1
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$MARKETING_VERSION"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")" = '${{ github.run_number }}'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist")" = '26.0'
           codesign --verify --strict --all-architectures --verbose=2 "$app"
 
           signature_details="$RUNNER_TEMP/codesign-details.txt"
@@ -233,6 +239,7 @@ jobs:
           trap cleanup_mount EXIT
           test -d "$mount_point/Techne.app"
           test "$(readlink "$mount_point/Applications")" = '/Applications'
+          test "$(lipo -archs "$mount_point/Techne.app/Contents/MacOS/Techne")" = 'arm64'
           codesign --verify --strict --all-architectures "$mount_point/Techne.app"
           cleanup_mount
           trap - EXIT

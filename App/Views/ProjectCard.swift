@@ -379,7 +379,7 @@ struct ProjectCard: View {
                 Text("放弃更改")
                     .font(.system(size: AppConfig.UI.smallFontSize, weight: .medium))
             }
-            .adaptiveGlassButtonStyle()
+            .buttonStyle(.glass)
             .buttonBorderShape(.capsule)
             .tint(.red)
         }
