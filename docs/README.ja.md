@@ -66,6 +66,16 @@ Techne は、フロントエンドのローカル開発で発生する作業を�
 sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 ```
 
+リリース後に署名済みメタデータが同期されると、Homebrew でもインストールできます。
+
+```bash
+brew tap slippindylan/tap
+brew trust --tap slippindylan/tap
+brew install --cask techne@beta
+```
+
+リリース版は Sparkle 2 を使い、`https://slippindylan.github.io/homebrew-tap/techne/appcast.xml` の署名済み appcast から更新を確認します。App またはメニューバーの「アップデートを確認…」で手動確認できます。Beta と Alpha はそれぞれ独立した appcast チャンネルと Cask を使用します。
+
 リリース設定は [`Config/Release/manifest.json`](../Config/Release/manifest.json) にあります。`main` への push の CI が成功し、`release` が `true`、そのバージョンが未公開で、[CHANGELOG.md](../CHANGELOG.md) に完全一致する一意かつ空でないバージョンセクションがある場合に限り、Release workflow が DMG を署名、パッケージ化、公開します。
 
 バージョン形式は `x.y.z`、`x.y.z-alpha.n`、`x.y.z-beta.n` に対応しています。Alpha／Beta の接尾辞は Release、tag、DMG、CHANGELOG に使用され、App の `CFBundleShortVersionString` には対応する数字のみの `x.y.z` を使用します。

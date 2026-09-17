@@ -134,6 +134,10 @@ jobs:
           test "$(lipo -archs "$binary")" = 'arm64'
           test "$(vtool -show-build "$binary" | grep -c 'minos 26.0')" -eq 1
           test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist")" = '26.0'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$app/Contents/Info.plist")" = 'https://slippindylan.github.io/homebrew-tap/techne/appcast.xml'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$app/Contents/Info.plist")" = 'TLw+HvAZdTlZUmR3IRYPf+GNOZ1F5yH1repc6UCkrEA='
+          test "$(/usr/libexec/PlistBuddy -c 'Print :TechneUpdaterEnabled' "$app/Contents/Info.plist")" = 'YES'
+          test -d "$app/Contents/Frameworks/Sparkle.framework"
 
   build-check:
     name: Build Check

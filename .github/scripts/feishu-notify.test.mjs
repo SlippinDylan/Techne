@@ -110,7 +110,7 @@ test('reports main CI success and release workflow failure', () => {
 
 test('reports a requested CI run and suppresses a requested Release run', () => {
   const sha = 'a'.repeat(40);
-  const ciStarted = buildNotification('workflow_run', {
+  const ciRequested = buildNotification('workflow_run', {
     repository,
     action: 'requested',
     workflow_run: {
@@ -122,9 +122,9 @@ test('reports a requested CI run and suppresses a requested Release run', () => 
       html_url: 'https://github.com/owner/Techne/actions/runs/12',
     },
   });
-  assert.equal(ciStarted.title, 'Techne CI 已开始');
-  assert.equal(ciStarted.color, 'blue');
-  assert.ok(ciStarted.details.includes('提交：aaaaaaa'));
+  assert.equal(ciRequested.title, 'Techne CI 已触发');
+  assert.equal(ciRequested.color, 'blue');
+  assert.ok(ciRequested.details.includes('提交：aaaaaaa'));
 
   assert.equal(buildNotification('workflow_run', {
     repository,

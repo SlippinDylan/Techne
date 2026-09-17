@@ -30,6 +30,7 @@ jobs:
       publish: ${{ steps.plan.outputs.publish || 'false' }}
       version: ${{ steps.manifest.outputs.version }}
       marketing_version: ${{ steps.manifest.outputs.marketing_version }}
+      channel: ${{ steps.manifest.outputs.channel }}
       tag: ${{ steps.manifest.outputs.tag }}
       prerelease: ${{ steps.manifest.outputs.prerelease }}
       dmg_name: ${{ steps.manifest.outputs.dmg_name }}
@@ -95,6 +96,7 @@ jobs:
     env:
       VERSION: ${{ needs.plan.outputs.version }}
       MARKETING_VERSION: ${{ needs.plan.outputs.marketing_version }}
+      CHANNEL: ${{ needs.plan.outputs.channel }}
       TAG: ${{ needs.plan.outputs.tag }}
       PRERELEASE: ${{ needs.plan.outputs.prerelease }}
       DMG_NAME: ${{ needs.plan.outputs.dmg_name }}
@@ -221,6 +223,7 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            TECHNE_UPDATE_CHANNEL="$CHANNEL" \
             CODE_SIGNING_ALLOWED=YES \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGN_STYLE=Manual \
@@ -239,6 +242,10 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$MARKETING_VERSION"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")" = '${{ github.run_number }}'
           test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist")" = '26.0'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :TechneUpdateChannel' "$app/Contents/Info.plist")" = "$CHANNEL"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$app/Contents/Info.plist")" = 'https://slippindylan.github.io/homebrew-tap/techne/appcast.xml'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$app/Contents/Info.plist")" = 'TLw+HvAZdTlZUmR3IRYPf+GNOZ1F5yH1repc6UCkrEA='
+          test -d "$app/Contents/Frameworks/Sparkle.framework"
           codesign --verify --strict --all-architectures --verbose=2 "$app"
 
           signature_details="$RUNNER_TEMP/codesign-details.txt"
@@ -246,6 +253,63 @@ jobs:
           cat "$signature_details"
           grep -Fq 'Authority=Apple Development:' "$signature_details"
           grep -Fq "TeamIdentifier=${{ steps.signing.outputs.team_id }}" "$signature_details"
+
+      - name: Re-sign Sparkle nested code in dependency order
+        env:
+          SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/DerivedData/Build/Products/Release/Techne.app"
+          sparkle="$app/Contents/Frameworks/Sparkle.framework"
+          sparkle_version="$sparkle/Versions/B"
+          test -d "$sparkle_version"
+
+          sign_component() {
+            local component="$1"
+            local metadata_before="$RUNNER_TEMP/$(basename "$component").metadata-before"
+            local metadata_after="$RUNNER_TEMP/$(basename "$component").metadata-after"
+            local entitlements_before="$RUNNER_TEMP/$(basename "$component").entitlements-before"
+            local entitlements_after="$RUNNER_TEMP/$(basename "$component").entitlements-after"
+            codesign --display --verbose=4 "$component" 2> "$metadata_before"
+            codesign --display --entitlements :- "$component" > "$entitlements_before"
+            codesign --force --sign "$SIGNING_IDENTITY" \
+              --preserve-metadata=identifier,entitlements,flags,runtime \
+              --keychain "$RUNNER_TEMP/techne-signing.keychain-db" \
+              "$component"
+            codesign --display --verbose=4 "$component" 2> "$metadata_after"
+            codesign --display --entitlements :- "$component" > "$entitlements_after"
+            diff -u \
+              <(grep -E '^Identifier=' "$metadata_before") \
+              <(grep -E '^Identifier=' "$metadata_after")
+            cmp "$entitlements_before" "$entitlements_after"
+          }
+
+          # Sparkle 2's XPC services, command-line installer, and progress app must
+          # be sealed before their enclosing framework and application bundles.
+          sign_component "$sparkle_version/XPCServices/Downloader.xpc"
+          sign_component "$sparkle_version/XPCServices/Installer.xpc"
+          sign_component "$sparkle_version/Autoupdate"
+          sign_component "$sparkle_version/Updater.app"
+          sign_component "$sparkle"
+          sign_component "$app"
+
+      - name: Verify Sparkle signatures and preserved metadata
+        env:
+          SIGNING_TEAM_ID: ${{ steps.signing.outputs.team_id }}
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/DerivedData/Build/Products/Release/Techne.app"
+          for component in \
+            "$app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc" \
+            "$app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc" \
+            "$app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" \
+            "$app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app" \
+            "$app/Contents/Frameworks/Sparkle.framework" \
+            "$app"; do
+            codesign --verify --strict --all-architectures --verbose=2 "$component"
+            codesign --display --verbose=4 "$component" > /dev/null 2> "$RUNNER_TEMP/$(basename "$component").signature"
+            grep -Fq "TeamIdentifier=$SIGNING_TEAM_ID" "$RUNNER_TEMP/$(basename "$component").signature"
+          done
 
       - name: Package drag-to-install DMG
         run: |
@@ -343,6 +407,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+
+      - name: Dispatch distribution metadata update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq -n \
+            --arg tag "$TAG" \
+            '{event_type: "distribution_metadata_requested", client_payload: {tag: $tag}}' \
+            | gh api --method POST "repos/${GITHUB_REPOSITORY}/dispatches" --input -
 
       - name: Dispatch release notification
         continue-on-error: true

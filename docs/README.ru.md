@@ -65,6 +65,16 @@ Techne собирает повседневные локальные задачи
 sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 ```
 
+После публикации и синхронизации подписанных метаданных приложение также можно установить через Homebrew:
+
+```bash
+brew tap slippindylan/tap
+brew trust --tap slippindylan/tap
+brew install --cask techne@beta
+```
+
+Версии из релизов используют Sparkle 2 и подписанный appcast `https://slippindylan.github.io/homebrew-tap/techne/appcast.xml`. Ручная проверка доступна через пункт «Проверить обновления…» в приложении или меню строки меню. Для Beta и Alpha используются отдельные каналы appcast и Cask.
+
 Манифест выпуска находится в [`Config/Release/manifest.json`](../Config/Release/manifest.json). Поддерживаются версии `x.y.z`, `x.y.z-alpha.n` и `x.y.z-beta.n`. Суффикс Alpha или Beta используется в Release, теге, DMG и [CHANGELOG.md](../CHANGELOG.md), а `CFBundleShortVersionString` приложения получает только числовую часть `x.y.z`.
 
 ## Основные решения

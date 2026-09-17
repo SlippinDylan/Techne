@@ -12,6 +12,7 @@ import ServiceManagement
 struct MenuBarView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(MainWindowNavigationCoordinator.self) private var mainWindowNavigation
+    let updateController: ApplicationUpdateController
 
     var body: some View {
         Group {
@@ -43,6 +44,11 @@ struct MenuBarView: View {
 
             Divider()
 
+            Button("检查更新…") {
+                updateController.checkForUpdates()
+            }
+            .disabled(!updateController.canCheckForUpdates)
+
             Button("关于 Techne") {
                 openWindow(id: "about")
             }
@@ -56,5 +62,5 @@ struct MenuBarView: View {
 }
 
 #Preview {
-    MenuBarView()
+    MenuBarView(updateController: ApplicationUpdateController())
 }

@@ -533,7 +533,8 @@ struct ProjectServiceStartupRecoveryTests {
             persistenceService: PersistenceService<Project>(
                 filename: "projects.json",
                 root: .custom(persistenceRoot)
-            )
+            ),
+            startupBehavior: .empty
         )
     }
 
