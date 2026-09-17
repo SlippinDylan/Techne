@@ -70,6 +70,7 @@ struct ProjectSnapshotMigrationTests {
         #expect(project.installCommand == "")
         #expect(project.commandProfileName == nil)
         #expect(project.installStrategy == .ifMissing)
+        #expect(project.preparedDependencyFingerprint == nil)
     }
 
     @Test

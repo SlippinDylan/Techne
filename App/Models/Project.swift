@@ -65,6 +65,7 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
     var discardChangesCommand: String
     var commandProfileName: String?
     var installStrategy: InstallStrategy
+    var preparedDependencyFingerprint: String?
     var commandConfigId: UUID?
     var availableStartupModes: [ProjectStartupMode]
     var selectedStartupModeID: String?
@@ -94,6 +95,7 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         discardChangesCommand: String = "",
         commandProfileName: String? = nil,
         installStrategy: InstallStrategy = .ifMissing,
+        preparedDependencyFingerprint: String? = nil,
         commandConfigId: UUID? = nil,
         availableStartupModes: [ProjectStartupMode] = [],
         selectedStartupModeID: String? = nil
@@ -124,6 +126,7 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         self.discardChangesCommand = discardChangesCommand
         self.commandProfileName = commandProfileName
         self.installStrategy = installStrategy
+        self.preparedDependencyFingerprint = preparedDependencyFingerprint
         self.commandConfigId = commandConfigId
         self.availableStartupModes = canonicalStartupConfiguration.availableStartupModes
         self.selectedStartupModeID = canonicalStartupConfiguration.selectedStartupModeID
@@ -174,6 +177,7 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         case discardChangesCommand
         case commandProfileName
         case installStrategy
+        case preparedDependencyFingerprint
         case commandConfigId
         case availableStartupModes
         case selectedStartupModeID
@@ -196,6 +200,7 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         self.discardChangesCommand = try container.decodeIfPresent(String.self, forKey: .discardChangesCommand) ?? ""
         self.commandProfileName = try container.decodeIfPresent(String.self, forKey: .commandProfileName)
         self.installStrategy = try container.decodeIfPresent(InstallStrategy.self, forKey: .installStrategy) ?? .ifMissing
+        self.preparedDependencyFingerprint = try container.decodeIfPresent(String.self, forKey: .preparedDependencyFingerprint)
         self.commandConfigId = try container.decodeIfPresent(UUID.self, forKey: .commandConfigId)
         let preferredStartupModeSource = Project.preferredStartupModeSource(commandConfigId: self.commandConfigId)
         let decodedStartupModes = try container.decodeIfPresent([ProjectStartupMode].self, forKey: .availableStartupModes) ?? []
@@ -239,6 +244,7 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         try container.encode(discardChangesCommand, forKey: .discardChangesCommand)
         try container.encodeIfPresent(commandProfileName, forKey: .commandProfileName)
         try container.encode(installStrategy, forKey: .installStrategy)
+        try container.encodeIfPresent(preparedDependencyFingerprint, forKey: .preparedDependencyFingerprint)
         try container.encodeIfPresent(commandConfigId, forKey: .commandConfigId)
         try container.encode(availableStartupModes, forKey: .availableStartupModes)
         try container.encodeIfPresent(selectedStartupModeID, forKey: .selectedStartupModeID)

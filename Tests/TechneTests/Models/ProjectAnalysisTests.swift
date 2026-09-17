@@ -58,6 +58,7 @@ struct ProjectAnalysisTests {
 
         #expect(snapshot.startCommand == "npm run serve")
         #expect(snapshot.buildCommand == "npm run build")
+        #expect(snapshot.installCommand == "npm install")
         #expect(snapshot.commandProfileName == "自动识别 · Mpx + npm")
     }
 
@@ -142,6 +143,37 @@ struct ProjectAnalysisTests {
 
         #expect(snapshot.startCommand == "npm run dev")
         #expect(snapshot.installCommand == "npm install")
+    }
+
+    @Test
+    func workspaceLeafUsesWorkspacePackageManager() throws {
+        let workspaceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let projectRoot = workspaceRoot.appendingPathComponent("apps/web", isDirectory: true)
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: workspaceRoot) }
+        try "{ \"packageManager\": \"pnpm@10.32.1\" }".write(
+            to: workspaceRoot.appendingPathComponent("package.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "packages:\n  - apps/*".write(
+            to: workspaceRoot.appendingPathComponent("pnpm-workspace.yaml"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "{ \"scripts\": { \"dev\": \"vite\" } }".write(
+            to: projectRoot.appendingPathComponent("package.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let snapshot = try ProjectCommandSnapshotResolver.analyzedSnapshot(
+            for: .devServer,
+            path: projectRoot.path
+        ).get()
+
+        #expect(snapshot.startCommand == "pnpm dev")
+        #expect(snapshot.installCommand == "pnpm install")
     }
 
     @Test

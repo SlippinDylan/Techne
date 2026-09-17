@@ -397,7 +397,11 @@ final class ProjectService {
             onEvent: { [weak self] event in
                 Self.performStartupUpdate(on: self) { service in
                     guard service.activeRunIDs[project.id] == runID else { return }
-                    service.handleProjectStartupEvent(event, for: project)
+                    service.handleProjectStartupEvent(
+                        event,
+                        for: project,
+                        dependencyFingerprint: plan.dependencyFingerprint
+                    )
                 }
             },
             onCompletion: { [weak self] completion in
@@ -412,7 +416,11 @@ final class ProjectService {
                 guard service.activeRunIDs[project.id] == runID else { return }
                 service.appendTerminalOutput(output, for: projectID)
                 if ProjectStartupCoordinator.containsStartPhaseMessage(output) {
-                    service.handleProjectStartupEvent(.phaseStarted(.start), for: project)
+                    service.handleProjectStartupEvent(
+                        .phaseStarted(.start),
+                        for: project,
+                        dependencyFingerprint: plan.dependencyFingerprint
+                    )
                 }
             }
         }
@@ -505,7 +513,11 @@ final class ProjectService {
     }
 
     @MainActor
-    private func handleProjectStartupEvent(_ event: ProjectStartupEvent, for project: Project) {
+    private func handleProjectStartupEvent(
+        _ event: ProjectStartupEvent,
+        for project: Project,
+        dependencyFingerprint: String?
+    ) {
         guard let index = projects.firstIndex(where: { $0.id == project.id }) else { return }
 
         switch event {
@@ -514,11 +526,22 @@ final class ProjectService {
         case .phaseStarted(.clean):
             break
         case .phaseStarted(.start):
+            if projects[index].preparedDependencyFingerprint == nil,
+               let dependencyFingerprint {
+                projects[index].preparedDependencyFingerprint = dependencyFingerprint
+                saveProjects()
+            }
             switch project.type {
             case .devServer:
                 projects[index].transitionState = .starting
             case .miniApp:
                 projects[index].transitionState = .idle
+            }
+        case .dependenciesInstalled:
+            if let dependencyFingerprint,
+               projects[index].preparedDependencyFingerprint != dependencyFingerprint {
+                projects[index].preparedDependencyFingerprint = dependencyFingerprint
+                saveProjects()
             }
         case .startCommandStarted(let pid):
             projects[index].runningProcessPID = pid

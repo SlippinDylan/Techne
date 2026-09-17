@@ -150,6 +150,13 @@ struct ProjectStartupCoordinatorTests {
     }
 
     @Test
+    func installCompletionControlSignalParsesAsStructuredEvent() {
+        let line = "\(ProjectStartupCoordinator.controlSignalPrefix)install-completed"
+
+        #expect(ProjectStartupCoordinator.event(forControlLine: line) == .dependenciesInstalled)
+    }
+
+    @Test
     func installFailureShortCircuitsBeforeStartCommand() async throws {
         let root = try makeProjectRoot(packageJSON: false, nodeModules: false)
         defer { try? FileManager.default.removeItem(at: root) }

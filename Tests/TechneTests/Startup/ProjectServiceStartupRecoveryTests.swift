@@ -179,6 +179,53 @@ struct ProjectServiceStartupRecoveryTests {
         #expect(recovered)
         #expect(FileManager.default.fileExists(atPath: projectRoot.appendingPathComponent("install-ran").path))
         #expect(FileManager.default.fileExists(atPath: projectRoot.appendingPathComponent("start-ran").path) == false)
+        #expect(service.projects[0].preparedDependencyFingerprint == nil)
+    }
+
+    @Test
+    @MainActor
+    func successfulInstallPersistsPreparedDependencyFingerprint() async throws {
+        let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: isolatedPersistenceRoot) }
+
+        let projectRoot = isolatedPersistenceRoot.appendingPathComponent("project")
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+        try "{}".write(
+            to: projectRoot.appendingPathComponent("package.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "lockfileVersion: '9.0'".write(
+            to: projectRoot.appendingPathComponent("pnpm-lock.yaml"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let service = makeProjectService(persistenceRoot: isolatedPersistenceRoot)
+        let project = Project(
+            name: "fresh-project",
+            path: projectRoot.path,
+            type: .devServer,
+            startCommand: "sleep 0.2",
+            installCommand: "mkdir -p node_modules",
+            installStrategy: .ifMissing
+        )
+        service.projects = [project]
+
+        _ = service.startServer(for: project)
+
+        let persisted = await waitUntil(timeout: .seconds(3)) {
+            service.projects[0].preparedDependencyFingerprint != nil
+        }
+        let storedProjects = PersistenceService<Project>(
+            filename: "projects.json",
+            root: .custom(isolatedPersistenceRoot)
+        ).load()
+
+        #expect(persisted)
+        #expect(service.projects[0].preparedDependencyFingerprint == ProjectDependencyResolver.state(at: projectRoot.path).fingerprint)
+        #expect(storedProjects.first?.preparedDependencyFingerprint == service.projects[0].preparedDependencyFingerprint)
     }
 
     @Test

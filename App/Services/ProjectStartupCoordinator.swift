@@ -8,6 +8,7 @@ enum ProjectStartupStage: String, Equatable, Sendable {
 
 enum ProjectStartupEvent: Equatable, Sendable {
     case phaseStarted(ProjectStartupStage)
+    case dependenciesInstalled
     case startCommandStarted(pid: Int32)
 }
 
@@ -40,6 +41,7 @@ struct ProjectStartupPlan: Equatable, Sendable {
     let messages: [String]
     let shellScript: String
     let shouldInstallDependencies: Bool
+    let dependencyFingerprint: String?
 }
 
 struct ProjectStartupCoordinator {
@@ -61,10 +63,11 @@ struct ProjectStartupCoordinator {
         case .always:
             return true
         case .ifMissing:
-            let projectURL = URL(fileURLWithPath: project.path)
-            let packageJSON = projectURL.appendingPathComponent("package.json").path
-            let nodeModules = projectURL.appendingPathComponent("node_modules").path
-            return fileManager.fileExists(atPath: packageJSON) && !fileManager.fileExists(atPath: nodeModules)
+            let state = ProjectDependencyResolver.state(at: project.path, fileManager: fileManager)
+            guard state.fingerprint != nil else { return false }
+            guard state.hasInstallArtifact else { return true }
+            guard let preparedFingerprint = project.preparedDependencyFingerprint else { return false }
+            return state.fingerprint != preparedFingerprint
         }
     }
 
@@ -80,10 +83,18 @@ struct ProjectStartupCoordinator {
         let fallbackCleanCommand = fallbackCleanCommand.trimmingCharacters(in: .whitespacesAndNewlines)
 
         let shouldInstall = shouldInstallDependencies(for: project, fileManager: fileManager)
+        let dependencyState = ProjectDependencyResolver.state(at: project.path, fileManager: fileManager)
         var phases: [ProjectStartupPhase] = []
 
         if shouldInstall {
-            phases.append(.install(command: installCommand))
+            let workspaceRootPath = dependencyState.workspaceRootPath
+            let command: String
+            if ProjectPath.canonical(workspaceRootPath) == ProjectPath.canonical(project.path) {
+                command = installCommand
+            } else {
+                command = "(cd \(ShellEscape.escape(workspaceRootPath)) && \(installCommand))"
+            }
+            phases.append(.install(command: command))
         }
 
         if includesClean {
@@ -105,7 +116,8 @@ struct ProjectStartupCoordinator {
             phases: phases,
             messages: messages,
             shellScript: buildShellScript(for: project.path, phases: phases, messages: messages),
-            shouldInstallDependencies: shouldInstall
+            shouldInstallDependencies: shouldInstall,
+            dependencyFingerprint: dependencyState.fingerprint
         )
     }
 
@@ -117,6 +129,9 @@ struct ProjectStartupCoordinator {
         guard let markerRange = line.range(of: controlSignalPrefix) else { return nil }
         let suffix = line[markerRange.upperBound...]
         let rawStage = suffix.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? ""
+        if rawStage == "install-completed" {
+            return .dependenciesInstalled
+        }
         guard let stage = ProjectStartupStage(rawValue: rawStage) else { return nil }
         return .phaseStarted(stage)
     }
@@ -163,6 +178,7 @@ struct ProjectStartupCoordinator {
             switch phase {
             case .install(let command):
                 lines.append(command)
+                lines.append(shellPrintLine("\(controlSignalPrefix)install-completed"))
                 lines.append(shellPrintLine(installCompletedMessage))
             case .clean(let command):
                 lines.append(command)

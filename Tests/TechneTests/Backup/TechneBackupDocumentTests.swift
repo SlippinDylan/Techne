@@ -22,7 +22,8 @@ struct TechneBackupDocumentTests {
                     stopCommand: "",
                     discardChangesCommand: "git restore . && git clean -fd",
                     commandProfileName: "Vite + pnpm",
-                    installStrategy: .ifMissing
+                    installStrategy: .ifMissing,
+                    preparedDependencyFingerprint: "dependency-fingerprint"
                 )
             ],
             commandConfigs: [
@@ -47,5 +48,6 @@ struct TechneBackupDocumentTests {
         #expect(restored.payload.commandConfigs.count == 1)
         #expect(restored.payload.projects[0].installStrategy == .ifMissing)
         #expect(restored.payload.projects[0].commandProfileName == "Vite + pnpm")
+        #expect(restored.payload.projects[0].preparedDependencyFingerprint == "dependency-fingerprint")
     }
 }

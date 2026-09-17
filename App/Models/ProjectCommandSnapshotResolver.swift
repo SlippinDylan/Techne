@@ -102,8 +102,9 @@ struct ProjectCommandSnapshotResolver {
             return .failure(.invalidPackageManifest)
         }
 
+        let dependencyState = ProjectDependencyResolver.state(at: path, fileManager: fileManager)
         let packageManager = detectPackageManager(
-            at: path,
+            at: dependencyState.workspaceRootPath,
             manifest: manifest,
             fileManager: fileManager,
             defaultPackageManager: .npm
@@ -477,6 +478,12 @@ struct ProjectCommandSnapshotResolver {
             return packageManager
         }
 
+        let rootManifest = loadManifest(at: path)
+        if let rawPackageManager = rootManifest?.packageManager?.split(separator: "@").first,
+           let packageManager = ProjectPackageManager(rawValue: String(rawPackageManager)) {
+            return packageManager
+        }
+
         let rootURL = URL(fileURLWithPath: path)
         let knownFiles: [(String, ProjectPackageManager)] = [
             ("pnpm-lock.yaml", .pnpm),
@@ -655,6 +662,7 @@ struct ProjectPersistenceMigration {
             lhs.stopCommand != rhs.stopCommand ||
             lhs.discardChangesCommand != rhs.discardChangesCommand ||
             lhs.commandProfileName != rhs.commandProfileName ||
+            lhs.preparedDependencyFingerprint != rhs.preparedDependencyFingerprint ||
             lhs.commandConfigId != rhs.commandConfigId ||
             lhs.availableStartupModes != rhs.availableStartupModes ||
             lhs.selectedStartupModeID != rhs.selectedStartupModeID
