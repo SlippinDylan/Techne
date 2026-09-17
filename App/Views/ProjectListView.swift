@@ -222,6 +222,7 @@ struct ProjectListView: View {
                         onDiscardChanges: { _ = projectService.discardChanges(at: project.path) },
                         onStartServer: { startServer(for: project) },
                         onStopServer: { stopServer(for: project) },
+                        onRestartServer: { restartServer(for: project) },
                         onSwitchStartupMode: { switchStartupMode(for: project, to: $0) },
                         onRefresh: { refreshProject(project) },
                         onKillServer: { 
@@ -309,6 +310,16 @@ struct ProjectListView: View {
     private func stopServer(for project: Project) {
         Task {
             _ = await projectService.stopServer(for: project)
+        }
+    }
+
+    private func restartServer(for project: Project) {
+        Task {
+            let result = await projectService.restartServer(for: project)
+            if case .failure(let error) = result {
+                errorMessage = error.localizedDescription
+                showingError = true
+            }
         }
     }
 

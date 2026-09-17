@@ -31,7 +31,6 @@ final class ProjectService {
 
     // MARK: - Dependencies
 
-    private let gitService = GitService.shared
     private let processService: ProcessService
     private let persistenceService: PersistenceService<Project>
     private let logService = LogService.shared
@@ -39,11 +38,11 @@ final class ProjectService {
     private let processManager: ProcessManager
     private let terminalHandler = TerminalOutputHandler()
     private let commandConfigService: CommandConfigService
-    private let managedBrowserInstanceService: ManagedBrowserInstanceService
 
     private var gitMonitors: [String: GitWorkspaceMonitor] = [:]
     private var cachedProcessKeywords: [String]?
     private var devServerDetectionTriggeredProjectIDs: Set<UUID> = []
+    @MainActor private var activeRunIDs: [UUID: UUID] = [:]
 
     // MARK: - Initialization
 
@@ -51,14 +50,12 @@ final class ProjectService {
     init(
         commandConfigService: CommandConfigService,
         processService: ProcessService = .shared,
-        managedBrowserInstanceService: ManagedBrowserInstanceService = ManagedBrowserInstanceService(),
         persistenceService: PersistenceService<Project> = PersistenceService(filename: "projects.json"),
         startupBehavior: ProjectServiceStartupBehavior = .restoreAndRefresh
     ) {
         self.commandConfigService = commandConfigService
         self.processService = processService
         self.processManager = ProcessManager(processService: processService)
-        self.managedBrowserInstanceService = managedBrowserInstanceService
         self.persistenceService = persistenceService
         applyStartupBehavior(startupBehavior)
     }
@@ -94,7 +91,16 @@ final class ProjectService {
                 
                 await MainActor.run { [weak self] in
                     guard let self = self else { return }
-                    self.projects = updated
+                    for refreshedProject in updated {
+                        guard let index = self.projects.firstIndex(where: { $0.id == refreshedProject.id }) else {
+                            continue
+                        }
+                        self.projects[index].currentBranch = refreshedProject.currentBranch
+                        self.projects[index].uncommittedFileCount = refreshedProject.uncommittedFileCount
+                        if self.projects[index].transitionState == .idle {
+                            self.projects[index].isRunning = refreshedProject.isRunning
+                        }
+                    }
                     self.isLoading = false
                     self.currentRefreshTask = nil
                 }
@@ -320,7 +326,7 @@ final class ProjectService {
             return .success(())
         }
 
-        let stopResult = await stopServer(for: updatedProject, cleanCache: false)
+        let stopResult = await stopServer(for: updatedProject)
         guard case .success = stopResult else {
             appendSystemTerminalMessage("启动模式切换已保存，但停止旧进程失败", for: updatedProject.id)
             return stopResult
@@ -341,15 +347,28 @@ final class ProjectService {
     }
 
     @MainActor
-    func stopServer(for project: Project, cleanCache: Bool = true) async -> Result<Void, ProjectServiceError> {
+    func stopServer(for project: Project) async -> Result<Void, ProjectServiceError> {
         let category = getCategoryName(for: project.type)
         if let idx = projects.firstIndex(where: { $0.id == project.id }) {
             projects[idx].transitionState = .stopping
         }
         switch project.type {
-        case .devServer: return await stopDevServerWithoutOutput(for: project, category: category, cleanCache: cleanCache)
+        case .devServer: return await stopDevServerWithoutOutput(for: project)
         case .miniApp: return await stopDevServerWithOutput(for: project, category: category)
         }
+    }
+
+    @MainActor
+    func restartServer(for project: Project) async -> Result<Void, ProjectServiceError> {
+        let stopResult = await stopServer(for: project)
+        guard case .success = stopResult else {
+            return stopResult
+        }
+        guard let currentProject = projects.first(where: { $0.id == project.id }) else {
+            return .failure(.pathNotFound(project.path))
+        }
+        appendSystemTerminalMessage("正在重新启动...", for: project.id)
+        return startServer(for: currentProject)
     }
 
     @MainActor
@@ -357,6 +376,8 @@ final class ProjectService {
         for project: Project,
         category: String
     ) -> Result<Void, ProjectServiceError> {
+        let runID = UUID()
+        activeRunIDs[project.id] = runID
         let plan = ProjectStartupCoordinator.makePlan(
             for: project,
             fallbackCleanCommand: cleanCommand(for: project)
@@ -369,21 +390,26 @@ final class ProjectService {
             plan: plan,
             onStart: { [weak self] pid in
                 Self.performStartupUpdate(on: self) { service in
+                    guard service.activeRunIDs[project.id] == runID else { return }
                     service.handleProjectProcessStart(for: project, pid: pid)
                 }
             },
             onEvent: { [weak self] event in
                 Self.performStartupUpdate(on: self) { service in
+                    guard service.activeRunIDs[project.id] == runID else { return }
                     service.handleProjectStartupEvent(event, for: project)
                 }
             },
             onCompletion: { [weak self] completion in
                 Self.performStartupUpdate(on: self) { service in
+                    guard service.activeRunIDs[project.id] == runID else { return }
                     service.handleProjectStartupCompletion(completion, for: project.id)
+                    service.activeRunIDs[project.id] = nil
                 }
             }
         ) { [weak self] projectID, output in
             Self.performStartupUpdate(on: self) { service in
+                guard service.activeRunIDs[project.id] == runID else { return }
                 service.appendTerminalOutput(output, for: projectID)
                 if ProjectStartupCoordinator.containsStartPhaseMessage(output) {
                     service.handleProjectStartupEvent(.phaseStarted(.start), for: project)
@@ -413,7 +439,7 @@ final class ProjectService {
     }
 
     @MainActor
-    private func stopDevServerWithoutOutput(for project: Project, category: String, cleanCache: Bool) async -> Result<Void, ProjectServiceError> {
+    private func stopDevServerWithoutOutput(for project: Project) async -> Result<Void, ProjectServiceError> {
         appendSystemTerminalMessage("正在停止开发服务...", for: project.id)
 
         let result = await processService.stopProjectProcesses(
@@ -423,14 +449,12 @@ final class ProjectService {
         
         if case .success = result {
             appendSystemTerminalMessage("开发服务已停止", for: project.id)
-            await closeManagedBrowserInstances(for: project, category: category)
             if let idx = self.projects.firstIndex(where: { $0.id == project.id }) {
                 self.projects[idx].runningProcessPID = nil
                 self.projects[idx].isRunning = false
                 self.projects[idx].transitionState = .idle
             }
             NotificationCenter.default.post(name: .devServerStopped, object: nil, userInfo: ["path": project.path])
-            if cleanCache { cleanCacheAfterStop(for: project) }
         } else if let idx = self.projects.firstIndex(where: { $0.id == project.id }) {
             self.projects[idx].transitionState = .idle
             if case .failure(let error) = result {
@@ -441,57 +465,8 @@ final class ProjectService {
     }
 
     @MainActor
-    private func closeManagedBrowserInstances(for project: Project, category: String) async {
-        do {
-            let managedBrowserInstanceService = self.managedBrowserInstanceService
-            let result = try await Task.detached(priority: .utility) {
-                try await managedBrowserInstanceService.terminateManagedInstances(forProjectPath: project.path)
-            }.value
-
-            if result.matchedCount > 0 {
-                appendSystemTerminalMessage("检测到 \(result.matchedCount) 个受管浏览器实例", for: project.id)
-                logService.info(
-                    "停止项目时回收 \(result.matchedCount) 个受管浏览器实例",
-                    category: category
-                )
-            }
-
-            if result.terminatedPIDs.isEmpty == false {
-                appendSystemTerminalMessage(
-                    "已关闭浏览器实例 PID: \(result.terminatedPIDs.map(String.init).joined(separator: ", "))",
-                    for: project.id
-                )
-                logService.success(
-                    "已关闭浏览器实例 PID: \(result.terminatedPIDs.map(String.init).joined(separator: ", "))",
-                    category: category
-                )
-            }
-
-            if result.failedPIDs.isEmpty == false {
-                appendSystemTerminalMessage(
-                    "以下浏览器实例未能关闭: \(result.failedPIDs.map(String.init).joined(separator: ", "))",
-                    for: project.id
-                )
-                logService.warning(
-                    "以下浏览器实例未能关闭: \(result.failedPIDs.map(String.init).joined(separator: ", "))",
-                    category: category
-                )
-            }
-        } catch {
-            appendSystemTerminalMessage("回收受管浏览器实例失败: \(error.localizedDescription)", for: project.id)
-            logService.warning(
-                "回收受管浏览器实例失败: \(error.localizedDescription)",
-                category: category
-            )
-        }
-
-        NotificationCenter.default.post(name: .browserInstancesChanged, object: nil, userInfo: ["projectPath": project.path])
-    }
-
-    @MainActor
     private func stopDevServerWithOutput(for project: Project, category: String) async -> Result<Void, ProjectServiceError> {
-        let cleanCommand = cleanCommand(for: project)
-        let result = await processManager.stopDevServer(for: project, category: category, cleanCommand: cleanCommand) { [weak self] pid, output in 
+        let result = await processManager.stopDevServer(for: project, category: category) { [weak self] pid, output in
             Task { @MainActor [weak self] in 
                 guard let self = self else { return }
                 if let idx = self.projects.firstIndex(where: { $0.id == pid }) { 
@@ -647,32 +622,6 @@ final class ProjectService {
                 projects[index].isRunning = false
                 projects[index].transitionState = .idle
                 clearDevServerDetectionTrigger(for: projects[index].id)
-            }
-        }
-    }
-
-    @MainActor
-    private func cleanCacheAfterStop(for project: Project) {
-        Task {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            let cmd = cleanCommand(for: project)
-            if cmd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                await MainActor.run {
-                    self.appendSystemTerminalMessage("正在执行缓存清理...", for: project.id)
-                }
-            }
-
-            let result = GitService.shared.cleanCache(at: project.path, command: cmd)
-
-            await MainActor.run {
-                switch result {
-                case .success:
-                    if cmd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                        self.appendSystemTerminalMessage("缓存清理完成", for: project.id)
-                    }
-                case .failure(let error):
-                    self.appendSystemTerminalMessage("缓存清理失败: \(error.localizedDescription)", for: project.id)
-                }
             }
         }
     }

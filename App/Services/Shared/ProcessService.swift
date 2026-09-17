@@ -108,7 +108,8 @@ final class ProcessService: Sendable {
         if pgid > 0 {
             return await stopProcessGroup(
                 processGroupID: pgid,
-                verificationPIDs: await verificationPIDsForProcessGroup(processGroupID: pgid, fallbackPID: pid)
+                verificationPIDs: await verificationPIDsForProcessGroup(processGroupID: pgid, fallbackPID: pid),
+                fallbackPIDs: [pid]
             )
         }
 
@@ -129,7 +130,8 @@ final class ProcessService: Sendable {
                     verificationPIDs: await verificationPIDsForProcessGroup(
                         processGroupID: preferredSnapshot.processGroupID,
                         fallbackPID: preferredPID
-                    )
+                    ),
+                    fallbackPIDs: [preferredPID]
                 )
             }
 
@@ -152,9 +154,16 @@ final class ProcessService: Sendable {
             let verificationPIDs = processSnapshots
                 .filter { $0.processGroupID == processGroupID }
                 .map(\.pid)
+            let fallbackPIDs = processSnapshots
+                .filter {
+                    $0.processGroupID == processGroupID &&
+                        ProjectRootProcessMatcher.matches(process: $0, projectRootPath: projectRootPath)
+                }
+                .map(\.pid)
             let result = await stopProcessGroup(
                 processGroupID: processGroupID,
-                verificationPIDs: verificationPIDs
+                verificationPIDs: verificationPIDs,
+                fallbackPIDs: fallbackPIDs
             )
             if case .failure(let error) = result {
                 failureMessages.append("进程组 \(processGroupID): \(error.localizedDescription)")
@@ -182,17 +191,31 @@ final class ProcessService: Sendable {
 
     private func stopProcessGroup(
         processGroupID: Int32,
-        verificationPIDs: [Int32]
+        verificationPIDs: [Int32],
+        fallbackPIDs: [Int32]
     ) async -> Result<Void, ProjectServiceError> {
-        runtime.sendSignalToProcessGroup(processGroupID, SIGTERM)
-        await runtime.sleep(500_000_000)
-
-        if await anyProcessRunning(in: verificationPIDs) {
-            runtime.sendSignalToProcessGroup(processGroupID, SIGKILL)
-            await runtime.sleep(200_000_000)
+        if processGroupID == getpgrp() {
+            for pid in fallbackPIDs {
+                let result = await stopSingleProcess(pid: pid)
+                if case .failure = result {
+                    return result
+                }
+            }
+            return .success(())
         }
 
-        if await anyProcessRunning(in: verificationPIDs) {
+        runtime.sendSignalToProcessGroup(processGroupID, SIGINT)
+        if await waitUntilProcessesStop(verificationPIDs, attempts: 6) {
+            return .success(())
+        }
+
+        runtime.sendSignalToProcessGroup(processGroupID, SIGTERM)
+        if await waitUntilProcessesStop(verificationPIDs, attempts: 4) {
+            return .success(())
+        }
+
+        runtime.sendSignalToProcessGroup(processGroupID, SIGKILL)
+        if await waitUntilProcessesStop(verificationPIDs, attempts: 2) == false {
             return .failure(.processStopFailed("进程组 (\(processGroupID)) 强制停止无效，可能存在权限限制"))
         }
 
@@ -200,15 +223,18 @@ final class ProcessService: Sendable {
     }
 
     private func stopSingleProcess(pid: Int32) async -> Result<Void, ProjectServiceError> {
-        runtime.sendSignalToProcess(pid, SIGTERM)
-        await runtime.sleep(500_000_000)
-
-        if await runtime.isProcessRunning(pid) {
-            runtime.sendSignalToProcess(pid, SIGKILL)
-            await runtime.sleep(200_000_000)
+        runtime.sendSignalToProcess(pid, SIGINT)
+        if await waitUntilProcessesStop([pid], attempts: 6) {
+            return .success(())
         }
 
-        if await runtime.isProcessRunning(pid) {
+        runtime.sendSignalToProcess(pid, SIGTERM)
+        if await waitUntilProcessesStop([pid], attempts: 4) {
+            return .success(())
+        }
+
+        runtime.sendSignalToProcess(pid, SIGKILL)
+        if await waitUntilProcessesStop([pid], attempts: 2) == false {
             return .failure(.processStopFailed("进程 \(pid) 停止失败"))
         }
 
@@ -231,6 +257,17 @@ final class ProcessService: Sendable {
         }
 
         return false
+    }
+
+    private func waitUntilProcessesStop(_ processIDs: [Int32], attempts: Int) async -> Bool {
+        for _ in 0..<attempts {
+            if await anyProcessRunning(in: processIDs) == false {
+                return true
+            }
+            await runtime.sleep(50_000_000)
+        }
+
+        return await anyProcessRunning(in: processIDs) == false
     }
 
     nonisolated private static func loadProjectProcessSnapshots() async -> [ProjectProcessSnapshot] {

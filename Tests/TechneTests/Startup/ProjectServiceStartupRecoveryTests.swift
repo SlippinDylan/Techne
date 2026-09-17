@@ -6,7 +6,7 @@ import Testing
 struct ProjectServiceStartupRecoveryTests {
     @Test
     @MainActor
-    func stoppingDevServerAppendsTerminalHistoryAndClosesManagedBrowsers() async throws {
+    func stoppingDevServerPreservesManagedBrowsers() async throws {
         let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: isolatedPersistenceRoot) }
@@ -20,13 +20,6 @@ struct ProjectServiceStartupRecoveryTests {
             instanceName: "dev-server-browser",
             projectPath: projectRoot.path,
             port: 5173
-        )
-        let signalRecorder = TestManagedBrowserSignalRecorder(runningPIDs: [browserRecord.pid])
-        let managedBrowserService = ManagedBrowserInstanceService(
-            instanceStore: browserStore,
-            sendSignal: signalRecorder.send(pid:signal:),
-            isProcessRunning: signalRecorder.isRunning(pid:),
-            sleep: { _ in }
         )
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sleep")
@@ -50,7 +43,6 @@ struct ProjectServiceStartupRecoveryTests {
 
         let service = makeProjectService(
             persistenceRoot: isolatedPersistenceRoot,
-            managedBrowserInstanceService: managedBrowserService,
             processService: processService
         )
 
@@ -65,7 +57,7 @@ struct ProjectServiceStartupRecoveryTests {
         project.runningProcessPID = process.processIdentifier
         service.projects = [project]
 
-        let result = await service.stopServer(for: project, cleanCache: false)
+        let result = await service.stopServer(for: project)
 
         guard case .success = result else {
             Issue.record("expected stopServer to succeed")
@@ -78,10 +70,69 @@ struct ProjectServiceStartupRecoveryTests {
         #expect(updatedProject.transitionState == ProjectTransitionState.idle)
         #expect(updatedProject.terminalOutput.contains("[系统] 正在停止开发服务"))
         #expect(updatedProject.terminalOutput.contains("[系统] 开发服务已停止"))
-        #expect(updatedProject.terminalOutput.contains("[系统] 检测到 1 个受管浏览器实例"))
-        #expect(updatedProject.terminalOutput.contains("[系统] 已关闭浏览器实例 PID: \(browserRecord.pid)"))
-        #expect(signalRecorder.events() == [ManagedSignalEvent(pid: browserRecord.pid, signal: SIGTERM)])
-        #expect(try browserStore.loadTrackedInstances().isEmpty)
+        #expect(updatedProject.terminalOutput.contains("受管浏览器实例") == false)
+        #expect(try browserStore.loadTrackedInstances().map(\.pid) == [browserRecord.pid])
+    }
+
+    @Test
+    @MainActor
+    func restartingProjectSkipsCleanupAndStartsCurrentCommand() async throws {
+        let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: isolatedPersistenceRoot) }
+
+        let projectRoot = isolatedPersistenceRoot.appendingPathComponent("project")
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+
+        let oldProcess = Process()
+        oldProcess.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        oldProcess.arguments = ["30"]
+        try oldProcess.run()
+        defer {
+            if oldProcess.isRunning {
+                oldProcess.terminate()
+            }
+        }
+
+        let processService = makeProjectScopedTestProcessService(
+            snapshots: [
+                ProjectProcessSnapshot(
+                    pid: oldProcess.processIdentifier,
+                    processGroupID: getpgid(oldProcess.processIdentifier),
+                    commandLine: "sleep 30",
+                    currentWorkingDirectory: projectRoot.path
+                )
+            ]
+        )
+        let service = makeProjectService(
+            persistenceRoot: isolatedPersistenceRoot,
+            processService: processService
+        )
+        var project = Project(
+            name: "restartable-project",
+            path: projectRoot.path,
+            type: .devServer,
+            startCommand: "touch restarted && sleep 0.2",
+            cleanCommand: "touch cleaned",
+            installStrategy: .never
+        )
+        project.isRunning = true
+        project.runningProcessPID = oldProcess.processIdentifier
+        service.projects = [project]
+
+        let result = await service.restartServer(for: project)
+
+        guard case .success = result else {
+            Issue.record("expected restart to begin")
+            return
+        }
+        let restarted = await waitUntil(timeout: .seconds(3)) {
+            FileManager.default.fileExists(atPath: projectRoot.appendingPathComponent("restarted").path)
+        }
+
+        #expect(restarted)
+        #expect(FileManager.default.fileExists(atPath: projectRoot.appendingPathComponent("cleaned").path) == false)
+        #expect(service.projects[0].terminalOutput.contains("[系统] 正在重新启动"))
     }
 
     @Test
@@ -132,7 +183,7 @@ struct ProjectServiceStartupRecoveryTests {
 
     @Test
     @MainActor
-    func cleanFailureDoesNotReachStartCommand() async throws {
+    func normalStartIgnoresCleanCommand() async throws {
         let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: isolatedPersistenceRoot) }
@@ -172,8 +223,8 @@ struct ProjectServiceStartupRecoveryTests {
         }
 
         #expect(recovered)
-        #expect(FileManager.default.fileExists(atPath: projectRoot.appendingPathComponent("clean-ran").path))
-        #expect(FileManager.default.fileExists(atPath: projectRoot.appendingPathComponent("start-ran").path) == false)
+        #expect(FileManager.default.fileExists(atPath: projectRoot.appendingPathComponent("clean-ran").path) == false)
+        #expect(FileManager.default.fileExists(atPath: projectRoot.appendingPathComponent("start-ran").path))
     }
 
     @Test
@@ -344,7 +395,6 @@ struct ProjectServiceStartupRecoveryTests {
         )
         let service = makeProjectService(
             persistenceRoot: persistenceRoot,
-            managedBrowserInstanceService: ManagedBrowserInstanceService(),
             processService: processService
         )
 
@@ -359,7 +409,7 @@ struct ProjectServiceStartupRecoveryTests {
         project.runningProcessPID = 111
         service.projects = [project]
 
-        let result = await service.stopServer(for: project, cleanCache: false)
+        let result = await service.stopServer(for: project)
 
         guard case .success = result else {
             Issue.record("expected stopServer to succeed when a descendant process matches the managed project root")
@@ -370,7 +420,7 @@ struct ProjectServiceStartupRecoveryTests {
         #expect(updatedProject.runningProcessPID == nil)
         #expect(updatedProject.isRunning == false)
         #expect(updatedProject.transitionState == .idle)
-        #expect(recorder.groupSignals() == [ProcessSignalEvent(target: 99365, signal: SIGTERM)])
+        #expect(recorder.groupSignals() == [ProcessSignalEvent(target: 99365, signal: SIGINT)])
         #expect(recorder.processSignals().isEmpty)
     }
 
@@ -441,7 +491,6 @@ struct ProjectServiceStartupRecoveryTests {
 
         let service = makeProjectService(
             persistenceRoot: isolatedPersistenceRoot,
-            managedBrowserInstanceService: ManagedBrowserInstanceService(),
             processService: processService
         )
         var project = Project(
@@ -507,7 +556,6 @@ struct ProjectServiceStartupRecoveryTests {
     private func makeProjectService(persistenceRoot: URL) -> ProjectService {
         makeProjectService(
             persistenceRoot: persistenceRoot,
-            managedBrowserInstanceService: ManagedBrowserInstanceService(),
             processService: makeDefaultTestProcessService()
         )
     }
@@ -515,7 +563,6 @@ struct ProjectServiceStartupRecoveryTests {
     @MainActor
     private func makeProjectService(
         persistenceRoot: URL,
-        managedBrowserInstanceService: ManagedBrowserInstanceService,
         processService: ProcessService? = nil
     ) -> ProjectService {
         let configService = CommandConfigService(
@@ -529,7 +576,6 @@ struct ProjectServiceStartupRecoveryTests {
         return ProjectService(
             commandConfigService: configService,
             processService: resolvedProcessService,
-            managedBrowserInstanceService: managedBrowserInstanceService,
             persistenceService: PersistenceService<Project>(
                 filename: "projects.json",
                 root: .custom(persistenceRoot)
@@ -626,54 +672,6 @@ struct ProjectServiceStartupRecoveryTests {
     }
 }
 
-private final class TestManagedBrowserSignalRecorder: @unchecked Sendable {
-    private let lock = NSLock()
-    nonisolated(unsafe) private var runningPIDs: Set<Int32>
-    nonisolated(unsafe) private(set) var signals: [ManagedSignalEvent] = []
-
-    init(runningPIDs: Set<Int32>) {
-        self.runningPIDs = runningPIDs
-    }
-
-    nonisolated
-    func send(pid: Int32, signal: Int32) -> ManagedBrowserInstanceService.SignalResult {
-        lock.lock()
-        defer { lock.unlock() }
-
-        guard runningPIDs.contains(pid) else {
-            return .notRunning
-        }
-
-        signals.append(ManagedSignalEvent(pid: pid, signal: signal))
-
-        if signal == SIGTERM || signal == SIGKILL {
-            runningPIDs.remove(pid)
-            return .delivered
-        }
-
-        return .failed
-    }
-
-    nonisolated
-    func isRunning(pid: Int32) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return runningPIDs.contains(pid)
-    }
-
-    nonisolated
-    func events() -> [ManagedSignalEvent] {
-        lock.lock()
-        defer { lock.unlock() }
-        return signals
-    }
-}
-
-private struct ManagedSignalEvent: Equatable {
-    let pid: Int32
-    let signal: Int32
-}
-
 private struct ProcessSignalEvent: Equatable {
     let target: Int32
     let signal: Int32
@@ -703,7 +701,7 @@ private final class TestProcessRuntimeRecorder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         recordedGroupSignals.append(ProcessSignalEvent(target: groupID, signal: signal))
-        if signal == SIGTERM || signal == SIGKILL {
+        if signal == SIGINT || signal == SIGTERM || signal == SIGKILL {
             aliveProcessIDs = Set(aliveProcessIDs.filter { processGroupIDs[$0] != groupID })
         }
     }
@@ -713,7 +711,7 @@ private final class TestProcessRuntimeRecorder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         recordedProcessSignals.append(ProcessSignalEvent(target: pid, signal: signal))
-        if signal == SIGTERM || signal == SIGKILL {
+        if signal == SIGINT || signal == SIGTERM || signal == SIGKILL {
             aliveProcessIDs.remove(pid)
         }
     }

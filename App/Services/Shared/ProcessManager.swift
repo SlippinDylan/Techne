@@ -17,7 +17,6 @@ enum ProjectStartupCompletion: Sendable, Equatable {
 @MainActor
 class ProcessManager {
     private let processService: ProcessService
-    private let gitService = GitService.shared
     private let logService = LogService.shared
     private let terminalHandler = TerminalOutputHandler()
 
@@ -186,7 +185,6 @@ class ProcessManager {
     func stopDevServer(
         for project: Project,
         category: String,
-        cleanCommand: String,
         onOutputUpdate: @escaping @Sendable (UUID, String) -> Void
     ) async -> Result<Void, ProjectServiceError> {
         logService.info("停止开发服务器：\(project.name)", category: category)
@@ -199,23 +197,9 @@ class ProcessManager {
 
         if case .success = result {
             logService.success("成功停止开发服务器：\(project.name)", category: category)
-            scheduleCleanup(for: project, category: category, cleanCommand: cleanCommand, onOutputUpdate: onOutputUpdate)
         }
 
         return result
-    }
-
-    private func scheduleCleanup(
-        for project: Project,
-        category: String,
-        cleanCommand: String,
-        onOutputUpdate: @escaping @Sendable (UUID, String) -> Void
-    ) {
-        Task {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            _ = gitService.cleanCache(at: project.path, command: cleanCommand)
-            onOutputUpdate(project.id, "[系统] 缓存清理完成\n")
-        }
     }
 }
 

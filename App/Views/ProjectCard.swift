@@ -19,6 +19,7 @@ struct ProjectCard: View {
     let onDiscardChanges: () -> Void
     let onStartServer: () -> Void
     let onStopServer: () -> Void
+    let onRestartServer: () -> Void
     let onSwitchStartupMode: (String) -> Void
     let onRefresh: () -> Void
     let onKillServer: () -> Void
@@ -45,6 +46,7 @@ struct ProjectCard: View {
         onDiscardChanges: @escaping () -> Void,
         onStartServer: @escaping () -> Void,
         onStopServer: @escaping () -> Void,
+        onRestartServer: @escaping () -> Void,
         onSwitchStartupMode: @escaping (String) -> Void,
         onRefresh: @escaping () -> Void,
         onKillServer: @escaping () -> Void,
@@ -59,6 +61,7 @@ struct ProjectCard: View {
         self.onDiscardChanges = onDiscardChanges
         self.onStartServer = onStartServer
         self.onStopServer = onStopServer
+        self.onRestartServer = onRestartServer
         self.onSwitchStartupMode = onSwitchStartupMode
         self.onRefresh = onRefresh
         self.onKillServer = onKillServer
@@ -326,6 +329,11 @@ struct ProjectCard: View {
                     .frame(width: 28, height: 28)
             } else if isRunning {
                 ActionButton(
+                    icon: "arrow.clockwise",
+                    action: onRestartServer,
+                    tooltip: "重新启动"
+                )
+                ActionButton(
                     icon: "stop.fill",
                     action: onStopServer,
                     tooltip: "停止服务器"
@@ -534,6 +542,7 @@ struct ProjectCard: View {
         onDiscardChanges: {},
         onStartServer: {},
         onStopServer: {},
+        onRestartServer: {},
         onSwitchStartupMode: { _ in },
         onRefresh: {},
         onKillServer: {},

@@ -50,7 +50,7 @@ struct ProcessServiceProjectScopeTests {
         }
 
         #expect(recorder.snapshotScanCount() == 0)
-        #expect(recorder.groupSignals() == [ProcessSignalEvent(target: 99365, signal: SIGTERM)])
+        #expect(recorder.groupSignals() == [ProcessSignalEvent(target: 99365, signal: SIGINT)])
         #expect(recorder.processSignals().isEmpty)
     }
 
@@ -103,9 +103,62 @@ struct ProcessServiceProjectScopeTests {
 
         #expect(recorder.snapshotScanCount() == 0)
         #expect(recorder.groupSignals() == [
+            ProcessSignalEvent(target: 99365, signal: SIGINT),
             ProcessSignalEvent(target: 99365, signal: SIGTERM),
             ProcessSignalEvent(target: 99365, signal: SIGKILL)
         ])
+    }
+
+    @Test
+    func hostProcessGroupFallsBackToPreferredProcessSignal() async {
+        let preferredPID: Int32 = 99752
+        let unrelatedPID: Int32 = 99767
+        let hostProcessGroup = getpgrp()
+        let recorder = ProcessServiceStopRecorder(
+            aliveProcessIDs: [preferredPID, unrelatedPID],
+            processGroupIDs: [
+                preferredPID: hostProcessGroup,
+                unrelatedPID: hostProcessGroup
+            ],
+            currentWorkingDirectories: [
+                preferredPID: "/Users/test/Portlens",
+                unrelatedPID: "/Users/test/other-project"
+            ]
+        )
+        let service = ProcessService(
+            runtime: .init(
+                processSnapshots: { [] },
+                processSnapshotForPID: { pid in
+                    ProjectProcessSnapshot(
+                        pid: pid,
+                        processGroupID: recorder.processGroupID(for: pid),
+                        commandLine: "pnpm dev",
+                        currentWorkingDirectory: recorder.currentWorkingDirectory(for: pid)
+                    )
+                },
+                processIDsInGroup: { _ in [preferredPID, unrelatedPID] },
+                processGroupID: recorder.processGroupID(for:),
+                sendSignalToProcessGroup: recorder.sendGroupSignal(groupID:signal:),
+                sendSignalToProcess: recorder.sendProcessSignal(pid:signal:),
+                isProcessRunning: { pid in recorder.isRunning(pid: pid) },
+                sleep: { _ in }
+            )
+        )
+
+        let result = await service.stopProjectProcesses(
+            at: "/Users/test/Portlens",
+            preferredPID: preferredPID
+        )
+
+        guard case .success = result else {
+            Issue.record("expected a safe single-process fallback")
+            return
+        }
+        #expect(recorder.groupSignals().isEmpty)
+        #expect(recorder.processSignals() == [
+            ProcessSignalEvent(target: preferredPID, signal: SIGINT)
+        ])
+        #expect(recorder.isRunning(pid: unrelatedPID))
     }
 
     @Test
@@ -341,7 +394,7 @@ private final class ProcessServiceStopRecorder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         recordedGroupSignals.append(ProcessSignalEvent(target: groupID, signal: signal))
-        if signal == SIGTERM || signal == SIGKILL {
+        if signal == SIGINT || signal == SIGTERM || signal == SIGKILL {
             aliveProcessIDs = Set(
                 aliveProcessIDs.filter {
                     processGroupIDs[$0] != groupID || groupSignalSurvivors.contains($0)
@@ -355,7 +408,7 @@ private final class ProcessServiceStopRecorder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         recordedProcessSignals.append(ProcessSignalEvent(target: pid, signal: signal))
-        if signal == SIGTERM || signal == SIGKILL {
+        if signal == SIGINT || signal == SIGTERM || signal == SIGKILL {
             aliveProcessIDs.remove(pid)
         }
     }

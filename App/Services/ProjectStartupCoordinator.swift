@@ -71,6 +71,7 @@ struct ProjectStartupCoordinator {
     static func makePlan(
         for project: Project,
         fallbackCleanCommand: String,
+        includesClean: Bool = false,
         fileManager: FileManager = .default
     ) -> ProjectStartupPlan {
         let installCommand = project.installCommand.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -85,9 +86,11 @@ struct ProjectStartupCoordinator {
             phases.append(.install(command: installCommand))
         }
 
-        let resolvedCleanCommand = cleanCommand.isEmpty ? fallbackCleanCommand : cleanCommand
-        if !resolvedCleanCommand.isEmpty {
-            phases.append(.clean(command: resolvedCleanCommand))
+        if includesClean {
+            let resolvedCleanCommand = cleanCommand.isEmpty ? fallbackCleanCommand : cleanCommand
+            if !resolvedCleanCommand.isEmpty {
+                phases.append(.clean(command: resolvedCleanCommand))
+            }
         }
 
         phases.append(.start(command: startCommand))

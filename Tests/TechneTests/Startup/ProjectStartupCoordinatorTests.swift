@@ -70,7 +70,11 @@ struct ProjectStartupCoordinatorTests {
             startCommand: "pnpm dev --host"
         )
 
-        let plan = ProjectStartupCoordinator.makePlan(for: project, fallbackCleanCommand: "rm -rf tmp-cache")
+        let plan = ProjectStartupCoordinator.makePlan(
+            for: project,
+            fallbackCleanCommand: "rm -rf tmp-cache",
+            includesClean: true
+        )
 
         #expect(plan.shouldInstallDependencies)
         #expect(plan.phases == [
@@ -92,6 +96,26 @@ struct ProjectStartupCoordinatorTests {
     }
 
     @Test
+    func normalExecutionPlanDoesNotCleanBeforeStart() throws {
+        let root = try makeProjectRoot(packageJSON: false, nodeModules: false)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let project = makeProject(
+            path: root.path,
+            installStrategy: .never,
+            cleanCommand: "rm -rf dist",
+            startCommand: "pnpm dev"
+        )
+
+        let plan = ProjectStartupCoordinator.makePlan(
+            for: project,
+            fallbackCleanCommand: "rm -rf .cache"
+        )
+
+        #expect(plan.phases == [.start(command: "pnpm dev")])
+    }
+
+    @Test
     func executionPlanFallsBackToProvidedCleanCommandWhenProjectSnapshotIsEmpty() throws {
         let root = try makeProjectRoot(packageJSON: false, nodeModules: false)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -103,7 +127,11 @@ struct ProjectStartupCoordinatorTests {
             startCommand: "pnpm dev"
         )
 
-        let plan = ProjectStartupCoordinator.makePlan(for: project, fallbackCleanCommand: "rm -rf .cache")
+        let plan = ProjectStartupCoordinator.makePlan(
+            for: project,
+            fallbackCleanCommand: "rm -rf .cache",
+            includesClean: true
+        )
 
         #expect(plan.shouldInstallDependencies == false)
         #expect(plan.phases == [
@@ -134,7 +162,11 @@ struct ProjectStartupCoordinatorTests {
             startCommand: "touch start-ran"
         )
 
-        let plan = ProjectStartupCoordinator.makePlan(for: project, fallbackCleanCommand: "")
+        let plan = ProjectStartupCoordinator.makePlan(
+            for: project,
+            fallbackCleanCommand: "",
+            includesClean: true
+        )
         let result = try await ModernProcessExecutor.execute(
             command: plan.shellScript,
             in: root
@@ -157,7 +189,11 @@ struct ProjectStartupCoordinatorTests {
             startCommand: "touch start-ran"
         )
 
-        let plan = ProjectStartupCoordinator.makePlan(for: project, fallbackCleanCommand: "")
+        let plan = ProjectStartupCoordinator.makePlan(
+            for: project,
+            fallbackCleanCommand: "",
+            includesClean: true
+        )
         let result = try await ModernProcessExecutor.execute(
             command: plan.shellScript,
             in: root
