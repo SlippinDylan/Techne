@@ -26,8 +26,8 @@ final actor ModernProcessExecutor: Sendable {
     ) async throws -> (exitCode: Int32, finalOutput: String) {
         let process = Process()
         let cancellationController = ProcessCancellationController()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = ["-m", "-l", "-c", command]
+        process.executableURL = ShellExecutionEnvironment.shellURL()
+        process.arguments = ShellExecutionEnvironment.arguments(for: command)
         process.currentDirectoryURL = directory
         
         let outputPipe = Pipe()

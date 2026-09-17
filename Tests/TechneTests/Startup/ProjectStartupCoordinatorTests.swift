@@ -86,7 +86,7 @@ struct ProjectStartupCoordinatorTests {
             "[系统] 正在检查依赖...",
             "[系统] 检测到缺少依赖，准备执行安装命令: pnpm install --frozen-lockfile"
         ])
-        #expect(plan.shellScript.contains("source ~/.zshrc 2>/dev/null || source ~/.bash_profile 2>/dev/null || source ~/.bashrc 2>/dev/null"))
+        #expect(plan.shellScript.contains("source ~/.zshrc") == false)
         #expect(plan.shellScript.contains("cd \(ShellEscape.escape(root.path))"))
         #expect(plan.shellScript.contains("pnpm install --frozen-lockfile"))
         #expect(plan.shellScript.contains("rm -rf .cache"))

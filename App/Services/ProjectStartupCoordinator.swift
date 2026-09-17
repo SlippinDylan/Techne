@@ -45,7 +45,6 @@ struct ProjectStartupPlan: Equatable, Sendable {
 }
 
 struct ProjectStartupCoordinator {
-    nonisolated static let shellProfileCommand = "source ~/.zshrc 2>/dev/null || source ~/.bash_profile 2>/dev/null || source ~/.bashrc 2>/dev/null"
     nonisolated static let startPhaseMessagePrefix = "[系统] 准备启动命令: "
     nonisolated static let installCompletedMessage = "[系统] 依赖安装完成"
     nonisolated static let controlSignalPrefix = "__TECHNE_STARTUP_PHASE__:"
@@ -165,7 +164,6 @@ struct ProjectStartupCoordinator {
         messages: [String]
     ) -> String {
         var lines = [
-            shellProfileCommand,
             "set -e",
             "cd \(ShellEscape.escape(path))"
         ]
