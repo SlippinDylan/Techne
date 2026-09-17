@@ -1,4 +1,4 @@
-name: Feishu Activity Notifications
+name: Discord Activity Notifications
 
 on: # zizmor: ignore[dangerous-triggers] Every privileged event executes only the pinned default-branch script.
   push:
@@ -36,7 +36,6 @@ on: # zizmor: ignore[dangerous-triggers] Every privileged event executes only th
   repository_dispatch:
     types:
       - release_started
-      - release_published
 
 permissions:
   contents: read
@@ -56,11 +55,10 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Send Feishu notification
+      - name: Send Discord notification
         if: >-
           github.event_name != 'pull_request_review' ||
           github.event.pull_request.head.repo.full_name == github.repository
         env:
-          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
-          FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
-        run: node .github/scripts/feishu-notify.mjs
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: node .github/scripts/discord-notify.mjs
