@@ -3,8 +3,6 @@
   <h1>Techne</h1>
 </div>
 
----
-
 <div align="center">
   <p>A native macOS app for keeping local projects, development servers, WeChat Mini Program commands, and Android APK deployment close at hand.</p>
   <p>

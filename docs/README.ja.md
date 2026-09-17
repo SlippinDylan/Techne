@@ -3,8 +3,6 @@
   <h1>Techne</h1>
 </div>
 
----
-
 <div align="center">
   <p>ローカルプロジェクト、開発サーバー、WeChat ミニプログラムのコマンド、Android APK の配布作業をまとめるネイティブ macOS アプリです。</p>
   <p>

@@ -3,8 +3,6 @@
   <h1>Techne</h1>
 </div>
 
----
-
 <div align="center">
   <p>把本地项目、开发服务、微信小程序命令和 Android APK 部署放在一起的原生 macOS 应用。</p>
   <p>
