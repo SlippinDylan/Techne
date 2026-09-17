@@ -1,7 +1,12 @@
 <div align="center">
   <img src="images/readme/app-icon.png" width="160" height="160" alt="Techne App 圖示">
   <h1>Techne</h1>
-  <p>將本機開發環境、微信小程式建置與 Android 部署整合在同一個原生 macOS App，並提供選單列入口。</p>
+</div>
+
+---
+
+<div align="center">
+  <p>將本機專案、開發服務、微信小程式命令與 Android APK 部署放在一起的原生 macOS App。</p>
   <p>
     <a href="README.zh-CN.md">简体中文</a> ·
     <strong>繁體中文</strong> ·
@@ -11,62 +16,44 @@
   </p>
 </div>
 
-## Techne 是什麼
+## Techne 可以做什麼
 
-Techne 將前端本機開發常見的零散工作集中在一個地方：管理專案與 Git 狀態、尋找正在執行的 dev server、啟動隔離的 Chrome 偵錯執行個體、建置微信小程式，以及透過 ADB 部署 Android App。將常用專案加入後，就能從同一個介面啟動服務、切換分支、查看日誌及執行部署。
+Techne 適合經常處理同一批本機專案的開發者。專案加一次後，就能查看 Git 分支和工作目錄、執行專案自己的命令、尋找正在監聽的開發服務，或直接為服務開啟瀏覽器。
 
-## 功能
+它也包含兩條獨立工作流程：
+
+- 微信小程式專案可執行你設定的安裝相依套件、啟動、建置、清理與停止命令。
+- Android 部署可選取 APK、尋找已連線裝置、透過 ADB 安裝，並顯示命令輸出。
+
+## App 內功能
 
 <table>
   <tr>
     <td width="32%">
-      <strong>開發環境與偵錯</strong><br><br>
-      集中管理專案，顯示 Git 分支、未提交變更與服務狀態。自動偵測本機 dev server，並可為指定服務啟動使用隔離 profile 與遠端偵錯連接埠的 Chrome。
+      <strong>專案、Git 與服務</strong><br><br>
+      查看目前分支和未提交檔案；工作目錄乾淨時可切換分支；依專案設定啟動或停止服務。Techne 會尋找與 Node、Bun 或 Deno 行程相關的本機監聽服務。
     </td>
-    <td width="68%"><img src="images/readme/development-environment.png" alt="Techne 的開發環境與偵錯介面"></td>
+    <td width="68%"><img src="images/readme/development-environment.png" alt="Techne 的專案與服務狀態"></td>
   </tr>
   <tr>
     <td>
-      <strong>微信小程式建置</strong><br><br>
-      儲存小程式專案路徑及建置、清理、停止命令。一鍵執行建置、清理快取或切換分支，並在日誌面板即時查看輸出。
+      <strong>微信小程式</strong><br><br>
+      命令依專案儲存，不綁定單一建置系統。內建範本提供 npm 和 pnpm 的微信小程式範例。
     </td>
-    <td><img src="images/readme/mini-program-build.png" alt="Techne 的微信小程式建置介面"></td>
+    <td><img src="images/readme/mini-program-build.png" alt="Techne 微信小程式建置工作區"></td>
   </tr>
   <tr>
     <td>
-      <strong>Android App 部署</strong><br><br>
-      選取 APK 並連接裝置後，即可執行 <code>adb install</code> 與日誌擷取。介面提供裝置連線檢查、安裝進度及時間戳記驗證。
+      <strong>Android APK 部署</strong><br><br>
+      選取 APK 與已連線 Android 裝置。Techne 讀取套件名稱，透過 ADB 重新安裝 APK、核對套件更新時間，接著啟動 App。
     </td>
-    <td><img src="images/readme/android-deployment.png" alt="Techne 的 Android App 部署介面"></td>
+    <td><img src="images/readme/android-deployment.png" alt="Techne Android APK 部署工作區"></td>
   </tr>
 </table>
 
-## 目前狀態
+## 安裝
 
-> **持續開發中**
-
-核心工作流程已經完成。main push 與 Pull Request 都會執行輕量自動化檢查；僅修改 `README.md`、`docs/`、`LICENSE` 或 `AGENTS.md` 時會略過 macOS 建置，但啟用發布時仍會執行完整檢查。其他變更會執行 `TechneTests` 與未簽署的 Release 建置。目前的發布清單已關閉發布。
-
-## 平台需求
-
-| 項目 | 需求 |
-|---|---|
-| 最低系統 | macOS 26.0 Tahoe |
-| 從原始碼建置 | macOS 26.0 以上與 Xcode 26+ |
-| 發佈架構 | Apple Silicon（`arm64`） |
-| App 類型 | 非沙盒的原生 macOS App，提供選單列入口 |
-| 本機開發 | 可偵測本機開發服務，並啟動隔離的 Chrome 偵錯執行個體 |
-| 發佈方式 | GitHub Releases 提供由 Apple Development 簽署、未經公證的 DMG |
-
-## 安裝與發佈
-
-每個 GitHub Release 只包含一個 `Techne-<版本號>.dmg`。開啟 DMG 後，將 `Techne.app` 拖入 `Applications`。目前版本使用 Apple Development 憑證簽署，但未經 Apple 公證；首次開啟前請移除下載隔離屬性：
-
-```bash
-sudo xattr -rd com.apple.quarantine /Applications/Techne.app
-```
-
-發佈完成並同步簽名中繼資料後，也可以透過 Homebrew 安裝：
+### Homebrew
 
 ```bash
 brew tap slippindylan/tap
@@ -74,33 +61,82 @@ brew trust --tap slippindylan/tap
 brew install --cask techne@beta
 ```
 
-發佈版本使用 Sparkle 2 從 `https://slippindylan.github.io/homebrew-tap/techne/appcast.xml` 取得已簽名的更新資訊；可在 App 或選單列選單中選擇「檢查更新…」。Beta 與 Alpha 版本各自使用獨立的 appcast 頻道和 Cask。
+### DMG
 
-發布設定位於 [`Config/Release/manifest.json`](../Config/Release/manifest.json)。只有 `main` 的 push CI 成功、`release` 為 `true`、版本尚未發布，且 [CHANGELOG.md](../CHANGELOG.md) 有唯一、非空且完全同名的版本章節時，Release workflow 才會簽署、打包並發佈 DMG。
+從 [Techne Releases](https://github.com/SlippinDylan/Techne/releases) 下載 DMG，開啟後將 `Techne.app` 拖到 `Applications`。已發佈的 DMG 適用於 Apple Silicon Mac。
 
-版本格式支援 `x.y.z`、`x.y.z-alpha.n` 和 `x.y.z-beta.n`。Alpha／Beta 後綴會用於 Release、tag、DMG 與 CHANGELOG；App 的 `CFBundleShortVersionString` 則使用對應的純數字 `x.y.z`。
+目前版本使用 Apple Development 憑證簽署，但未經 Apple 公證。macOS 因此可能阻擋首次開啟，或顯示無法驗證開發者的提示。若 DMG 來自官方 Releases、App 已移至 `Applications`，且你決定繼續使用，可移除下載隔離屬性：
 
-## 設計要點
+```bash
+sudo xattr -rd com.apple.quarantine /Applications/Techne.app
+```
 
-- 以專案為核心管理本機開發流程，在同一個介面中顯示 Git 狀態、服務狀態與常用操作。
-- 以隔離的 Chrome profile 啟動偵錯執行個體，避免多個前端專案的 cookie 與儲存空間互相影響。
-- 將小程式的建置、清理與停止命令，以及不同專案類型的命令範本集中管理。
-- 將啟動、停止、建置、部署與切換分支等關鍵操作寫入可依分類篩選的時間序日誌。
+## 快速開始
+
+1. 開啟 Techne，加入本機專案，選擇開發服務或微信小程式專案。
+2. 選擇命令範本，或填入已能在該專案運作的命令。Techne 會在專案目錄中透過登入 Bash shell 執行它們。
+3. Web 專案啟動服務後，重新整理開發環境，選擇已安裝的瀏覽器開啟偵測到的服務。
+4. 在 Android 部署頁連線裝置、選取 APK，然後部署。
+
+### 瀏覽器與獨立 profile
+
+Techne 會偵測已安裝的 Safari、Google Chrome、Chrome Beta、Chromium、Microsoft Edge、Brave 和 Arc。Safari 以一般方式開啟網址。Chrome、Chrome Beta、Chromium、Edge、Brave 和 Arc 使用 Chromium 核心：每個受管理實例都有獨立 profile、新視窗與遠端偵錯連接埠，連接埠從 `9222` 起自動尋找可用值。這不會重用日常瀏覽器或其他受管理實例的 cookie 與網站儲存空間。
+
+### 微信小程式命令
+
+Techne 不附帶小程式工具鏈。請先安裝專案所需相依套件，再設定能在該倉庫運作的命令。內建範例如下：
+
+```bash
+npm run dev:mp-weixin
+npm run build:mp-weixin
+pnpm dev:mp-weixin
+pnpm build:mp-weixin
+```
+
+可改成專案自己的 npm、pnpm 或其他 shell 命令。相應的套件管理器和專案工具必須位於登入 shell 的 `PATH`。
+
+### Android APK 部署
+
+安裝 Android SDK Platform-Tools，使 `adb` 可從 `PATH` 使用；連接已啟用 USB 偵錯的 Android 裝置；並安裝 Android SDK Build Tools。Techne 使用 `aapt2` 或 `aapt` 讀取 APK 套件名稱，先從 `PATH` 尋找，再查看 `~/Library/Android/sdk/build-tools`。
+
+## 系統需求
+
+| 項目 | 需求 |
+|---|---|
+| macOS | macOS 26 Tahoe 或以上 |
+| 硬體 | 已發佈 DMG 僅支援 Apple Silicon |
+| Git 功能 | `git` 位於 `PATH`，供狀態與分支操作使用 |
+| 開發服務偵測 | macOS 內建 `lsof`；Techne 掃描 3000–9999 的 TCP 監聽連接埠 |
+| 瀏覽器啟動 | 至少安裝一個受支援瀏覽器 |
+| 小程式與專案命令 | 專案相依套件與命令列工具可由登入 shell 使用 |
+| Android 部署 | `adb`、Android SDK Build Tools（`aapt2` 或 `aapt`）及已啟用 USB 偵錯的裝置 |
 
 ## 資料位置
 
-應用程式狀態儲存在：
+專案記錄、命令設定和日誌儲存在：
 
 ```bash
 ~/Library/Application Support/studio.slippindylan.Techne/
 ```
 
-瀏覽器偵錯執行個體的暫存資訊儲存在：
+受管理 Chromium 實例的 profile 與追蹤檔案儲存在：
 
 ```bash
 ~/.techne-browsers/
 ```
 
+## 從原始碼建置
+
+需要 macOS 26 以上與 Xcode 26 以上。複製倉庫後，在 Xcode 開啟 `Techne.xcodeproj` 並執行 `Techne` scheme；也可在終端執行：
+
+```bash
+git clone https://github.com/SlippinDylan/Techne.git
+cd Techne
+xcodebuild -project Techne.xcodeproj -scheme Techne -configuration Debug build
+```
+
+以上列出的外部工具只在使用對應功能時需要。
+
 ## 授權條款
 
-Copyright © 2025–2026 SlippinDylan Studio。Techne 採用 [Apache License 2.0](../LICENSE) 開放原始碼授權條款。
+Copyright © 2025–2026 SlippinDylan Studio。Techne 採用 [Apache License 2.0](../LICENSE) 授權。
