@@ -170,6 +170,7 @@ async function main() {
       release: manifest.release,
       version: manifest.version.value,
       marketing_version: manifest.version.base,
+      channel: manifest.version.channel,
       tag: `v${manifest.version.value}`,
       prerelease: manifest.version.prerelease,
       dmg_name: `Techne-${manifest.version.value}.dmg`,

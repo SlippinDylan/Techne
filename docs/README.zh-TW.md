@@ -66,6 +66,16 @@ Techne 將前端本機開發常見的零散工作集中在一個地方：管理�
 sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 ```
 
+發佈完成並同步簽名中繼資料後，也可以透過 Homebrew 安裝：
+
+```bash
+brew tap slippindylan/tap
+brew trust --tap slippindylan/tap
+brew install --cask techne@beta
+```
+
+發佈版本使用 Sparkle 2 從 `https://slippindylan.github.io/homebrew-tap/techne/appcast.xml` 取得已簽名的更新資訊；可在 App 或選單列選單中選擇「檢查更新…」。Beta 與 Alpha 版本各自使用獨立的 appcast 頻道和 Cask。
+
 發布設定位於 [`Config/Release/manifest.json`](../Config/Release/manifest.json)。只有 `main` 的 push CI 成功、`release` 為 `true`、版本尚未發布，且 [CHANGELOG.md](../CHANGELOG.md) 有唯一、非空且完全同名的版本章節時，Release workflow 才會簽署、打包並發佈 DMG。
 
 版本格式支援 `x.y.z`、`x.y.z-alpha.n` 和 `x.y.z-beta.n`。Alpha／Beta 後綴會用於 Release、tag、DMG 與 CHANGELOG；App 的 `CFBundleShortVersionString` 則使用對應的純數字 `x.y.z`。

@@ -16,6 +16,7 @@ struct TechneApp: App {
     @State private var commandConfigService: CommandConfigService
     @State private var projectService: ProjectService
     @State private var mainWindowNavigationCoordinator = MainWindowNavigationCoordinator.shared
+    @State private var updateController = ApplicationUpdateController()
 
     init() {
         let commandConfigService = CommandConfigService()
@@ -37,7 +38,7 @@ struct TechneApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             MainWindowNavigationCommands()
-            TechneAppCommands()
+            TechneAppCommands(updateController: updateController)
         }
 
         // 原生设置场景 (Cmd + ,)
@@ -65,7 +66,7 @@ struct TechneApp: App {
 
         // 菜单栏
         MenuBarExtra("Techne", systemImage: "macbook.and.iphone") {
-            MenuBarView()
+            MenuBarView(updateController: updateController)
                 .environment(launchSettings)
                 .environment(mainWindowNavigationCoordinator)
         }
@@ -90,12 +91,20 @@ struct SettingsView: View {
 
 struct TechneAppCommands: Commands {
     @Environment(\.openWindow) private var openWindow
+    let updateController: ApplicationUpdateController
 
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
             Button("关于 Techne") {
                 openWindow(id: "about")
             }
+        }
+
+        CommandGroup(after: .appInfo) {
+            Button("检查更新…") {
+                updateController.checkForUpdates()
+            }
+            .disabled(!updateController.canCheckForUpdates)
         }
 
         CommandGroup(after: .windowArrangement) {

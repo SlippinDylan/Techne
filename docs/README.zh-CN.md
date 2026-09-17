@@ -65,6 +65,16 @@ Techne 把本地开发中反复出现的杂事收进一个原生 macOS 应用：
 sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 ```
 
+发布完成并同步签名元数据后，也可以通过 Homebrew 安装：
+
+```bash
+brew tap slippindylan/tap
+brew trust --tap slippindylan/tap
+brew install --cask techne@beta
+```
+
+发布版本使用 Sparkle 2 从 `https://slippindylan.github.io/homebrew-tap/techne/appcast.xml` 获取已签名的更新信息；可在应用或菜单栏菜单中选择“检查更新…”。Beta 和 Alpha 版本分别使用独立的 appcast 频道和 Cask。
+
 main push 和 Pull Request 始终运行轻量发布自动化检查。修改 `README.md`、`docs/`、`LICENSE` 和 `AGENTS.md` 以外的内容时，还会运行 `TechneTests` 和未签名的 Release 构建；启用发布也会强制执行这项完整检查。发布配置位于 [`Config/Release/manifest.json`](../Config/Release/manifest.json)。只有 main 分支的 CI 成功、`release` 为 `true`、版本尚未发布，并且 [`CHANGELOG.md`](../CHANGELOG.md) 存在唯一、非空且与版本完全同名的章节时，发布工作流才会签名、打包并发布 DMG。
 
 支持的版本格式为 `x.y.z`、`x.y.z-alpha.n` 和 `x.y.z-beta.n`。Alpha 和 Beta 后缀用于 Release、tag、DMG 与 Changelog；应用的 `CFBundleShortVersionString` 使用对应的纯数字 `x.y.z`。
@@ -75,6 +85,8 @@ main push 和 Pull Request 始终运行轻量发布自动化检查。修改 `REA
 - `CERTIFICATES_PASSWORD`：P12 导出密码
 - `FEISHU_WEBHOOK`：飞书自定义机器人 Webhook
 - `FEISHU_SECRET`：飞书自定义机器人的签名密钥
+- `SPARKLE_ED_PRIVATE_KEY`：仅用于签名 Sparkle appcast 的 EdDSA 私钥
+- `HOMEBREW_TAP_TOKEN`：允许更新共享 Homebrew tap 的 Token
 
 ## 关键设计决策
 

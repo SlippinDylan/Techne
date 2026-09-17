@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		BE7C5B5F305ACD1D0041C3BF /* Techne.icon in Resources */ = {isa = PBXBuildFile; fileRef = BE7C5B5E305ACD1D0041C3BF /* Techne.icon */; };
 		BEE630012EF01A4D00A1B2C3 /* SwiftGitX in Frameworks */ = {isa = PBXBuildFile; productRef = BEE630002EF01A4D00A1B2C3 /* SwiftGitX */; };
+		BEE630042EF01A4D00A1B2C3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = BEE630032EF01A4D00A1B2C3 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -27,8 +28,21 @@
 		BE7C5B5E305ACD1D0041C3BF /* Techne.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Techne.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		BEE630062EF01A4D00A1B2C3 /* Exceptions for "App" folder in "Techne" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = BE3806942EEDA48B008B541B /* Techne */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BE3806972EEDA48B008B541B /* App */ = {
+			exceptions = (
+				BEE630062EF01A4D00A1B2C3 /* Exceptions for "App" folder in "Techne" target */,
+			);
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = App;
 			sourceTree = "<group>";
@@ -46,6 +60,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BEE630012EF01A4D00A1B2C3 /* SwiftGitX in Frameworks */,
+				BEE630042EF01A4D00A1B2C3 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -99,6 +114,7 @@
 			name = Techne;
 			packageProductDependencies = (
 				BEE630002EF01A4D00A1B2C3 /* SwiftGitX */,
+				BEE630032EF01A4D00A1B2C3 /* Sparkle */,
 			);
 			productName = Techne;
 			productReference = BE3806952EEDA48B008B541B /* Techne.app */;
@@ -157,6 +173,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				BEE630022EF01A4D00A1B2C3 /* XCRemoteSwiftPackageReference "SwiftGitX" */,
+				BEE630052EF01A4D00A1B2C3 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BE3806962EEDA48B008B541B /* Products */;
@@ -344,8 +361,8 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -355,6 +372,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				TECHNE_UPDATE_CHANNEL = stable;
+				TECHNE_UPDATER_ENABLED = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -376,8 +395,8 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -387,6 +406,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				TECHNE_UPDATE_CHANNEL = stable;
+				TECHNE_UPDATER_ENABLED = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -494,6 +515,14 @@
 				minimumVersion = 0.1.0;
 			};
 		};
+		BEE630052EF01A4D00A1B2C3 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -501,6 +530,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BEE630022EF01A4D00A1B2C3 /* XCRemoteSwiftPackageReference "SwiftGitX" */;
 			productName = SwiftGitX;
+		};
+		BEE630032EF01A4D00A1B2C3 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BEE630052EF01A4D00A1B2C3 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

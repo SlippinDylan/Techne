@@ -65,6 +65,16 @@ Each GitHub Release contains one `Techne-<version>.dmg`. Open it and drag `Techn
 sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 ```
 
+Homebrew installation is also available after a release has published its signed distribution metadata:
+
+```bash
+brew tap slippindylan/tap
+brew trust --tap slippindylan/tap
+brew install --cask techne@beta
+```
+
+Release builds use Sparkle 2 to check the signed appcast at `https://slippindylan.github.io/homebrew-tap/techne/appcast.xml`; choose **Check for Updates…** from the app or menu-bar menu to check manually. Beta and alpha releases stay on their own appcast channels and Casks.
+
 Pushes to main and pull requests always run lightweight release-automation checks. Changes outside `README.md`, `docs/`, `LICENSE`, and `AGENTS.md` additionally run `TechneTests` and an unsigned Release build; enabling publishing also forces this full check. Release configuration lives in [`Config/Release/manifest.json`](Config/Release/manifest.json). The release workflow signs, packages, and publishes a DMG only after main CI succeeds, `release` is `true`, the version is unpublished, and [`CHANGELOG.md`](CHANGELOG.md) contains one unique, non-empty section with the exact same version.
 
 Supported versions are `x.y.z`, `x.y.z-alpha.n`, and `x.y.z-beta.n`. Alpha and beta suffixes are used by the release, tag, DMG, and Changelog; the app's `CFBundleShortVersionString` uses the matching numeric `x.y.z` value.
@@ -75,6 +85,8 @@ The release workflow uses these GitHub Actions repository secrets:
 - `CERTIFICATES_PASSWORD`: P12 export password
 - `FEISHU_WEBHOOK`: Feishu custom bot webhook
 - `FEISHU_SECRET`: Feishu custom bot signing secret
+- `SPARKLE_ED_PRIVATE_KEY`: Sparkle EdDSA private key used only to sign the appcast
+- `HOMEBREW_TAP_TOKEN`: token permitted to update the shared Homebrew tap
 
 ## Key Design Decisions
 

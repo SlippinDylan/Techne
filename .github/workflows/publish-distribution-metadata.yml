@@ -1,0 +1,222 @@
+name: Publish Distribution Metadata
+
+on:
+  repository_dispatch:
+    types:
+      - distribution_metadata_requested
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published Techne tag to synchronize
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: distribution-metadata-techne
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Sign appcast and update Homebrew tap
+    runs-on: macos-26
+    timeout-minutes: 20
+    env:
+      TAG: ${{ github.event.client_payload.tag || inputs.tag }}
+      SPARKLE_VERSION: 2.10.0
+      SPARKLE_ARCHIVE_SHA256: c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c
+
+    steps:
+      - name: Checkout trusted default-branch automation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Checkout published source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+          path: published-source
+          persist-credentials: false
+
+      - name: Read published release manifest
+        id: manifest
+        working-directory: published-source
+        run: node ../.github/scripts/release-manifest.mjs validate
+
+      - name: Validate published release
+        env:
+          EXPECTED_TAG: ${{ steps.manifest.outputs.tag }}
+          DMG_NAME: ${{ steps.manifest.outputs.dmg_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$TAG" = "$EXPECTED_TAG"
+          test "$(gh repo view "$GITHUB_REPOSITORY" --json visibility --jq '.visibility')" = 'PUBLIC'
+          test "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')" = 'false'
+          assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          test "$assets" = "$DMG_NAME"
+
+      - name: Download release inputs
+        env:
+          DMG_NAME: ${{ steps.manifest.outputs.dmg_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          archive_dir="$RUNNER_TEMP/techne-updates"
+          mkdir -p "$archive_dir"
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$DMG_NAME" \
+            --dir "$archive_dir"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' \
+            > "$archive_dir/${DMG_NAME%.dmg}.md"
+
+      - name: Download pinned Sparkle tools
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/Sparkle-$SPARKLE_VERSION.tar.xz"
+          tools_dir="$RUNNER_TEMP/Sparkle-$SPARKLE_VERSION"
+          curl --fail --location --silent --show-error \
+            "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz" \
+            --output "$archive"
+          echo "$SPARKLE_ARCHIVE_SHA256  $archive" | shasum -a 256 --check
+          mkdir -p "$tools_dir"
+          tar -xf "$archive" -C "$tools_dir"
+          test -x "$tools_dir/bin/generate_appcast"
+          test -x "$tools_dir/bin/sign_update"
+
+      - name: Checkout current Homebrew tap metadata
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: SlippinDylan/homebrew-tap
+          ref: main
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+          fetch-depth: 0
+
+      - name: Recover the trusted tap default branch
+        run: |
+          set -euo pipefail
+          git -C homebrew-tap fetch origin main
+          git -C homebrew-tap checkout main
+          git -C homebrew-tap pull --ff-only origin main
+
+      - name: Generate signed appcast and Cask
+        env:
+          CHANNEL: ${{ steps.manifest.outputs.channel }}
+          DMG_NAME: ${{ steps.manifest.outputs.dmg_name }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          VERSION: ${{ steps.manifest.outputs.version }}
+        run: |
+          set -euo pipefail
+          : "${SPARKLE_ED_PRIVATE_KEY:?Missing SPARKLE_ED_PRIVATE_KEY secret}"
+          archive_dir="$RUNNER_TEMP/techne-updates"
+          appcast_path="$archive_dir/appcast.xml"
+          tap_appcast='homebrew-tap/docs/techne/appcast.xml'
+          tools_dir="$RUNNER_TEMP/Sparkle-$SPARKLE_VERSION"
+          mkdir -p "$(dirname "$tap_appcast")"
+          appcast_plan=append
+          if [[ -f "$tap_appcast" ]]; then
+            appcast_plan="$(CHANNEL="$CHANNEL" DMG_NAME="$DMG_NAME" VERSION="$VERSION" \
+              node .github/scripts/distribution-metadata.mjs appcast-plan "$tap_appcast")"
+            cp "$tap_appcast" "$appcast_path"
+          fi
+
+          if [[ "$appcast_plan" == 'append' ]]; then
+            arguments=(
+              --ed-key-file -
+              --download-url-prefix "https://github.com/SlippinDylan/Techne/releases/download/$TAG/"
+              --embed-release-notes
+              --maximum-deltas 0
+              --maximum-versions 3
+              --link 'https://github.com/SlippinDylan/Techne'
+              -o "$appcast_path"
+            )
+            if [[ "$CHANNEL" != 'stable' ]]; then
+              arguments+=(--channel "$CHANNEL")
+            fi
+            printf '%s' "$SPARKLE_ED_PRIVATE_KEY" \
+              | "$tools_dir/bin/generate_appcast" "${arguments[@]}" "$archive_dir"
+            DMG_NAME="$DMG_NAME" VERSION="$VERSION" \
+              node .github/scripts/distribution-metadata.mjs appcast "$appcast_path"
+            printf '%s' "$SPARKLE_ED_PRIVATE_KEY" \
+              | "$tools_dir/bin/sign_update" --ed-key-file - "$appcast_path"
+            cp "$appcast_path" "$tap_appcast"
+          fi
+
+          dmg_sha256="$(shasum -a 256 "$archive_dir/$DMG_NAME" | awk '{ print $1 }')"
+          case "$CHANNEL" in
+            stable) cask_path='homebrew-tap/Casks/techne.rb' ;;
+            alpha) cask_path='homebrew-tap/Casks/techne@alpha.rb' ;;
+            beta) cask_path='homebrew-tap/Casks/techne@beta.rb' ;;
+            *) echo "Unsupported update channel: $CHANNEL" >&2; exit 1 ;;
+          esac
+          existing_cask_path=''
+          if [[ -f "$cask_path" ]]; then existing_cask_path="$cask_path"; fi
+          cask_candidate="$RUNNER_TEMP/$(basename "$cask_path")"
+          DMG_SHA256="$dmg_sha256" EXISTING_CASK_PATH="$existing_cask_path" VERSION="$VERSION" \
+            node .github/scripts/distribution-metadata.mjs cask > "$cask_candidate"
+          mv "$cask_candidate" "$cask_path"
+
+      - name: Verify distribution metadata
+        env:
+          CHANNEL: ${{ steps.manifest.outputs.channel }}
+          DMG_NAME: ${{ steps.manifest.outputs.dmg_name }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          VERSION: ${{ steps.manifest.outputs.version }}
+        run: |
+          set -euo pipefail
+          appcast='homebrew-tap/docs/techne/appcast.xml'
+          xmllint --noout "$appcast"
+          grep -Fq "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>" "$appcast"
+          grep -Fq "$DMG_NAME" "$appcast"
+          grep -Fq 'sparkle:edSignature=' "$appcast"
+          case "$CHANNEL" in
+            stable) cask='homebrew-tap/Casks/techne.rb'; cask_token='techne' ;;
+            alpha) cask='homebrew-tap/Casks/techne@alpha.rb'; cask_token='techne@alpha'; grep -Fq '<sparkle:channel>alpha</sparkle:channel>' "$appcast" ;;
+            beta) cask='homebrew-tap/Casks/techne@beta.rb'; cask_token='techne@beta'; grep -Fq '<sparkle:channel>beta</sparkle:channel>' "$appcast" ;;
+            *) exit 1 ;;
+          esac
+          ruby -c "$cask"
+          brew tap slippindylan/tap
+          tap_repository="$(brew --repository slippindylan/tap)"
+          cp "$cask" "$tap_repository/Casks/$(basename "$cask")"
+          brew style --cask "slippindylan/tap/$cask_token"
+          brew readall --os all --arch all slippindylan/tap
+          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" \
+            | "$RUNNER_TEMP/Sparkle-$SPARKLE_VERSION/bin/sign_update" \
+                --verify --ed-key-file - "$appcast"
+
+      - name: Commit Homebrew tap update with conflict-safe retries
+        env:
+          VERSION: ${{ steps.manifest.outputs.version }}
+        run: |
+          set -euo pipefail
+          git -C homebrew-tap config user.name 'github-actions[bot]'
+          git -C homebrew-tap config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C homebrew-tap add Casks docs/techne/appcast.xml
+          if git -C homebrew-tap diff --cached --quiet; then
+            echo 'Homebrew tap already contains this distribution metadata.'
+            exit 0
+          fi
+          git -C homebrew-tap diff --cached --check
+          git -C homebrew-tap commit -m "chore: update Techne to $VERSION"
+          for attempt in 1 2 3; do
+            if git -C homebrew-tap push origin main; then
+              exit 0
+            fi
+            if [[ "$attempt" == '3' ]]; then
+              echo 'Failed to push Homebrew tap after three attempts.' >&2
+              exit 1
+            fi
+            git -C homebrew-tap fetch origin main
+            if ! git -C homebrew-tap rebase origin/main; then
+              git -C homebrew-tap rebase --abort || true
+              echo 'Homebrew tap changed conflicting metadata; refusing to overwrite it.' >&2
+              exit 1
+            fi
+          done
