@@ -144,14 +144,31 @@ final class ProjectService {
             return .failure(.projectAlreadyExists(canonicalPath))
         }
         let projectName = URL(fileURLWithPath: canonicalPath).lastPathComponent
-        let commandConfig = configId.flatMap(commandConfigService.getConfig(by:))
-        let project = ProjectCommandSnapshotResolver.makeProject(
-            name: projectName,
-            path: canonicalPath,
-            type: type,
-            commandConfigId: configId,
-            legacyConfig: commandConfig
-        )
+        let project: Project
+        if let configId {
+            guard let commandConfig = commandConfigService.getConfig(by: configId) else {
+                return .failure(.invalidConfiguration("所选命令配置不存在"))
+            }
+            project = ProjectCommandSnapshotResolver.makeProject(
+                name: projectName,
+                path: canonicalPath,
+                type: type,
+                commandConfigId: configId,
+                legacyConfig: commandConfig
+            )
+        } else {
+            switch ProjectCommandSnapshotResolver.analyzedSnapshot(for: type, path: canonicalPath) {
+            case .success(let snapshot):
+                project = ProjectCommandSnapshotResolver.makeProject(
+                    name: projectName,
+                    path: canonicalPath,
+                    type: type,
+                    snapshot: snapshot
+                )
+            case .failure(let error):
+                return .failure(.invalidConfiguration(error.localizedDescription))
+            }
+        }
         projects.append(project)
         saveProjects()
         

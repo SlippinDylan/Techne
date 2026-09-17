@@ -16,6 +16,25 @@ struct ProjectCommandSnapshot: Equatable, Sendable {
     let installStrategy: InstallStrategy
 }
 
+enum ProjectAnalysisError: LocalizedError, Equatable, Sendable {
+    case missingPackageManifest
+    case invalidPackageManifest
+    case missingDevelopmentScript(ProjectType)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingPackageManifest:
+            return "未找到 package.json，无法确认项目的安装和启动方式"
+        case .invalidPackageManifest:
+            return "package.json 格式无效，无法读取项目命令"
+        case .missingDevelopmentScript(.devServer):
+            return "package.json 未声明可运行的 dev、dev:*、start 或 serve 脚本"
+        case .missingDevelopmentScript(.miniApp):
+            return "package.json 未声明可运行的微信小程序开发脚本"
+        }
+    }
+}
+
 struct ProjectCommandSnapshotResolver {
     static func makeProject(
         name: String,
@@ -32,7 +51,23 @@ struct ProjectCommandSnapshotResolver {
             fileManager: fileManager
         )
 
-        return Project(
+        return makeProject(
+            name: name,
+            path: path,
+            type: type,
+            commandConfigId: commandConfigId,
+            snapshot: snapshot
+        )
+    }
+
+    static func makeProject(
+        name: String,
+        path: String,
+        type: ProjectType,
+        commandConfigId: UUID? = nil,
+        snapshot: ProjectCommandSnapshot
+    ) -> Project {
+        Project(
             name: name,
             path: path,
             type: type,
@@ -47,6 +82,75 @@ struct ProjectCommandSnapshotResolver {
             commandConfigId: commandConfigId,
             availableStartupModes: snapshot.startupModes,
             selectedStartupModeID: snapshot.selectedStartupModeID
+        )
+    }
+
+    static func analyzedSnapshot(
+        for type: ProjectType,
+        path: String,
+        fileManager: FileManager = .default
+    ) -> Result<ProjectCommandSnapshot, ProjectAnalysisError> {
+        let manifestURL = URL(fileURLWithPath: path).appendingPathComponent("package.json")
+        guard fileManager.fileExists(atPath: manifestURL.path) else {
+            return .failure(.missingPackageManifest)
+        }
+
+        let manifest: PackageManifest
+        do {
+            manifest = try JSONDecoder().decode(PackageManifest.self, from: Data(contentsOf: manifestURL))
+        } catch {
+            return .failure(.invalidPackageManifest)
+        }
+
+        let packageManager = detectPackageManager(
+            at: path,
+            manifest: manifest,
+            fileManager: fileManager,
+            defaultPackageManager: .npm
+        )
+        let startupModes: [ProjectStartupMode]
+        let buildScriptNames: [String]
+        let profileName: String
+
+        switch type {
+        case .devServer:
+            startupModes = detectedStartupModes(packageManager: packageManager, manifest: manifest)
+            buildScriptNames = ["build"]
+            if isNextProject(manifest) {
+                profileName = "Next.js"
+            } else if isViteProject(manifest) {
+                profileName = "Vite"
+            } else {
+                profileName = "开发服务"
+            }
+        case .miniApp:
+            startupModes = detectedMiniAppStartupModes(packageManager: packageManager, manifest: manifest)
+            buildScriptNames = ["build:weapp", "build:mp-weixin", "build:mp", "build"]
+            profileName = miniAppFrameworkName(manifest)
+        }
+
+        guard startupModes.isEmpty == false else {
+            return .failure(.missingDevelopmentScript(type))
+        }
+
+        let selectedMode = selectedStartupMode(from: startupModes)
+        return .success(
+            ProjectCommandSnapshot(
+                startCommand: selectedMode.startCommand,
+                startupModes: startupModes,
+                selectedStartupModeID: selectedMode.id,
+                buildCommand: commandForFirstScript(
+                    buildScriptNames,
+                    packageManager: packageManager,
+                    manifest: manifest
+                ) ?? "",
+                cleanCommand: commandForScript("clean", packageManager: packageManager, manifest: manifest) ?? "",
+                installCommand: packageManager.installCommand,
+                stopCommand: ProjectCommandSnapshot.managedStopCommand,
+                discardChangesCommand: ProjectCommandSnapshot.defaultDiscardChangesCommand,
+                commandProfileName: "自动识别 · \(profileName) + \(packageManager.rawValue)",
+                installStrategy: .ifMissing
+            )
         )
     }
 
@@ -237,7 +341,8 @@ struct ProjectCommandSnapshotResolver {
         packageManager: ProjectPackageManager,
         manifest: PackageManifest?
     ) -> String? {
-        guard manifest?.scripts?[name] != nil else {
+        guard let script = manifest?.scripts?[name],
+              script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             return nil
         }
         return packageManager.runCommand(name)
@@ -247,24 +352,82 @@ struct ProjectCommandSnapshotResolver {
         packageManager: ProjectPackageManager,
         manifest: PackageManifest?
     ) -> [ProjectStartupMode] {
-        let candidates: [(String, String)] = [
-            ("dev", "默认"),
-            ("dev:mock", "Mock"),
-            ("dev:live", "Live"),
-            ("mock", "Mock"),
-            ("start", "Start")
-        ]
+        let preferredNames = ["dev", "dev:mock", "dev:live"]
+        let additionalNames = manifest?.nonemptyScriptNames
+            .filter { $0.hasPrefix("dev:") && preferredNames.contains($0) == false }
+            .sorted() ?? []
+        return startupModes(
+            scriptNames: preferredNames + additionalNames + ["mock", "start", "serve"],
+            packageManager: packageManager,
+            manifest: manifest
+        )
+    }
 
-        return candidates.compactMap { scriptName, displayName in
-            guard manifest?.scripts?[scriptName] != nil else {
+    private static func detectedMiniAppStartupModes(
+        packageManager: ProjectPackageManager,
+        manifest: PackageManifest
+    ) -> [ProjectStartupMode] {
+        let preferredNames = [
+            "dev:weapp",
+            "dev:mp-weixin",
+            "dev:mp",
+            "serve:wx"
+        ]
+        let additionalNames = manifest.nonemptyScriptNames
+            .filter { name in
+                (name.hasPrefix("dev:weapp:") ||
+                    name.hasPrefix("dev:mp-weixin:") ||
+                    name.hasPrefix("dev:mp:") ||
+                    name.hasPrefix("serve:wx:")) &&
+                    preferredNames.contains(name) == false
+            }
+            .sorted()
+        let platformModes = startupModes(
+            scriptNames: preferredNames + additionalNames,
+            packageManager: packageManager,
+            manifest: manifest
+        )
+        if platformModes.isEmpty == false {
+            return platformModes
+        }
+
+        return startupModes(
+            scriptNames: ["serve", "dev", "start"],
+            packageManager: packageManager,
+            manifest: manifest
+        )
+    }
+
+    private static func startupModes(
+        scriptNames: [String],
+        packageManager: ProjectPackageManager,
+        manifest: PackageManifest?
+    ) -> [ProjectStartupMode] {
+        scriptNames.compactMap { scriptName in
+            guard commandForScript(scriptName, packageManager: packageManager, manifest: manifest) != nil else {
                 return nil
             }
             return ProjectStartupMode(
                 id: scriptName,
-                displayName: displayName,
+                displayName: startupModeDisplayName(scriptName),
                 startCommand: packageManager.runCommand(scriptName),
                 source: .autoDetected
             )
+        }
+    }
+
+    private static func startupModeDisplayName(_ scriptName: String) -> String {
+        switch scriptName {
+        case "dev", "dev:weapp", "dev:mp-weixin", "dev:mp", "serve:wx", "serve":
+            return "默认"
+        case "dev:mock", "mock":
+            return "Mock"
+        case "dev:live":
+            return "Live"
+        case "start":
+            return "Start"
+        default:
+            return scriptName.split(separator: ":").dropFirst().joined(separator: ":")
         }
     }
 
@@ -306,7 +469,8 @@ struct ProjectCommandSnapshotResolver {
     private static func detectPackageManager(
         at path: String,
         manifest: PackageManifest?,
-        fileManager: FileManager
+        fileManager: FileManager,
+        defaultPackageManager: ProjectPackageManager = .pnpm
     ) -> ProjectPackageManager {
         if let rawPackageManager = manifest?.packageManager?.split(separator: "@").first,
            let packageManager = ProjectPackageManager(rawValue: String(rawPackageManager)) {
@@ -328,7 +492,7 @@ struct ProjectCommandSnapshotResolver {
             }
         }
 
-        return .pnpm
+        return defaultPackageManager
     }
 
     private static func loadManifest(at path: String) -> PackageManifest? {
@@ -347,6 +511,24 @@ struct ProjectCommandSnapshotResolver {
     private static func isViteProject(_ manifest: PackageManifest?) -> Bool {
         manifest?.hasDependency(named: "vite") == true ||
         manifest?.scriptValues.contains(where: { $0.localizedCaseInsensitiveContains("vite") }) == true
+    }
+
+    private static func miniAppFrameworkName(_ manifest: PackageManifest) -> String {
+        if manifest.hasDependency(named: "@tarojs/cli") ||
+            manifest.hasDependency(named: "@tarojs/runtime") ||
+            manifest.scriptValues.contains(where: { $0.localizedCaseInsensitiveContains("taro build") }) {
+            return "Taro"
+        }
+        if manifest.hasDependency(named: "@dcloudio/uni-app") ||
+            manifest.scriptValues.contains(where: { $0.localizedCaseInsensitiveContains("uni -p mp-weixin") }) {
+            return "UniApp"
+        }
+        if manifest.hasDependency(named: "@mpxjs/core") ||
+            manifest.hasDependency(named: "@mpxjs/mpx-cli-service") ||
+            manifest.scriptValues.contains(where: { $0.localizedCaseInsensitiveContains("mpx-cli-service") }) {
+            return "Mpx"
+        }
+        return "微信小程序"
     }
 }
 
@@ -391,6 +573,12 @@ private struct PackageManifest: Decodable, Sendable {
 
     var scriptValues: [String] {
         Array((scripts ?? [:]).values)
+    }
+
+    var nonemptyScriptNames: [String] {
+        (scripts ?? [:]).compactMap { name, command in
+            command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : name
+        }
     }
 
     func hasDependency(named packageName: String) -> Bool {

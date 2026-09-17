@@ -107,10 +107,17 @@ struct AddProjectSheet: View {
                 .font(.system(size: AppConfig.UI.smallFontSize))
                 .foregroundStyle(.secondary)
 
-            if let snapshot = snapshotPreview {
+            if let analysis = projectAnalysis {
                 Divider()
                     .padding(.vertical, AppConfig.UI.smallSpacing)
-                snapshotRows(snapshot)
+                switch analysis {
+                case .success(let snapshot):
+                    snapshotRows(snapshot)
+                case .failure(let error):
+                    Label(error.localizedDescription, systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: AppConfig.UI.smallFontSize))
+                        .foregroundStyle(.orange)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -182,13 +189,13 @@ struct AddProjectSheet: View {
         }
     }
 
-    private var snapshotPreview: ProjectCommandSnapshot? {
+    private var projectAnalysis: Result<ProjectCommandSnapshot, ProjectAnalysisError>? {
         let trimmedPath = projectPath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPath.isEmpty else {
             return nil
         }
 
-        return ProjectCommandSnapshotResolver.resolvedSnapshot(for: projectType, path: trimmedPath)
+        return ProjectCommandSnapshotResolver.analyzedSnapshot(for: projectType, path: trimmedPath)
     }
 }
 

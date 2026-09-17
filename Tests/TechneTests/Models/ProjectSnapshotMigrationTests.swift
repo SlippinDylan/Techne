@@ -156,7 +156,7 @@ struct ProjectSnapshotMigrationTests {
         #expect(project.commandConfigId == nil)
         #expect(project.startCommand == "pnpm dev")
         #expect(project.buildCommand == "pnpm build")
-        #expect(project.cleanCommand == "rm -rf dist node_modules/.cache .vite")
+        #expect(project.cleanCommand.isEmpty)
         #expect(project.installCommand == "pnpm install")
         #expect(project.stopCommand == "由 Techne 自动停止关联进程")
         #expect(project.discardChangesCommand == "git restore . && git clean -fd")
