@@ -27,7 +27,7 @@ export function renderCask(versionValue, sha256) {
 
   url "https://github.com/SlippinDylan/Techne/releases/download/v#{version}/Techne-#{version}.dmg"
   name "Techne"
-  desc "Native macOS workspace for local development services and deployments"
+  desc "Workspace for local development services and deployments"
   homepage "https://github.com/SlippinDylan/Techne"
 
   auto_updates true
