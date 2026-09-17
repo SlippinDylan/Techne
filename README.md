@@ -16,11 +16,12 @@
 
 ## What Techne does
 
-Techne is for developers who keep returning to the same local projects. Add a project once, then check its Git branch and working tree, run its own commands, find listening development servers, or open a browser for a server without hunting through terminals.
+Techne is for developers who keep returning to the same local projects. Add a project explicitly once, then check its Git branch and working tree, run its declared commands, find its listening development server, or open a browser without hunting through terminals. Port scanning can reconcile servers with projects you already manage, but it never adds unknown projects to the list.
 
-It also keeps two separate workflows in the same app:
+Its main project workflows are:
 
-- WeChat Mini Program projects run the commands you configure for installing dependencies, starting, building, cleaning, and stopping.
+- Web and compiled Mini Program projects are analyzed from their manifests and scripts. Techne can prepare missing dependencies before starting them.
+- Native WeChat Mini Programs open and close through the WeChat DevTools CLI without requiring a shell start command.
 - Android deployment selects an APK, finds a connected device, installs the APK through ADB, and shows the command output.
 
 ## In the app
@@ -29,14 +30,14 @@ It also keeps two separate workflows in the same app:
   <tr>
     <td width="32%">
       <strong>Projects, Git, and servers</strong><br><br>
-      Track a project's current branch and uncommitted files, switch branches when the working tree is clean, and start or stop its configured service. Techne finds local listening development servers associated with Node, Bun, or Deno processes.
+      Track a project's current branch and uncommitted files, switch branches when the working tree is clean, and start, stop, or restart its service. Techne finds local listening development servers associated with managed Node, Bun, or Deno projects.
     </td>
     <td width="68%"><img src="docs/images/readme/development-environment.png" alt="Techne development environment with project and server status"></td>
   </tr>
   <tr>
     <td>
       <strong>WeChat Mini Programs</strong><br><br>
-      Save commands per project instead of relying on a fixed build system. Built-in command templates include npm and pnpm examples for WeChat Mini Programs.
+      Run declared Taro, UniApp, or Mpx development scripts, or open a native Mini Program in WeChat DevTools. A recovery action asks DevTools to rebuild file watching when newly added pages stop appearing.
     </td>
     <td><img src="docs/images/readme/mini-program-build.png" alt="Techne WeChat Mini Program build workspace"></td>
   </tr>
@@ -71,27 +72,22 @@ sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 
 ## Quick start
 
-1. Open Techne and add a local project. Choose a development-service project or a WeChat Mini Program project.
-2. Select a command template or enter the commands that already work for that project. Techne runs them in the project directory through your login Bash shell.
-3. For a web project, start its service and refresh the development environment. Select an installed browser to open a detected server.
-4. For Android, open the deployment view, connect a device, select an APK, and deploy it.
+1. Open Techne and explicitly add a local project. Choose a development-service project or a WeChat Mini Program project.
+2. Techne reads the project's real manifest, scripts, package-manager metadata, and lockfiles. It rejects a directory when it cannot identify a runnable project instead of inventing a command.
+3. Start the project. For npm, pnpm, Yarn, or Bun projects, missing dependencies are installed automatically; later manifest or lockfile changes trigger preparation again. Commands run through the configured zsh, Bash, or fish login shell.
+4. Stop or restart when needed. Normal stop and restart do not clean build caches or close managed browser windows.
+5. For a web project, select an installed browser to open its detected server.
+6. For Android, open the deployment view, connect a device, select an APK, and deploy it.
 
 ### Browsers and isolated profiles
 
 Techne detects Safari, Google Chrome, Chrome Beta, Chromium, Microsoft Edge, Brave, and Arc when they are installed. Safari opens the address normally. Chrome, Chrome Beta, Chromium, Edge, Brave, and Arc are Chromium-based: Techne launches each managed instance in a separate profile directory, opens a new window, and assigns an available remote-debugging port beginning at `9222`. This keeps cookies and site storage separate from your normal browser profile and from other managed instances.
 
-### WeChat Mini Program commands
+### Web and WeChat Mini Program projects
 
-Techne does not bundle a Mini Program toolchain. Install the dependencies required by the project, then set commands that work in that repository. The included examples are:
+For shell-based projects, Techne only runs scripts declared by the repository. It recognizes common Web development scripts and WeChat targets used by Taro, UniApp, and Mpx, and supports npm, pnpm, Yarn, and Bun. Dependency installation runs at the detected workspace root while the development command still runs in the selected project directory.
 
-```bash
-npm run dev:mp-weixin
-npm run build:mp-weixin
-pnpm dev:mp-weixin
-pnpm build:mp-weixin
-```
-
-You can replace these with the project's own npm, pnpm, or other shell commands. The required package manager and any project-specific tools must be available in your login shell's `PATH`.
+Native Mini Programs with a valid root `project.config.json` use the installed WeChat DevTools CLI for open, close, and file-watching recovery. Compiled Mini Programs use their generated DevTools project directory when it is available. Techne does not bundle Node.js, a package manager, a framework CLI, or WeChat DevTools; the tools required by the project must be installed and available to the login shell.
 
 ### Android APK deployment
 
@@ -104,9 +100,10 @@ Install Android SDK Platform-Tools so `adb` is available in `PATH`, connect an A
 | macOS | macOS 26 Tahoe or later |
 | Hardware | Apple Silicon for the published DMG |
 | Git workflows | `git` available in `PATH` for status and branch operations |
-| Development-server discovery | macOS `lsof`; Techne scans listening TCP ports 3000–9999 |
+| Managed server matching | macOS `lsof`; Techne scans listening TCP ports 3000–9999 and only associates them with projects already added |
 | Browser launching | At least one supported browser installed for that feature |
-| Mini Program and project commands | The project's dependencies and command-line tools available in the login shell |
+| Web and compiled Mini Programs | Node.js and the project's package manager/framework tools available in the login shell; dependencies themselves may be prepared by Techne |
+| Native WeChat Mini Programs | WeChat DevTools installed with its CLI available inside the application bundle |
 | Android deployment | `adb`, Android SDK Build Tools (`aapt2` or `aapt`), and a USB-debugging-enabled device |
 
 ## Data locations

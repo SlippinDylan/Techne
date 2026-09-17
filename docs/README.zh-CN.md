@@ -16,11 +16,12 @@
 
 ## Techne 能做什么
 
-Techne 适合反复处理同一批本地项目的开发者。项目添加一次后，就能查看 Git 分支和工作区、运行项目自己的命令、查找正在监听的开发服务，或直接为服务打开浏览器。
+Techne 适合反复处理同一批本地项目的开发者。项目只需手动添加一次，之后就能查看 Git 分支和工作区、运行项目实际声明的命令、查找其监听中的开发服务，或直接打开浏览器。端口扫描只会关联已经管理的项目，不会把未知项目自动加入列表。
 
-它还包含两类独立工作流：
+主要工作流包括：
 
-- 微信小程序项目可执行你配置的安装依赖、启动、构建、清理和停止命令。
+- Techne 会根据清单和脚本识别 Web 项目及需要编译的微信小程序，并在启动前自动准备缺失的依赖。
+- 原生微信小程序通过微信开发者工具 CLI 打开和关闭，不需要 Shell 启动命令。
 - Android 部署可选择 APK、查找已连接设备、通过 ADB 安装，并显示命令输出。
 
 ## 应用内功能
@@ -29,14 +30,14 @@ Techne 适合反复处理同一批本地项目的开发者。项目添加一次�
   <tr>
     <td width="32%">
       <strong>项目、Git 与服务</strong><br><br>
-      查看当前分支和未提交文件；工作区干净时可切换分支；按项目配置启动或停止服务。Techne 会查找与 Node、Bun 或 Deno 进程关联的本地监听服务。
+      查看当前分支和未提交文件；工作区干净时可切换分支；启动、停止或重启服务。Techne 会查找与已管理 Node、Bun 或 Deno 项目关联的本地监听服务。
     </td>
     <td width="68%"><img src="images/readme/development-environment.png" alt="Techne 中的项目和服务状态"></td>
   </tr>
   <tr>
     <td>
       <strong>微信小程序</strong><br><br>
-      命令按项目保存，不绑定某一种构建系统。内置模板提供 npm 和 pnpm 的微信小程序示例。
+      运行项目声明的 Taro、UniApp 或 Mpx 开发脚本，也可在微信开发者工具中打开原生小程序。新增页面未被识别时，可让开发者工具重建文件监听。
     </td>
     <td><img src="images/readme/mini-program-build.png" alt="Techne 微信小程序构建工作区"></td>
   </tr>
@@ -71,27 +72,22 @@ sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 
 ## 快速开始
 
-1. 打开 Techne，添加本地项目，选择开发服务或微信小程序项目。
-2. 选择命令模板，或填入已经能在该项目中运行的命令。Techne 会在项目目录中通过登录 Bash shell 执行它们。
-3. Web 项目启动服务后，刷新开发环境，选择已安装的浏览器打开检测到的服务。
-4. Android 部署页中连接设备、选择 APK，然后部署。
+1. 打开 Techne，手动添加一个本地项目，选择开发服务或微信小程序项目。
+2. Techne 会读取项目中的清单、脚本、包管理器信息和锁文件。无法识别可运行项目时，Techne 会拒绝添加，不会猜测命令。
+3. 启动项目。npm、pnpm、Yarn 或 Bun 项目缺少依赖时会自动安装；清单或锁文件后来发生变化时会再次准备。命令通过已配置的 zsh、Bash 或 fish 登录 shell 执行。
+4. 按需停止或重启。普通停止和重启不会清理构建缓存，也不会关闭受管理的浏览器窗口。
+5. Web 项目可选择已安装的浏览器打开检测到的服务。
+6. Android 部署页中连接设备、选择 APK，然后部署。
 
 ### 浏览器与独立 profile
 
 Techne 会检测已安装的 Safari、Google Chrome、Chrome Beta、Chromium、Microsoft Edge、Brave 和 Arc。Safari 按普通方式打开地址。Chrome、Chrome Beta、Chromium、Edge、Brave 和 Arc 使用 Chromium 内核：每个受管理实例都有独立 profile、新窗口和远程调试端口，端口从 `9222` 起自动寻找可用值。这样不会复用日常浏览器或其他受管理实例的 cookie 与站点存储。
 
-### 微信小程序命令
+### Web 与微信小程序项目
 
-Techne 不附带小程序工具链。请先安装项目需要的依赖，再填写能在该仓库运行的命令。内置示例为：
+对于通过命令行启动的项目，Techne 只运行仓库实际声明的脚本。它能识别常见 Web 开发脚本，以及 Taro、UniApp、Mpx 的微信目标，并支持 npm、pnpm、Yarn 和 Bun。依赖会在识别到的 workspace 根目录安装，开发命令仍在所选项目目录执行。
 
-```bash
-npm run dev:mp-weixin
-npm run build:mp-weixin
-pnpm dev:mp-weixin
-pnpm build:mp-weixin
-```
-
-可以改成项目自己的 npm、pnpm 或其他 shell 命令。相应包管理器和项目工具必须在登录 shell 的 `PATH` 中。
+根目录存在有效 `project.config.json` 的原生小程序通过已安装的微信开发者工具 CLI 打开、关闭和恢复文件监听。需要编译的小程序在生成开发者工具项目目录后，也会使用该目录执行文件监听恢复。Techne 不内置 Node.js、包管理器、框架 CLI 或微信开发者工具；项目需要的运行时和工具仍须安装，并能被登录 shell 找到。
 
 ### Android APK 部署
 
@@ -104,9 +100,10 @@ pnpm build:mp-weixin
 | macOS | macOS 26 Tahoe 或更高版本 |
 | 硬件 | 已发布 DMG 仅支持 Apple Silicon |
 | Git 功能 | `git` 在 `PATH` 中，供状态和分支操作使用 |
-| 开发服务发现 | macOS 自带的 `lsof`；Techne 扫描 3000–9999 的 TCP 监听端口 |
+| 已管理服务关联 | macOS 自带的 `lsof`；Techne 扫描 3000–9999 的 TCP 监听端口，只关联已经添加的项目 |
 | 浏览器启动 | 至少安装一个受支持浏览器 |
-| 小程序与项目命令 | 项目依赖和命令行工具可在登录 shell 中使用 |
+| Web 与编译型小程序 | Node.js、项目所用包管理器和框架工具能被登录 shell 找到；项目依赖可由 Techne 准备 |
+| 原生微信小程序 | 已安装微信开发者工具，且应用包内包含 CLI |
 | Android 部署 | `adb`、Android SDK Build Tools（`aapt2` 或 `aapt`）和已开启 USB 调试的设备 |
 
 ## 数据位置
