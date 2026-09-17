@@ -25,6 +25,7 @@ final actor ModernProcessExecutor: Sendable {
         onOutput: @escaping @Sendable (String) -> Void
     ) async throws -> (exitCode: Int32, finalOutput: String) {
         let process = Process()
+        let cancellationController = ProcessCancellationController()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = ["-m", "-l", "-c", command]
         process.currentDirectoryURL = directory
@@ -50,12 +51,8 @@ final actor ModernProcessExecutor: Sendable {
             batcher.process(data: data)
         }
         
-        try process.run()
-        let pid = process.processIdentifier
-        onStart?(pid)
-        
-        return await withTaskCancellationHandler {
-            return await withCheckedContinuation { continuation in
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
                 process.terminationHandler = { p in
                     // 1. 必须先解除 readabilityHandler，否则调用 readData 会导致异常
                     outputPipe.fileHandleForReading.readabilityHandler = nil
@@ -75,17 +72,65 @@ final actor ModernProcessExecutor: Sendable {
                     
                     continuation.resume(returning: (p.terminationStatus, finalOutput))
                 }
+
+                do {
+                    try process.run()
+                    onStart?(process.processIdentifier)
+                    cancellationController.processDidStart(process)
+                } catch {
+                    process.terminationHandler = nil
+                    continuation.resume(throwing: error)
+                }
             }
         } onCancel: {
-            let pgid = getpgid(pid)
-            if pgid > 0 {
-                kill(-pgid, SIGTERM)
-                Task.detached(priority: .high) {
-                    try? await Task.sleep(nanoseconds: 500_000_000)
-                    kill(-pgid, SIGKILL)
-                }
-            } else {
+            cancellationController.requestCancellation(of: process)
+        }
+    }
+}
+
+private final class ProcessCancellationController: @unchecked Sendable {
+    private let lock = NSLock()
+    nonisolated(unsafe) private var cancellationRequested = false
+    nonisolated(unsafe) private var escalationScheduled = false
+
+    nonisolated func requestCancellation(of process: Process) {
+        lock.lock()
+        cancellationRequested = true
+        let shouldSchedule = process.isRunning && escalationScheduled == false
+        if shouldSchedule {
+            escalationScheduled = true
+        }
+        lock.unlock()
+
+        if shouldSchedule {
+            scheduleInterruption(of: process)
+        }
+    }
+
+    nonisolated func processDidStart(_ process: Process) {
+        lock.lock()
+        let shouldSchedule = cancellationRequested && escalationScheduled == false
+        if shouldSchedule {
+            escalationScheduled = true
+        }
+        lock.unlock()
+
+        if shouldSchedule {
+            scheduleInterruption(of: process)
+        }
+    }
+
+    private nonisolated func scheduleInterruption(of process: Process) {
+        let pid = process.processIdentifier
+        process.interrupt()
+        Task.detached(priority: .high) {
+            try? await Task.sleep(for: .milliseconds(300))
+            if process.isRunning {
                 process.terminate()
+            }
+            try? await Task.sleep(for: .milliseconds(200))
+            if process.isRunning {
+                kill(pid, SIGKILL)
             }
         }
     }

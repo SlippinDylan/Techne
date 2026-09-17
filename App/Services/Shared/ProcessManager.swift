@@ -16,9 +16,15 @@ enum ProjectStartupCompletion: Sendable, Equatable {
 /// 统一管理项目进程的启动、停止和监控
 @MainActor
 class ProcessManager {
+    private struct ManagedExecution {
+        let runID: UUID
+        let task: Task<Void, Never>
+    }
+
     private let processService: ProcessService
     private let logService = LogService.shared
     private let terminalHandler = TerminalOutputHandler()
+    private var managedExecutions: [UUID: ManagedExecution] = [:]
 
     init(processService: ProcessService = .shared) {
         self.processService = processService
@@ -36,13 +42,18 @@ class ProcessManager {
         onCompletion: @escaping @Sendable (ProjectStartupCompletion) -> Void,
         onOutputUpdate: @escaping @Sendable (UUID, String) -> Void
     ) -> Result<Void, ProjectServiceError> {
+        guard managedExecutions[project.id] == nil else {
+            return .failure(.processStartFailed("项目已有受管进程正在运行"))
+        }
+
         logService.info("准备启动开发服务器：\(project.name)", category: category)
+        let logService = logService
         let terminalHandler = terminalHandler
         let startupOutputInterpreter = StartupOutputInterpreter()
         let startupStateTracker = StartupStateTracker()
+        let runID = UUID()
 
-        // 异步执行进程
-        Task {
+        let task = Task { [weak self] in
             do {
                 for message in plan.messages {
                     logService.info(message, category: project.name)
@@ -138,9 +149,20 @@ class ProcessManager {
                 onOutputUpdate(project.id, "\n[错误] 进程启动失败: \(error.localizedDescription)\n")
                 onCompletion(.executionFailed(description: error.localizedDescription))
             }
+            self?.finishManagedExecution(projectID: project.id, runID: runID)
         }
+        managedExecutions[project.id] = ManagedExecution(runID: runID, task: task)
 
         return .success(())
+    }
+
+    private func finishManagedExecution(projectID: UUID, runID: UUID) {
+        guard managedExecutions[projectID]?.runID == runID else { return }
+        managedExecutions[projectID] = nil
+    }
+
+    func cancelManagedExecution(for projectID: UUID) {
+        managedExecutions[projectID]?.task.cancel()
     }
 
     private nonisolated static func forwardVisibleStartupOutput(
@@ -190,10 +212,18 @@ class ProcessManager {
         logService.info("停止开发服务器：\(project.name)", category: category)
         onOutputUpdate(project.id, "\n\n[系统] 正在请求停止进程组...\n")
 
-        let result = await processService.stopProjectProcesses(
-            at: project.path,
-            preferredPID: project.runningProcessPID
-        )
+        let result: Result<Void, ProjectServiceError>
+        if let managedExecution = managedExecutions[project.id] {
+            managedExecution.task.cancel()
+            await managedExecution.task.value
+            finishManagedExecution(projectID: project.id, runID: managedExecution.runID)
+            result = .success(())
+        } else {
+            result = await processService.stopProjectProcesses(
+                at: project.path,
+                preferredPID: project.runningProcessPID
+            )
+        }
 
         if case .success = result {
             logService.success("成功停止开发服务器：\(project.name)", category: category)

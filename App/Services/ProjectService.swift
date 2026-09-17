@@ -188,6 +188,8 @@ final class ProjectService {
     @MainActor
     func removeProject(_ project: Project) {
         let path = project.path
+        processManager.cancelManagedExecution(for: project.id)
+        activeRunIDs[project.id] = nil
         if let monitor = gitMonitors[path] {
             monitor.stop()
         }
@@ -450,10 +452,14 @@ final class ProjectService {
     private func stopDevServerWithoutOutput(for project: Project) async -> Result<Void, ProjectServiceError> {
         appendSystemTerminalMessage("正在停止开发服务...", for: project.id)
 
-        let result = await processService.stopProjectProcesses(
-            at: project.path,
-            preferredPID: project.runningProcessPID
-        )
+        let result = await processManager.stopDevServer(
+            for: project,
+            category: getCategoryName(for: project.type)
+        ) { [weak self] projectID, output in
+            Self.performStartupUpdate(on: self) { service in
+                service.appendTerminalOutput(output, for: projectID)
+            }
+        }
         
         if case .success = result {
             appendSystemTerminalMessage("开发服务已停止", for: project.id)
@@ -519,6 +525,10 @@ final class ProjectService {
         dependencyFingerprint: String?
     ) {
         guard let index = projects.firstIndex(where: { $0.id == project.id }) else { return }
+        if projects[index].transitionState == .stopping,
+           event != .dependenciesInstalled {
+            return
+        }
 
         switch event {
         case .phaseStarted(.install):
