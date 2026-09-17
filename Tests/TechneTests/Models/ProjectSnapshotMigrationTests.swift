@@ -71,6 +71,39 @@ struct ProjectSnapshotMigrationTests {
         #expect(project.commandProfileName == nil)
         #expect(project.installStrategy == .ifMissing)
         #expect(project.preparedDependencyFingerprint == nil)
+        #expect(project.runtimeKind == .shell)
+    }
+
+    @Test
+    func nativeWeChatRuntimeRoundTripsWithoutShellStartupState() throws {
+        let project = Project(
+            name: "native-mini-app",
+            path: "/tmp/native-mini-app",
+            type: .miniApp,
+            startCommand: "should not survive",
+            commandProfileName: "自动识别 · 原生微信小程序",
+            installStrategy: .never,
+            runtimeKind: .weChatNative,
+            availableStartupModes: [
+                ProjectStartupMode(
+                    id: "dev",
+                    displayName: "默认",
+                    startCommand: "should not survive",
+                    source: .autoDetected
+                )
+            ],
+            selectedStartupModeID: "dev"
+        )
+
+        let restored = try JSONDecoder().decode(Project.self, from: JSONEncoder().encode(project))
+        let migrated = ProjectPersistenceMigration.migrate(projects: [restored], commandConfigs: [])
+            .projects[0]
+
+        #expect(migrated.runtimeKind == .weChatNative)
+        #expect(migrated.startCommand.isEmpty)
+        #expect(migrated.availableStartupModes.isEmpty)
+        #expect(migrated.selectedStartupModeID == nil)
+        #expect(migrated.installStrategy == .never)
     }
 
     @Test

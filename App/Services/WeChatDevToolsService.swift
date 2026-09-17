@@ -12,17 +12,18 @@ enum WeChatDevToolsError: LocalizedError, Equatable, Sendable {
         case .projectConfigurationNotFound:
             return "未找到可供微信开发者工具打开的 project.config.json"
         case .commandFailed(let output):
-            return output.isEmpty ? "微信开发者工具未能重建文件监听" : output
+            return output.isEmpty ? "微信开发者工具命令执行失败" : output
         }
     }
 }
 
-struct WeChatDevToolsResetPlan: Equatable, Sendable {
+struct WeChatDevToolsCommandPlan: Equatable, Sendable {
     let executableURL: URL
+    let command: String
     let projectPath: String
 
     var arguments: [String] {
-        ["reset-fileutils", "--project", projectPath]
+        [command, "--project", projectPath]
     }
 }
 
@@ -41,24 +42,50 @@ struct WeChatDevToolsService: Sendable {
         ]
     }
 
-    func makeResetPlan(for projectPath: String) -> Result<WeChatDevToolsResetPlan, WeChatDevToolsError> {
+    func makeResetPlan(for projectPath: String) -> Result<WeChatDevToolsCommandPlan, WeChatDevToolsError> {
+        makePlan(command: "reset-fileutils", projectPath: projectPath)
+    }
+
+    func openProject(at projectPath: String) async -> Result<String, WeChatDevToolsError> {
+        await execute(command: "open", projectPath: projectPath)
+    }
+
+    func closeProject(at projectPath: String) async -> Result<String, WeChatDevToolsError> {
+        await execute(command: "close", projectPath: projectPath)
+    }
+
+    func resetFileWatching(for projectPath: String) async -> Result<String, WeChatDevToolsError> {
+        await execute(command: "reset-fileutils", projectPath: projectPath)
+    }
+
+    private func makePlan(
+        command: String,
+        projectPath: String
+    ) -> Result<WeChatDevToolsCommandPlan, WeChatDevToolsError> {
         guard let executableURL = cliURL() else {
             return .failure(.cliNotFound)
         }
-        guard let resolvedProjectPath = developerToolsProjectPath(for: projectPath) else {
+        guard let resolvedProjectPath = WeChatProjectLocator.developerToolsProjectPath(
+            for: projectPath,
+            fileManager: fileManager
+        ) else {
             return .failure(.projectConfigurationNotFound)
         }
         return .success(
-            WeChatDevToolsResetPlan(
+            WeChatDevToolsCommandPlan(
                 executableURL: executableURL,
+                command: command,
                 projectPath: resolvedProjectPath
             )
         )
     }
 
-    func resetFileWatching(for projectPath: String) async -> Result<String, WeChatDevToolsError> {
-        let plan: WeChatDevToolsResetPlan
-        switch makeResetPlan(for: projectPath) {
+    private func execute(
+        command: String,
+        projectPath: String
+    ) async -> Result<String, WeChatDevToolsError> {
+        let plan: WeChatDevToolsCommandPlan
+        switch makePlan(command: command, projectPath: projectPath) {
         case .success(let resolvedPlan):
             plan = resolvedPlan
         case .failure(let error):
@@ -118,29 +145,4 @@ struct WeChatDevToolsService: Sendable {
         return nil
     }
 
-    private func developerToolsProjectPath(for projectPath: String) -> String? {
-        let rootURL = URL(fileURLWithPath: ProjectPath.canonical(projectPath), isDirectory: true)
-        let candidates = [
-            rootURL,
-            rootURL.appendingPathComponent("dist", isDirectory: true),
-            rootURL.appendingPathComponent("dist/weapp", isDirectory: true),
-            rootURL.appendingPathComponent("dist/dev/mp-weixin", isDirectory: true),
-            rootURL.appendingPathComponent("unpackage/dist/dev/mp-weixin", isDirectory: true)
-        ]
-
-        return candidates.first(where: hasValidProjectConfiguration(at:))?.path
-    }
-
-    private func hasValidProjectConfiguration(at directoryURL: URL) -> Bool {
-        let configurationURL = directoryURL.appendingPathComponent("project.config.json")
-        guard let data = try? Data(contentsOf: configurationURL),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let appID = object["appid"] as? String,
-              appID.isEmpty == false,
-              let projectName = object["projectname"] as? String,
-              projectName.isEmpty == false else {
-            return false
-        }
-        return true
-    }
 }

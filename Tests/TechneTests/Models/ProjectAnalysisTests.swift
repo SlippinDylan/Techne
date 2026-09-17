@@ -194,6 +194,65 @@ struct ProjectAnalysisTests {
     }
 
     @Test
+    func nativeWeChatProjectUsesDeveloperToolsRuntime() throws {
+        let projectRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: projectRoot) }
+        try """
+        {
+          "appid": "wx-test",
+          "projectname": "native-mini-app"
+        }
+        """.write(
+            to: projectRoot.appendingPathComponent("project.config.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let snapshot = try ProjectCommandSnapshotResolver.analyzedSnapshot(
+            for: .miniApp,
+            path: projectRoot.path
+        ).get()
+
+        #expect(snapshot.runtimeKind == .weChatNative)
+        #expect(snapshot.startCommand.isEmpty)
+        #expect(snapshot.installCommand.isEmpty)
+        #expect(snapshot.commandProfileName == "自动识别 · 原生微信小程序")
+    }
+
+    @Test
+    func nativeWeChatProjectMayContainPackageManifestWithoutDevelopmentScripts() throws {
+        let projectRoot = try makeProject(
+            packageJSON: """
+            {
+              "scripts": {
+                "lint": "eslint ."
+              }
+            }
+            """
+        )
+        defer { try? FileManager.default.removeItem(at: projectRoot) }
+        try """
+        {
+          "appid": "wx-test",
+          "projectname": "native-mini-app"
+        }
+        """.write(
+            to: projectRoot.appendingPathComponent("project.config.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let snapshot = try ProjectCommandSnapshotResolver.analyzedSnapshot(
+            for: .miniApp,
+            path: projectRoot.path
+        ).get()
+
+        #expect(snapshot.runtimeKind == .weChatNative)
+        #expect(snapshot.installStrategy == .never)
+    }
+
+    @Test
     func malformedPackageManifestIsRejected() throws {
         let projectRoot = try makeProject(packageJSON: "{ not-json }")
         defer { try? FileManager.default.removeItem(at: projectRoot) }

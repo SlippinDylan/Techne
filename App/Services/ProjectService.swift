@@ -100,7 +100,8 @@ final class ProjectService {
                         }
                         self.projects[index].currentBranch = refreshedProject.currentBranch
                         self.projects[index].uncommittedFileCount = refreshedProject.uncommittedFileCount
-                        if self.projects[index].transitionState == .idle {
+                        if self.projects[index].transitionState == .idle,
+                           self.projects[index].runtimeKind != .weChatNative {
                             self.projects[index].isRunning = refreshedProject.isRunning
                         }
                     }
@@ -130,7 +131,9 @@ final class ProjectService {
                     if let index = self.projects.firstIndex(where: { $0.path == path }) {
                         self.projects[index].currentBranch = status.branch
                         self.projects[index].uncommittedFileCount = status.fileCount
-                        self.projects[index].isRunning = status.isRunning
+                        if self.projects[index].runtimeKind != .weChatNative {
+                            self.projects[index].isRunning = status.isRunning
+                        }
                     }
                 }
             }
@@ -342,6 +345,9 @@ final class ProjectService {
 
     @MainActor
     func startServer(for project: Project) -> Result<Void, ProjectServiceError> {
+        if project.runtimeKind == .weChatNative {
+            return openNativeMiniApp(project)
+        }
         let category = getCategoryName(for: project.type)
         switch project.type {
         case .devServer:
@@ -353,6 +359,9 @@ final class ProjectService {
 
     @MainActor
     func stopServer(for project: Project) async -> Result<Void, ProjectServiceError> {
+        if project.runtimeKind == .weChatNative {
+            return await closeNativeMiniApp(project)
+        }
         let category = getCategoryName(for: project.type)
         if let idx = projects.firstIndex(where: { $0.id == project.id }) {
             projects[idx].transitionState = .stopping
@@ -394,6 +403,59 @@ final class ProjectService {
         case .failure(let error):
             appendSystemTerminalMessage("重建文件监听失败: \(error.localizedDescription)", for: project.id)
             return .failure(.processStartFailed(error.localizedDescription))
+        }
+    }
+
+    @MainActor
+    private func openNativeMiniApp(_ project: Project) -> Result<Void, ProjectServiceError> {
+        guard let index = projects.firstIndex(where: { $0.id == project.id }) else {
+            return .failure(.pathNotFound(project.path))
+        }
+        projects[index].transitionState = .starting
+        appendSystemTerminalMessage("正在通过微信开发者工具打开原生小程序...", for: project.id)
+
+        Task { @MainActor in
+            let result = await weChatDevToolsService.openProject(at: project.path)
+            guard let currentIndex = projects.firstIndex(where: { $0.id == project.id }) else { return }
+            projects[currentIndex].transitionState = .idle
+            switch result {
+            case .success(let output):
+                projects[currentIndex].isRunning = true
+                if output.isEmpty == false {
+                    appendTerminalOutput("\(output)\n", for: project.id)
+                }
+                appendSystemTerminalMessage("微信开发者工具已打开项目", for: project.id)
+            case .failure(let error):
+                projects[currentIndex].isRunning = false
+                appendSystemTerminalMessage("打开微信开发者工具失败: \(error.localizedDescription)", for: project.id)
+            }
+        }
+        return .success(())
+    }
+
+    @MainActor
+    private func closeNativeMiniApp(_ project: Project) async -> Result<Void, ProjectServiceError> {
+        guard let index = projects.firstIndex(where: { $0.id == project.id }) else {
+            return .failure(.pathNotFound(project.path))
+        }
+        projects[index].transitionState = .stopping
+        appendSystemTerminalMessage("正在关闭微信开发者工具项目窗口...", for: project.id)
+        let result = await weChatDevToolsService.closeProject(at: project.path)
+        guard let currentIndex = projects.firstIndex(where: { $0.id == project.id }) else {
+            return .failure(.pathNotFound(project.path))
+        }
+        projects[currentIndex].transitionState = .idle
+        switch result {
+        case .success(let output):
+            projects[currentIndex].isRunning = false
+            if output.isEmpty == false {
+                appendTerminalOutput("\(output)\n", for: project.id)
+            }
+            appendSystemTerminalMessage("微信开发者工具项目窗口已关闭", for: project.id)
+            return .success(())
+        case .failure(let error):
+            appendSystemTerminalMessage("关闭微信开发者工具失败: \(error.localizedDescription)", for: project.id)
+            return .failure(.processStopFailed(error.localizedDescription))
         }
     }
 

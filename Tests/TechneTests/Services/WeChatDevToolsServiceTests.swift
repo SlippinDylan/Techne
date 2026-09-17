@@ -42,6 +42,61 @@ struct WeChatDevToolsServiceTests {
         }
     }
 
+    @Test
+    func openAndCloseUseDeveloperToolsProjectCommands() async throws {
+        let fixture = try makeFixture(configurationRelativePath: "project.config.json")
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let service = WeChatDevToolsService(applicationDirectories: [fixture.applications])
+
+        let openOutput = try await service.openProject(at: fixture.project.path).get()
+        let closeOutput = try await service.closeProject(at: fixture.project.path).get()
+
+        #expect(openOutput == "open --project \(fixture.project.path)")
+        #expect(closeOutput == "close --project \(fixture.project.path)")
+    }
+
+    @Test
+    @MainActor
+    func nativeProjectServiceTracksDeveloperToolsOpenAndClose() async throws {
+        let fixture = try makeFixture(configurationRelativePath: "project.config.json")
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let service = ProjectService(
+            commandConfigService: CommandConfigService(
+                persistenceService: PersistenceService<CommandConfig>(
+                    filename: "commandconfigs.json",
+                    root: .custom(fixture.root)
+                )
+            ),
+            weChatDevToolsService: WeChatDevToolsService(applicationDirectories: [fixture.applications]),
+            persistenceService: PersistenceService<Project>(
+                filename: "projects.json",
+                root: .custom(fixture.root)
+            ),
+            startupBehavior: .empty
+        )
+        let project = Project(
+            name: "native-mini-app",
+            path: fixture.project.path,
+            type: .miniApp,
+            commandProfileName: "自动识别 · 原生微信小程序",
+            installStrategy: .never,
+            runtimeKind: .weChatNative
+        )
+        service.projects = [project]
+
+        _ = try service.startServer(for: project).get()
+        let didOpen = await waitUntil { service.projects[0].transitionState == .idle }
+
+        #expect(didOpen)
+        #expect(service.projects[0].isRunning)
+        #expect(service.projects[0].terminalOutput.contains("open --project"))
+
+        _ = try await service.stopServer(for: service.projects[0]).get()
+
+        #expect(service.projects[0].isRunning == false)
+        #expect(service.projects[0].terminalOutput.contains("close --project"))
+    }
+
     private func makeFixture(
         configurationRelativePath: String?
     ) throws -> (root: URL, applications: URL, project: URL, cli: URL) {
@@ -54,7 +109,7 @@ struct WeChatDevToolsServiceTests {
             at: cli.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try "#!/bin/sh\nexit 0\n".write(to: cli, atomically: true, encoding: .utf8)
+        try "#!/bin/sh\nprintf '%s\\n' \"$*\"\n".write(to: cli, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes(
             [.posixPermissions: 0o755],
             ofItemAtPath: cli.path
@@ -76,5 +131,21 @@ struct WeChatDevToolsServiceTests {
         }
 
         return (root, applications, project, cli)
+    }
+
+    @MainActor
+    private func waitUntil(
+        timeout: Duration = .seconds(2),
+        condition: @escaping @MainActor () -> Bool
+    ) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while clock.now < deadline {
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return condition()
     }
 }

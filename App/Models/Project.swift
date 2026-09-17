@@ -20,6 +20,11 @@ enum InstallStrategy: String, Codable, Sendable {
     case always
 }
 
+enum ProjectRuntimeKind: String, Codable, Sendable {
+    case shell
+    case weChatNative
+}
+
 enum ProjectStartupModeSource: String, Codable, Sendable {
     case autoDetected
     case importedLegacy
@@ -66,6 +71,7 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
     var commandProfileName: String?
     var installStrategy: InstallStrategy
     var preparedDependencyFingerprint: String?
+    var runtimeKind: ProjectRuntimeKind
     var commandConfigId: UUID?
     var availableStartupModes: [ProjectStartupMode]
     var selectedStartupModeID: String?
@@ -96,6 +102,7 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         commandProfileName: String? = nil,
         installStrategy: InstallStrategy = .ifMissing,
         preparedDependencyFingerprint: String? = nil,
+        runtimeKind: ProjectRuntimeKind = .shell,
         commandConfigId: UUID? = nil,
         availableStartupModes: [ProjectStartupMode] = [],
         selectedStartupModeID: String? = nil
@@ -127,9 +134,15 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         self.commandProfileName = commandProfileName
         self.installStrategy = installStrategy
         self.preparedDependencyFingerprint = preparedDependencyFingerprint
+        self.runtimeKind = runtimeKind
         self.commandConfigId = commandConfigId
         self.availableStartupModes = canonicalStartupConfiguration.availableStartupModes
         self.selectedStartupModeID = canonicalStartupConfiguration.selectedStartupModeID
+        if runtimeKind == .weChatNative {
+            self.startCommand = ""
+            self.availableStartupModes = []
+            self.selectedStartupModeID = nil
+        }
         self.addedDate = Date()
 
         // 运行时状态初始化
@@ -178,6 +191,7 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         case commandProfileName
         case installStrategy
         case preparedDependencyFingerprint
+        case runtimeKind
         case commandConfigId
         case availableStartupModes
         case selectedStartupModeID
@@ -201,6 +215,7 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         self.commandProfileName = try container.decodeIfPresent(String.self, forKey: .commandProfileName)
         self.installStrategy = try container.decodeIfPresent(InstallStrategy.self, forKey: .installStrategy) ?? .ifMissing
         self.preparedDependencyFingerprint = try container.decodeIfPresent(String.self, forKey: .preparedDependencyFingerprint)
+        self.runtimeKind = try container.decodeIfPresent(ProjectRuntimeKind.self, forKey: .runtimeKind) ?? .shell
         self.commandConfigId = try container.decodeIfPresent(UUID.self, forKey: .commandConfigId)
         let preferredStartupModeSource = Project.preferredStartupModeSource(commandConfigId: self.commandConfigId)
         let decodedStartupModes = try container.decodeIfPresent([ProjectStartupMode].self, forKey: .availableStartupModes) ?? []
@@ -219,6 +234,11 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         self.selectedStartupModeID = canonicalStartupConfiguration.selectedStartupModeID
         self.addedDate = try container.decode(Date.self, forKey: .addedDate)
         self.startCommand = canonicalStartupConfiguration.startCommand
+        if self.runtimeKind == .weChatNative {
+            self.startCommand = ""
+            self.availableStartupModes = []
+            self.selectedStartupModeID = nil
+        }
         
         // 初始化运行时状态
         self.isRunning = false
@@ -245,6 +265,7 @@ struct Project: Identifiable, Codable, Equatable, Sendable {
         try container.encodeIfPresent(commandProfileName, forKey: .commandProfileName)
         try container.encode(installStrategy, forKey: .installStrategy)
         try container.encodeIfPresent(preparedDependencyFingerprint, forKey: .preparedDependencyFingerprint)
+        try container.encode(runtimeKind, forKey: .runtimeKind)
         try container.encodeIfPresent(commandConfigId, forKey: .commandConfigId)
         try container.encode(availableStartupModes, forKey: .availableStartupModes)
         try container.encodeIfPresent(selectedStartupModeID, forKey: .selectedStartupModeID)
@@ -360,7 +381,7 @@ extension Project {
     }
 
     func backfillingMissingCommandSnapshot(from snapshot: ProjectCommandSnapshot?) -> Project {
-        guard let snapshot else { return self }
+        guard runtimeKind == .shell, let snapshot else { return self }
         var updated = self
         let snapshotPrefersStartupModes = snapshot.startupModes.contains(where: { $0.source == .commandConfig })
 

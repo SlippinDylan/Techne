@@ -14,6 +14,33 @@ struct ProjectCommandSnapshot: Equatable, Sendable {
     let discardChangesCommand: String
     let commandProfileName: String
     let installStrategy: InstallStrategy
+    let runtimeKind: ProjectRuntimeKind
+
+    init(
+        startCommand: String,
+        startupModes: [ProjectStartupMode],
+        selectedStartupModeID: String?,
+        buildCommand: String,
+        cleanCommand: String,
+        installCommand: String,
+        stopCommand: String,
+        discardChangesCommand: String,
+        commandProfileName: String,
+        installStrategy: InstallStrategy,
+        runtimeKind: ProjectRuntimeKind = .shell
+    ) {
+        self.startCommand = startCommand
+        self.startupModes = startupModes
+        self.selectedStartupModeID = selectedStartupModeID
+        self.buildCommand = buildCommand
+        self.cleanCommand = cleanCommand
+        self.installCommand = installCommand
+        self.stopCommand = stopCommand
+        self.discardChangesCommand = discardChangesCommand
+        self.commandProfileName = commandProfileName
+        self.installStrategy = installStrategy
+        self.runtimeKind = runtimeKind
+    }
 }
 
 enum ProjectAnalysisError: LocalizedError, Equatable, Sendable {
@@ -79,6 +106,7 @@ struct ProjectCommandSnapshotResolver {
             discardChangesCommand: snapshot.discardChangesCommand,
             commandProfileName: snapshot.commandProfileName,
             installStrategy: snapshot.installStrategy,
+            runtimeKind: snapshot.runtimeKind,
             commandConfigId: commandConfigId,
             availableStartupModes: snapshot.startupModes,
             selectedStartupModeID: snapshot.selectedStartupModeID
@@ -92,6 +120,10 @@ struct ProjectCommandSnapshotResolver {
     ) -> Result<ProjectCommandSnapshot, ProjectAnalysisError> {
         let manifestURL = URL(fileURLWithPath: path).appendingPathComponent("package.json")
         guard fileManager.fileExists(atPath: manifestURL.path) else {
+            if type == .miniApp,
+               WeChatProjectLocator.hasRootProjectConfiguration(at: path, fileManager: fileManager) {
+                return .success(nativeMiniAppSnapshot())
+            }
             return .failure(.missingPackageManifest)
         }
 
@@ -131,6 +163,10 @@ struct ProjectCommandSnapshotResolver {
         }
 
         guard startupModes.isEmpty == false else {
+            if type == .miniApp,
+               WeChatProjectLocator.hasRootProjectConfiguration(at: path, fileManager: fileManager) {
+                return .success(nativeMiniAppSnapshot())
+            }
             return .failure(.missingDevelopmentScript(type))
         }
 
@@ -214,6 +250,22 @@ struct ProjectCommandSnapshotResolver {
             discardChangesCommand: config.discardChangesCommand,
             commandProfileName: config.name,
             installStrategy: .ifMissing
+        )
+    }
+
+    private static func nativeMiniAppSnapshot() -> ProjectCommandSnapshot {
+        ProjectCommandSnapshot(
+            startCommand: "",
+            startupModes: [],
+            selectedStartupModeID: nil,
+            buildCommand: "",
+            cleanCommand: "",
+            installCommand: "",
+            stopCommand: "",
+            discardChangesCommand: ProjectCommandSnapshot.defaultDiscardChangesCommand,
+            commandProfileName: "自动识别 · 原生微信小程序",
+            installStrategy: .never,
+            runtimeKind: .weChatNative
         )
     }
 
@@ -663,6 +715,7 @@ struct ProjectPersistenceMigration {
             lhs.discardChangesCommand != rhs.discardChangesCommand ||
             lhs.commandProfileName != rhs.commandProfileName ||
             lhs.preparedDependencyFingerprint != rhs.preparedDependencyFingerprint ||
+            lhs.runtimeKind != rhs.runtimeKind ||
             lhs.commandConfigId != rhs.commandConfigId ||
             lhs.availableStartupModes != rhs.availableStartupModes ||
             lhs.selectedStartupModeID != rhs.selectedStartupModeID
