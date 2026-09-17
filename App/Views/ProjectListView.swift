@@ -223,6 +223,7 @@ struct ProjectListView: View {
                         onStartServer: { startServer(for: project) },
                         onStopServer: { stopServer(for: project) },
                         onRestartServer: { restartServer(for: project) },
+                        onResetMiniAppFileWatching: { resetMiniAppFileWatching(for: project) },
                         onSwitchStartupMode: { switchStartupMode(for: project, to: $0) },
                         onRefresh: { refreshProject(project) },
                         onKillServer: { 
@@ -316,6 +317,16 @@ struct ProjectListView: View {
     private func restartServer(for project: Project) {
         Task {
             let result = await projectService.restartServer(for: project)
+            if case .failure(let error) = result {
+                errorMessage = error.localizedDescription
+                showingError = true
+            }
+        }
+    }
+
+    private func resetMiniAppFileWatching(for project: Project) {
+        Task {
+            let result = await projectService.resetMiniAppFileWatching(for: project)
             if case .failure(let error) = result {
                 errorMessage = error.localizedDescription
                 showingError = true

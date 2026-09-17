@@ -20,6 +20,7 @@ struct ProjectCard: View {
     let onStartServer: () -> Void
     let onStopServer: () -> Void
     let onRestartServer: () -> Void
+    let onResetMiniAppFileWatching: () -> Void
     let onSwitchStartupMode: (String) -> Void
     let onRefresh: () -> Void
     let onKillServer: () -> Void
@@ -47,6 +48,7 @@ struct ProjectCard: View {
         onStartServer: @escaping () -> Void,
         onStopServer: @escaping () -> Void,
         onRestartServer: @escaping () -> Void,
+        onResetMiniAppFileWatching: @escaping () -> Void,
         onSwitchStartupMode: @escaping (String) -> Void,
         onRefresh: @escaping () -> Void,
         onKillServer: @escaping () -> Void,
@@ -62,6 +64,7 @@ struct ProjectCard: View {
         self.onStartServer = onStartServer
         self.onStopServer = onStopServer
         self.onRestartServer = onRestartServer
+        self.onResetMiniAppFileWatching = onResetMiniAppFileWatching
         self.onSwitchStartupMode = onSwitchStartupMode
         self.onRefresh = onRefresh
         self.onKillServer = onKillServer
@@ -354,6 +357,14 @@ struct ProjectCard: View {
                 )
             }
 
+            if project.type == .miniApp {
+                ActionButton(
+                    icon: "arrow.trianglehead.2.clockwise.rotate.90",
+                    action: onResetMiniAppFileWatching,
+                    tooltip: "重建微信文件监听"
+                )
+            }
+
             ActionButton(
                 icon: "terminal",
                 action: openInTerminal,
@@ -543,6 +554,7 @@ struct ProjectCard: View {
         onStartServer: {},
         onStopServer: {},
         onRestartServer: {},
+        onResetMiniAppFileWatching: {},
         onSwitchStartupMode: { _ in },
         onRefresh: {},
         onKillServer: {},

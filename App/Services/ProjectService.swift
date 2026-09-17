@@ -38,6 +38,7 @@ final class ProjectService {
     private let processManager: ProcessManager
     private let terminalHandler = TerminalOutputHandler()
     private let commandConfigService: CommandConfigService
+    private let weChatDevToolsService: WeChatDevToolsService
 
     private var gitMonitors: [String: GitWorkspaceMonitor] = [:]
     private var cachedProcessKeywords: [String]?
@@ -50,12 +51,14 @@ final class ProjectService {
     init(
         commandConfigService: CommandConfigService,
         processService: ProcessService = .shared,
+        weChatDevToolsService: WeChatDevToolsService = WeChatDevToolsService(),
         persistenceService: PersistenceService<Project> = PersistenceService(filename: "projects.json"),
         startupBehavior: ProjectServiceStartupBehavior = .restoreAndRefresh
     ) {
         self.commandConfigService = commandConfigService
         self.processService = processService
         self.processManager = ProcessManager(processService: processService)
+        self.weChatDevToolsService = weChatDevToolsService
         self.persistenceService = persistenceService
         applyStartupBehavior(startupBehavior)
     }
@@ -371,6 +374,27 @@ final class ProjectService {
         }
         appendSystemTerminalMessage("正在重新启动...", for: project.id)
         return startServer(for: currentProject)
+    }
+
+    @MainActor
+    func resetMiniAppFileWatching(for project: Project) async -> Result<Void, ProjectServiceError> {
+        guard project.type == .miniApp else {
+            return .failure(.invalidConfiguration("只有微信小程序项目支持重建文件监听"))
+        }
+
+        appendSystemTerminalMessage("正在请求微信开发者工具重建文件监听...", for: project.id)
+        let result = await weChatDevToolsService.resetFileWatching(for: project.path)
+        switch result {
+        case .success(let output):
+            if output.isEmpty == false {
+                appendTerminalOutput("\(output)\n", for: project.id)
+            }
+            appendSystemTerminalMessage("微信开发者工具文件监听已重建", for: project.id)
+            return .success(())
+        case .failure(let error):
+            appendSystemTerminalMessage("重建文件监听失败: \(error.localizedDescription)", for: project.id)
+            return .failure(.processStartFailed(error.localizedDescription))
+        }
     }
 
     @MainActor
