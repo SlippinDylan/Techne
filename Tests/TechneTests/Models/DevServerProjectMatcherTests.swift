@@ -47,22 +47,6 @@ struct DevServerProjectMatcherTests {
     }
 
     @Test
-    func suppressedProjectPathAlsoSuppressesNestedDetectedServer() {
-        let server = makeServer(
-            id: 13650,
-            path: "/Users/test/Portlens/app",
-            port: 3000
-        )
-
-        #expect(
-            DevServerProjectMatcher.isSuppressed(
-                server: server,
-                suppressedProjectPaths: ["/Users/test/Portlens"]
-            )
-        )
-    }
-
-    @Test
     func unmanagedServersExcludeNestedPathsOwnedByManagedProjects() {
         let managedPaths = [
             "/Users/test/blog",

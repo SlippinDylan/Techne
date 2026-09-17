@@ -16,8 +16,6 @@ struct ProjectListView: View {
     @Environment(DevServerDetectionService.self) private var devServerService
     @Environment(ChromeDetectionService.self) private var chromeService
     @Environment(BrowserDetectionService.self) private var browserDetectionService
-    @Environment(LogService.self) private var logService
-
     @State private var showingAddSheet = false
     @State private var showingError = false
     @State private var errorMessage = ""
@@ -25,7 +23,6 @@ struct ProjectListView: View {
     @State private var showingKillAllServersAlert = false
     @State private var showingKillAllInstancesAlert = false
     @State private var showingBrowserInstances = false
-    @State private var startupSuppressedProjectPaths: Set<String> = []
 
     var body: some View {
         presentedContent
@@ -38,9 +35,7 @@ struct ProjectListView: View {
             .onReceive(NotificationCenter.default.publisher(for: .devServerProcessStarted)) { notification in
                 guard projectType == .devServer else { return }
                 guard let userInfo = notification.userInfo,
-                      let pid = userInfo["pid"] as? Int32,
-                      let path = userInfo["path"] as? String else { return }
-                suppressDiscoveredServer(for: path)
+                      let pid = userInfo["pid"] as? Int32 else { return }
                 devServerService.refreshUntilServerDetected(pid: pid)
             }
             .onReceive(NotificationCenter.default.publisher(for: .devServerStopped)) { _ in
@@ -57,7 +52,6 @@ struct ProjectListView: View {
             }
             .onChange(of: devServerService.servers.map(\.id)) { _, _ in
                 projectService.reconcileDetectedDevServers(devServerService.servers)
-                clearResolvedSuppressedPaths()
             }
             .task {
                 guard projectType == .devServer else { return }
@@ -72,7 +66,7 @@ struct ProjectListView: View {
                 .padding(AppConfig.UI.extraLargePadding)
 
             // 可滚动的内容区域
-            if filteredProjects.isEmpty && (projectType == .miniApp || unmanagedDiscoveredServers.isEmpty) {
+            if filteredProjects.isEmpty {
                 emptyStateView
             } else {
                 contentView
@@ -84,8 +78,7 @@ struct ProjectListView: View {
         projectContent
         .sheet(isPresented: $showingAddSheet) {
             AddProjectSheet(projectType: projectType) { path in
-                _ = projectService.addProject(path: path, type: projectType)
-                showingAddSheet = false
+                projectService.addProject(path: path, type: projectType)
             }
         }
         .confirmationDialog(
@@ -185,7 +178,7 @@ struct ProjectListView: View {
                 .font(.title2)
                 .bold()
             
-            Text(projectType == .devServer ? "点击右上角 + 按钮添加项目或自动探测本地运行中的服务" : "点击右上角 + 按钮添加微信小程序项目")
+            Text(projectType == .devServer ? "点击右上角 + 按钮添加开发项目" : "点击右上角 + 按钮添加微信小程序项目")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -197,11 +190,6 @@ struct ProjectListView: View {
     private var contentView: some View {
         ScrollView {
             VStack(spacing: AppConfig.UI.extraLargePadding) {
-                // 如果有自动探测到的服务，优先显示
-                if projectType == .devServer && !unmanagedDiscoveredServers.isEmpty {
-                    discoveredServersSection
-                }
-
                 // 项目列表
                 if !filteredProjects.isEmpty {
                     projectsListSection
@@ -211,28 +199,6 @@ struct ProjectListView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var discoveredServersSection: some View {
-        VStack(alignment: .leading, spacing: AppConfig.UI.mediumPadding) {
-            HStack {
-                Label("探测到的本地服务", systemImage: "bolt.horizontal.circle")
-                    .font(.headline)
-            }
-            .padding(.horizontal, 4)
-
-            LazyVStack(spacing: AppConfig.UI.largePadding) {
-                ForEach(unmanagedDiscoveredServers) { server in
-                    DiscoveredServerCard(
-                        server: server,
-                        relatedInstances: getRelatedInstances(for: server),
-                        onAdd: { addDiscoveredServer(server) },
-                        onKillServer: { _ = devServerService.killServer(server) },
-                        onKillInstance: { _ = chromeService.killInstance($0) }
-                    )
-                }
-            }
-        }
     }
 
     private var projectsListSection: some View {
@@ -279,23 +245,6 @@ struct ProjectListView: View {
 
     private var allBrowserInstances: [ChromeInstance] {
         chromeService.instances
-    }
-
-    private var unmanagedDiscoveredServers: [DevServer] {
-        let managedProjectPaths = filteredProjects.map(\.path)
-
-        return devServerService.servers.filter { server in
-            let ownedProjectPath = DevServerProjectMatcher.bestMatchingProjectPath(
-                for: server,
-                managedProjectPaths: managedProjectPaths
-            )
-            let isSuppressed = DevServerProjectMatcher.isSuppressed(
-                server: server,
-                suppressedProjectPaths: startupSuppressedProjectPaths
-            )
-
-            return ownedProjectPath == nil && isSuppressed == false
-        }
     }
 
     private func findRelatedServer(for project: Project) -> DevServer? {
@@ -375,46 +324,6 @@ struct ProjectListView: View {
         }
     }
 
-    private func addDiscoveredServer(_ server: DevServer) {
-        _ = projectService.addProject(
-            path: server.projectPath,
-            type: .devServer
-        )
-    }
-
-    private func suppressDiscoveredServer(for path: String) {
-        let normalizedPath = normalizedPath(for: path)
-        startupSuppressedProjectPaths.insert(normalizedPath)
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(3))
-            startupSuppressedProjectPaths.remove(normalizedPath)
-        }
-    }
-
-    private func clearResolvedSuppressedPaths() {
-        let managedProjectPaths = filteredProjects.map(\.path)
-
-        let resolvedPaths = Set(
-            filteredProjects.compactMap { project -> String? in
-                let normalizedProjectPath = normalizedPath(for: project.path)
-                let hasResolvedServer = devServerService.servers.contains { server in
-                    DevServerProjectMatcher.bestMatchingProjectPath(
-                        for: server,
-                        managedProjectPaths: managedProjectPaths
-                    ) == normalizedProjectPath
-                }
-
-                guard hasResolvedServer else {
-                    return nil
-                }
-
-                return normalizedProjectPath
-            }
-        )
-
-        startupSuppressedProjectPaths.subtract(resolvedPaths)
-    }
 }
 
 #Preview {

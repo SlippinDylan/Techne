@@ -449,10 +449,7 @@ struct ProjectPersistenceMigration {
     }
 
     private static func normalize(_ path: String) -> String {
-        URL(fileURLWithPath: path)
-            .resolvingSymlinksInPath()
-            .standardizedFileURL
-            .path
+        ProjectPath.canonical(path)
     }
 
     private static func projectsChanged(from original: [Project], to normalized: [Project]) -> Bool {

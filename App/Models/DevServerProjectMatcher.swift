@@ -2,7 +2,7 @@ import Foundation
 
 enum DevServerProjectMatcher {
     static func normalize(_ path: String) -> String {
-        URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        ProjectPath.canonical(path)
     }
 
     static func belongs(serverPath: String, toProjectPath projectPath: String) -> Bool {
@@ -37,12 +37,4 @@ enum DevServerProjectMatcher {
             .max(by: { $0.count < $1.count })
     }
 
-    static func isSuppressed(
-        server: DevServer,
-        suppressedProjectPaths: Set<String>
-    ) -> Bool {
-        suppressedProjectPaths.contains { suppressedPath in
-            belongs(serverPath: server.projectPath, toProjectPath: suppressedPath)
-        }
-    }
 }

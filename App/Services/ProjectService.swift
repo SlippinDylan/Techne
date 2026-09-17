@@ -132,21 +132,22 @@ final class ProjectService {
 
     @MainActor
     func addProject(path: String, type: ProjectType, configId: UUID? = nil) -> Result<Project, ProjectServiceError> {
+        let canonicalPath = ProjectPath.canonical(path)
         var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            return .failure(.pathNotFound(path))
+        guard FileManager.default.fileExists(atPath: canonicalPath, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return .failure(.pathNotFound(canonicalPath))
         }
-        if ProjectPersistenceMigration.isTemporaryProjectPath(path) {
+        if ProjectPersistenceMigration.isTemporaryProjectPath(canonicalPath) {
             return .failure(.invalidConfiguration("临时目录项目不会被持久化，请选择真实项目目录"))
         }
-        if projects.contains(where: { $0.path == path }) {
-            return .failure(.projectAlreadyExists(path))
+        if projects.contains(where: { ProjectPath.canonical($0.path) == canonicalPath }) {
+            return .failure(.projectAlreadyExists(canonicalPath))
         }
-        let projectName = URL(fileURLWithPath: path).lastPathComponent
+        let projectName = URL(fileURLWithPath: canonicalPath).lastPathComponent
         let commandConfig = configId.flatMap(commandConfigService.getConfig(by:))
         let project = ProjectCommandSnapshotResolver.makeProject(
             name: projectName,
-            path: path,
+            path: canonicalPath,
             type: type,
             commandConfigId: configId,
             legacyConfig: commandConfig
@@ -156,7 +157,7 @@ final class ProjectService {
         
         Task {
             await setupMonitor(for: project)
-            refreshProjectStatusAsync(at: path)
+            refreshProjectStatusAsync(at: canonicalPath)
         }
         return .success(project)
     }

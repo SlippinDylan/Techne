@@ -14,12 +14,13 @@ struct AddProjectSheet: View {
     }
 
     let projectType: ProjectType
-    let onAdd: (String) -> Void
+    let onAdd: (String) -> Result<Project, ProjectServiceError>
 
     @Environment(\.dismiss) private var dismiss
 
     @State private var projectPath = ""
     @State private var showingFilePicker = false
+    @State private var addErrorMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,6 +39,17 @@ struct AddProjectSheet: View {
                 return
             }
             projectPath = url.path
+        }
+        .alert(
+            "无法添加项目",
+            isPresented: Binding(
+                get: { addErrorMessage != nil },
+                set: { if $0 == false { addErrorMessage = nil } }
+            )
+        ) {
+            Button("确定", role: .cancel) { }
+        } message: {
+            Text(addErrorMessage ?? "")
         }
     }
 
@@ -156,7 +168,12 @@ struct AddProjectSheet: View {
             .controlSize(.extraLarge)
 
             Button("添加") {
-                onAdd(projectPath)
+                switch onAdd(projectPath) {
+                case .success:
+                    dismiss()
+                case .failure(let error):
+                    addErrorMessage = error.localizedDescription
+                }
             }
             .buttonStyle(.glassProminent)
             .buttonBorderShape(.capsule)
@@ -176,5 +193,8 @@ struct AddProjectSheet: View {
 }
 
 #Preview {
-    AddProjectSheet(projectType: .devServer, onAdd: { _ in })
+    AddProjectSheet(
+        projectType: .devServer,
+        onAdd: { _ in .failure(.invalidConfiguration("预览不会添加项目")) }
+    )
 }

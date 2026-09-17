@@ -95,7 +95,7 @@ final class BackupService {
     }
 
     private static func normalizePath(_ path: String) -> String {
-        URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        ProjectPath.canonical(path)
     }
 
     private static func withSecurityScopedAccess<T>(to url: URL, _ work: () throws -> T) throws -> T {
