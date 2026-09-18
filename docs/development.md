@@ -90,6 +90,7 @@ xcodebuild build \
 bash -n Scripts/create-dmg.sh
 Scripts/create-dmg.sh --help >/dev/null
 node .github/scripts/release-manifest.mjs validate
+node .github/scripts/sync-version.mjs --check
 node --test .github/scripts/*.test.mjs
 ```
 
@@ -97,7 +98,7 @@ node --test .github/scripts/*.test.mjs
 
 ## 发布配置
 
-`Config/Release/manifest.json` 是发布版本和发布开关的唯一编辑入口：
+`Config/Release/manifest.json` 是版本号和发布开关的唯一人工编辑入口：
 
 ```json
 {
@@ -106,7 +107,15 @@ node --test .github/scripts/*.test.mjs
 }
 ```
 
-版本支持 stable、alpha 和 beta。启用发布前，`CHANGELOG.md` 必须存在完全匹配的版本标题和有效日期。不要手工修改由自动化推导的 tag、DMG 名称、Marketing Version、更新频道或预发布状态。
+版本支持 stable、alpha 和 beta。修改 manifest 后运行：
+
+```bash
+node .github/scripts/sync-version.mjs
+```
+
+该命令更新受版本控制的 `Config/Generated/Version.xcconfig`，供普通 Xcode Debug、Release 和 Archive 构建读取。生成文件不得手工修改；CI 使用 `--check` 验证它与 manifest 一致。应用运行时只从 Bundle 读取版本信息。
+
+启用发布前，`CHANGELOG.md` 必须存在完全匹配的版本标题和有效日期。不要手工修改由自动化推导的 tag、DMG 名称、Marketing Version、更新频道或预发布状态。
 
 Release workflow 只处理 `main` 分支上已经通过 CI 的 commit。它构建 arm64 应用、使用 Apple Development 证书签名、生成 DMG 并发布 GitHub Release。发布完成后，它通过 repository dispatch 触发独立的 `publish-distribution-metadata.yml`，由后者更新 Homebrew Cask 和 Sparkle appcast；Release workflow 不等待该同步任务完成。
 

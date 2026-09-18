@@ -91,7 +91,10 @@ final class BackupService {
             return trimmedVersion
         }
 
-        return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.4.0"
+        guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String else {
+            preconditionFailure("The app bundle must contain CFBundleShortVersionString")
+        }
+        return version
     }
 
     private static func normalizePath(_ path: String) -> String {

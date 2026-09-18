@@ -271,9 +271,7 @@ struct SettingsContentView: View {
 
     @State private var exportingBackup = false
     @State private var importingBackup = false
-    @State private var backupDocument = TechneBackupDocument(
-        payload: .init(schemaVersion: 1, exportedAt: .now, appVersion: "0.4.0", projects: [], commandConfigs: [])
-    )
+    @State private var backupDocument = BackupService.makeDocument(projects: [], commandConfigs: [])
     @State private var backupAlert: BackupAlertContext?
 
     var body: some View {

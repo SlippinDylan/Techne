@@ -76,6 +76,7 @@ jobs:
           bash -n Scripts/create-dmg.sh
           Scripts/create-dmg.sh --help >/dev/null
           node .github/scripts/release-manifest.mjs validate
+          node .github/scripts/sync-version.mjs --check
           node --test .github/scripts/*.test.mjs
 
   macos-check:

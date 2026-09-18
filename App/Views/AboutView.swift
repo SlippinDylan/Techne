@@ -12,8 +12,10 @@ struct AboutView: View {
 
     /// 从 Bundle 中获取应用版本号
     private var appVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.4.0"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+              let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String else {
+            preconditionFailure("The app bundle must contain version metadata")
+        }
         return "\(version) (\(build))"
     }
 

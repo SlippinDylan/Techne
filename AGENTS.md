@@ -57,6 +57,7 @@ Techne 是面向 macOS 26 及以上版本的原生开发工具，使用 Swift、
 xcodebuild test -project Techne.xcodeproj -scheme Techne -destination 'platform=macOS,arch=arm64'
 xcodebuild build -project Techne.xcodeproj -scheme Techne -configuration Debug -destination 'platform=macOS,arch=arm64'
 node .github/scripts/release-manifest.mjs validate
+node .github/scripts/sync-version.mjs --check
 node --test .github/scripts/*.test.mjs
 ```
 
