@@ -29,8 +29,10 @@ struct TechneApp: App {
         Window("Techne", id: "main") {
             ContentView(
                 commandConfigService: commandConfigService,
-                projectService: projectService
+                projectService: projectService,
+                updateController: updateController
             )
+            .environment(launchSettings)
             .environment(mainWindowNavigationCoordinator)
             .frame(minWidth: 1080, minHeight: 720)
         }
@@ -38,82 +40,38 @@ struct TechneApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             MainWindowNavigationCommands()
-            TechneAppCommands(updateController: updateController)
+            TechneAppCommands()
         }
-
-        // 原生设置场景 (Cmd + ,)
-        Settings {
-            SettingsView(
-                projectService: projectService,
-                commandConfigService: commandConfigService
-            )
-                .environment(launchSettings)
-        }
-
-        Window("操作日志", id: "logs") {
-            LogView()
-                .environment(LogService.shared)
-                .frame(minWidth: 920, minHeight: 620)
-        }
-        .defaultSize(width: 1040, height: 720)
-
-        Window("关于 Techne", id: "about") {
-            AboutView()
-                .frame(minWidth: 520, minHeight: 420)
-        }
-        .defaultSize(width: 560, height: 460)
-        .windowResizability(.contentSize)
 
         // 菜单栏
         MenuBarExtra("Techne", systemImage: "macbook.and.iphone") {
-            MenuBarView(updateController: updateController)
-                .environment(launchSettings)
+            MenuBarView()
                 .environment(mainWindowNavigationCoordinator)
         }
         .menuBarExtraStyle(.menu)
     }
 }
 
-/// 设置视图
-struct SettingsView: View {
-    let projectService: ProjectService
-    let commandConfigService: CommandConfigService
-    
-    var body: some View {
-        SettingsContentView(
-            projectService: projectService,
-            commandConfigService: commandConfigService
-        )
-        .frame(width: 560, height: 320)
-        .navigationTitle("设置")
-    }
-}
-
 struct TechneAppCommands: Commands {
-    @Environment(\.openWindow) private var openWindow
-    let updateController: ApplicationUpdateController
-
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
             Button("关于 Techne") {
-                openWindow(id: "about")
+                MainWindowNavigationCoordinator.shared.showMainWindow(selecting: .about)
             }
         }
 
-        CommandGroup(after: .appInfo) {
-            Button("检查更新…") {
-                updateController.checkForUpdates()
+        CommandGroup(replacing: .appSettings) {
+            Button("设置…") {
+                MainWindowNavigationCoordinator.shared.showMainWindow(selecting: .settings)
             }
-            .disabled(!updateController.canCheckForUpdates)
         }
 
         CommandGroup(after: .windowArrangement) {
             Divider()
 
             Button("操作日志") {
-                openWindow(id: "logs")
+                MainWindowNavigationCoordinator.shared.showMainWindow(selecting: .logs)
             }
-            .keyboardShortcut("l", modifiers: [.command, .shift])
         }
     }
 }

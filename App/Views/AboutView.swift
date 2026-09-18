@@ -8,9 +8,11 @@
 import SwiftUI
 
 struct AboutView: View {
+    let updateController: ApplicationUpdateController
+
     /// 从 Bundle 中获取应用版本号
     private var appVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.4.0"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "\(version) (\(build))"
     }
@@ -34,12 +36,17 @@ struct AboutView: View {
 
                     Text("版本 \(appVersion)")
                         .font(.system(size: AppConfig.UI.mediumFontSize))
-                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 9)
+                        .frame(height: 22)
+                        .background(.quaternary)
+                        .clipShape(Capsule())
                 }
 
-                Divider()
-                    .frame(width: 300)
-                    .padding(.vertical, AppConfig.UI.largeSpacing)
+                Button("检查更新…") {
+                    updateController.checkForUpdates()
+                }
+                .disabled(!updateController.canCheckForUpdates)
+                .padding(.bottom, AppConfig.UI.mediumSpacing)
 
                 Text("Copyright © 2025-2026 SlippinDylan Studio")
                     .font(.system(size: AppConfig.UI.mediumFontSize))
@@ -54,5 +61,5 @@ struct AboutView: View {
 }
 
 #Preview {
-    AboutView()
+    AboutView(updateController: ApplicationUpdateController(updaterEnabled: false))
 }

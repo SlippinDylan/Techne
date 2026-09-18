@@ -91,7 +91,7 @@ final class BackupService {
             return trimmedVersion
         }
 
-        return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.4.0"
     }
 
     private static func normalizePath(_ path: String) -> String {

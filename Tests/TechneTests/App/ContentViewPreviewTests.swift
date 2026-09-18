@@ -4,6 +4,12 @@ import Testing
 @testable import Techne
 
 struct ContentViewPreviewTests {
+    @Test
+    func sidebarGroupsKeepUtilityNavigationAtTheBottomInRequiredOrder() {
+        #expect(SidebarItem.primaryItems == [.devEnvironment, .miniApp, .adbDeploy])
+        #expect(SidebarItem.utilityItems == [.settings, .logs, .about])
+    }
+
     @MainActor
     @Test
     func previewEnvironmentRetainsInjectedNavigationCoordinator() {

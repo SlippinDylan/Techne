@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     let commandConfigService: CommandConfigService
     let projectService: ProjectService
+    let updateController: ApplicationUpdateController
     @Environment(MainWindowNavigationCoordinator.self) private var mainWindowNavigation
 
     @State private var selectedItem: SidebarItem? = .devEnvironment
@@ -27,12 +28,24 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             // 侧边栏
-            List(SidebarItem.allCases, selection: $selectedItem) { item in
+            List(SidebarItem.primaryItems, selection: $selectedItem) { item in
                 Label(item.rawValue, systemImage: item.icon)
                     .tag(item)
                     .padding(.vertical, 4)
             }
             .listStyle(.sidebar)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 2) {
+                    Divider()
+                        .padding(.bottom, 4)
+
+                    ForEach(SidebarItem.utilityItems) { item in
+                        utilitySidebarRow(item)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
+            }
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
             // 详情区域
@@ -54,6 +67,16 @@ struct ContentView: View {
                         .environment(logService)
                 case .adbDeploy:
                     ADBDeployView(viewModel: adbDeployViewModel)
+                case .settings:
+                    SettingsContentView(
+                        projectService: projectService,
+                        commandConfigService: commandConfigService
+                    )
+                case .logs:
+                    LogView()
+                        .environment(logService)
+                case .about:
+                    AboutView(updateController: updateController)
                 }
             }
             .navigationTitle(navigationTitle)
@@ -132,6 +155,24 @@ struct ContentView: View {
     }
 
     // MARK: - Helper Views & Methods
+
+    private func utilitySidebarRow(_ item: SidebarItem) -> some View {
+        let isSelected = selectedItem == item
+
+        return Button {
+            selectedItem = item
+        } label: {
+            Label(item.rawValue, systemImage: item.icon)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isSelected ? Color.white : Color.primary)
+        .background(isSelected ? Color.accentColor : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
 
     private func applyPendingSidebarSelection() {
         guard let item = mainWindowNavigation.consumePendingSidebarItem() else {
@@ -215,8 +256,10 @@ struct ContentViewPreviewEnvironment {
     func makeView() -> some View {
         ContentView(
             commandConfigService: commandConfigService,
-            projectService: projectService
+            projectService: projectService,
+            updateController: ApplicationUpdateController(updaterEnabled: false)
         )
+        .environment(LaunchSettings.shared)
         .environment(navigationCoordinator)
     }
 }
@@ -229,7 +272,7 @@ struct SettingsContentView: View {
     @State private var exportingBackup = false
     @State private var importingBackup = false
     @State private var backupDocument = TechneBackupDocument(
-        payload: .init(schemaVersion: 1, exportedAt: .now, appVersion: "1.0.0", projects: [], commandConfigs: [])
+        payload: .init(schemaVersion: 1, exportedAt: .now, appVersion: "0.4.0", projects: [], commandConfigs: [])
     )
     @State private var backupAlert: BackupAlertContext?
 
@@ -372,6 +415,12 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     case devEnvironment = "开发服务与实例"
     case miniApp = "微信小程序构建"
     case adbDeploy = "安卓应用部署"
+    case settings = "设置"
+    case logs = "日志"
+    case about = "关于"
+
+    static let primaryItems: [SidebarItem] = [.devEnvironment, .miniApp, .adbDeploy]
+    static let utilityItems: [SidebarItem] = [.settings, .logs, .about]
 
     var id: String { rawValue }
 
@@ -380,6 +429,9 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .devEnvironment: return "pc"
         case .miniApp: return "app.badge"
         case .adbDeploy: return "iphone.gen3"
+        case .settings: return "gearshape"
+        case .logs: return "doc.text"
+        case .about: return "info.circle"
         }
     }
 
@@ -390,6 +442,9 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .devEnvironment: return "统一管理开发服务和关联的浏览器实例"
         case .miniApp: return "管理微信小程序项目，快速切换分支并构建"
         case .adbDeploy: return "通过 ADB 快速部署 APK 到 Android 设备"
+        case .settings: return "管理启动选项、数据与备份"
+        case .logs: return "查看和筛选应用操作日志"
+        case .about: return "查看版本信息并检查更新"
         }
     }
 }
