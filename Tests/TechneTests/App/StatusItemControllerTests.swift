@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct StatusItemControllerTests {
     @Test
-    func configuredButtonUsesNativePrimaryActionAndContextMenu() throws {
+    func configuredButtonSendsPrimaryAndSecondaryMouseUpActions() throws {
         var openCount = 0
         let navigation = makeNavigationCoordinator()
         navigation.registerOpenMainWindowAction {
@@ -19,18 +19,24 @@ struct StatusItemControllerTests {
 
         controller.configure(button)
 
-        #expect(button.menu?.items.map(\.title) == [
-            SidebarItem.devEnvironment.title,
-            SidebarItem.miniApp.title,
-            SidebarItem.adbDeploy.title,
-            "",
-            AppLocalized("退出 Techne")
-        ])
+        #expect(button.menu == nil)
         #expect(button.gestureRecognizers.contains { $0 is NSClickGestureRecognizer } == false)
+
+        let configuredEvents = button.sendAction(on: [])
+        _ = button.sendAction(on: NSEvent.EventTypeMask(rawValue: UInt64(configuredEvents)))
+        #expect(configuredEvents & Int(NSEvent.EventTypeMask.leftMouseUp.rawValue) != 0)
+        #expect(configuredEvents & Int(NSEvent.EventTypeMask.rightMouseUp.rawValue) != 0)
 
         _ = try #require(button.action)
         button.performClick(nil)
         #expect(openCount == 1)
+    }
+
+    @Test
+    func onlySecondaryMouseUpRoutesToTheContextMenu() {
+        #expect(StatusItemController.isContextMenuEvent(.rightMouseUp))
+        #expect(StatusItemController.isContextMenuEvent(.leftMouseUp) == false)
+        #expect(StatusItemController.isContextMenuEvent(nil) == false)
     }
 
     @Test

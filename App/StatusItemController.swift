@@ -5,6 +5,7 @@ final class StatusItemController: NSObject {
     private let statusBar: NSStatusBar
     private let mainWindowNavigation: MainWindowNavigationCoordinator
     private let terminateApplication: () -> Void
+    private lazy var menu = makeMenu()
     private(set) var statusItem: NSStatusItem?
 
     init(
@@ -42,8 +43,8 @@ final class StatusItemController: NSObject {
         button.image = image
         button.toolTip = "Techne"
         button.target = self
-        button.action = #selector(handlePrimaryClick)
-        button.menu = makeMenu()
+        button.action = #selector(handleStatusItemClick)
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
     func makeMenu() -> NSMenu {
@@ -76,9 +77,27 @@ final class StatusItemController: NSObject {
         return menu
     }
 
+    static func isContextMenuEvent(_ eventType: NSEvent.EventType?) -> Bool {
+        eventType == .rightMouseUp
+    }
+
     @objc
-    private func handlePrimaryClick(_ sender: NSStatusBarButton) {
-        mainWindowNavigation.showMainWindow()
+    private func handleStatusItemClick() {
+        if Self.isContextMenuEvent(NSApp.currentEvent?.type) {
+            showContextMenu()
+        } else {
+            mainWindowNavigation.showMainWindow()
+        }
+    }
+
+    private func showContextMenu() {
+        guard let button = statusItem?.button else {
+            return
+        }
+
+        statusItem?.menu = menu
+        defer { statusItem?.menu = nil }
+        button.performClick(nil)
     }
 
     @objc
