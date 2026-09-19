@@ -91,8 +91,11 @@ struct ProjectStartupCoordinatorTests {
             .start(command: "pnpm dev --host")
         ])
         #expect(plan.messages == [
-            "[系统] 正在检查依赖...",
-            "[系统] 检测到缺少依赖，准备执行安装命令: pnpm install --frozen-lockfile"
+            AppLocalized("terminal.startup.checking_dependencies"),
+            AppLocalizedFormat(
+                "terminal.startup.missing_dependencies",
+                "pnpm install --frozen-lockfile"
+            )
         ])
         #expect(plan.shellScript.contains("source ~/.zshrc") == false)
         #expect(plan.shellScript.contains("cd \(ShellEscape.escape(root.path))"))

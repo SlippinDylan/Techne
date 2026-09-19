@@ -411,9 +411,30 @@ struct ProjectSnapshotMigrationTests {
 
         let details = ProjectCommandDetails(project: project)
 
-        #expect(details.profileDisplayName == "自定义命令")
-        #expect(details.sections.map(\.title) == ["当前启动模式", "启动命令", "可选启动模式", "安装依赖命令", "构建命令", "清理命令", "停止命令", "丢弃更改命令", "安装策略"])
-        #expect(details.sections.map(\.value) == ["默认", "pnpm dev:mp-weixin", "默认: pnpm dev:mp-weixin", "", "", "rm -rf dist", "pkill -f weixin", "", "总是安装"])
+        let persistedDefaultMode = "默认"
+        #expect(details.profileDisplayName == AppLocalized("自定义命令"))
+        #expect(details.sections.map(\.title) == [
+            "当前启动模式",
+            "启动命令",
+            "可选启动模式",
+            "安装依赖命令",
+            "构建命令",
+            "清理命令",
+            "停止命令",
+            "丢弃更改命令",
+            "安装策略"
+        ].map(AppLocalized))
+        #expect(details.sections.map(\.value) == [
+            persistedDefaultMode,
+            "pnpm dev:mp-weixin",
+            "\(persistedDefaultMode): pnpm dev:mp-weixin",
+            "",
+            "",
+            "rm -rf dist",
+            "pkill -f weixin",
+            "",
+            AppLocalized("总是安装")
+        ])
     }
 
     @Test

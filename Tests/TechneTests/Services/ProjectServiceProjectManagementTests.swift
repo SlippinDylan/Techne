@@ -123,7 +123,7 @@ struct ProjectServiceProjectManagementTests {
             Issue.record("expected an unknown command config to be rejected")
             return
         }
-        #expect(reason == "所选命令配置不存在")
+        #expect(reason == AppLocalized("error.project.selected_command_configuration_not_found"))
     }
 
     @MainActor

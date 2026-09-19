@@ -68,8 +68,8 @@ struct ProjectServiceStartupRecoveryTests {
         #expect(updatedProject.isRunning == false)
         #expect(updatedProject.runningProcessPID == nil)
         #expect(updatedProject.transitionState == ProjectTransitionState.idle)
-        #expect(updatedProject.terminalOutput.contains("[系统] 正在停止开发服务"))
-        #expect(updatedProject.terminalOutput.contains("[系统] 开发服务已停止"))
+        #expect(updatedProject.terminalOutput.contains(AppLocalized("terminal.project.stopping_development_service")))
+        #expect(updatedProject.terminalOutput.contains(AppLocalized("terminal.project.development_service_stopped")))
         #expect(updatedProject.terminalOutput.contains("受管浏览器实例") == false)
         #expect(try browserStore.loadTrackedInstances().map(\.pid) == [browserRecord.pid])
     }
@@ -132,7 +132,7 @@ struct ProjectServiceStartupRecoveryTests {
 
         #expect(restarted)
         #expect(FileManager.default.fileExists(atPath: projectRoot.appendingPathComponent("cleaned").path) == false)
-        #expect(service.projects[0].terminalOutput.contains("[系统] 正在重新启动"))
+        #expect(service.projects[0].terminalOutput.contains(AppLocalized("terminal.project.restarting")))
     }
 
     @Test
@@ -577,7 +577,9 @@ struct ProjectServiceStartupRecoveryTests {
         #expect(restarted)
         #expect(service.projects[0].selectedStartupModeID == "dev:mock")
         #expect(service.projects[0].startCommand == "touch mode-switched && sleep 0.2")
-        #expect(service.projects[0].terminalOutput.contains("[系统] 已切换启动模式为 Mock"))
+        #expect(service.projects[0].terminalOutput.contains(
+            AppLocalizedFormat("terminal.project.startup_mode_changed", "Mock")
+        ))
     }
 
     @MainActor
