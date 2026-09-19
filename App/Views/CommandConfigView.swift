@@ -42,7 +42,7 @@ struct CommandConfigView: View {
                     case .success:
                         showingEditConfig = nil
                     case .failure(let error):
-                        LogService.shared.error("更新配置失败: \(error.localizedDescription)", category: "命令配置")
+                        LogService.shared.error(AppLocalizedFormat("更新配置失败: %@", error.localizedDescription), category: AppLocalized("命令配置"))
                     }
                 }
             )
@@ -50,7 +50,7 @@ struct CommandConfigView: View {
         .alert(item: $showingDeleteAlert) { config in
             Alert(
                 title: Text("确认删除"),
-                message: Text("确定要删除配置 \"\(config.name)\" 吗？此操作不可撤销。"),
+                message: Text(AppLocalizedFormat("确定要删除配置 \"%@\" 吗？此操作不可撤销。", config.name)),
                 primaryButton: .destructive(Text("删除")) {
                     commandConfigService.removeConfig(config)
                 },

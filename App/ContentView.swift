@@ -29,7 +29,7 @@ struct ContentView: View {
         NavigationSplitView {
             // 侧边栏
             List(SidebarItem.primaryItems, selection: $selectedItem) { item in
-                Label(item.rawValue, systemImage: item.icon)
+                Label(item.title, systemImage: item.icon)
                     .tag(item)
                     .padding(.vertical, 4)
             }
@@ -129,12 +129,12 @@ struct ContentView: View {
                             }
                         }) {
                             Label(
-                                item == .devEnvironment ? "添加服务" : "添加项目",
+                                AppLocalized(item == .devEnvironment ? "添加服务" : "添加项目"),
                                 systemImage: "plus"
                             )
                             .labelStyle(.iconOnly)
                         }
-                        .help(item == .devEnvironment ? "添加服务" : "添加项目")
+                        .help(AppLocalized(item == .devEnvironment ? "添加服务" : "添加项目"))
                     }
                 }
             }
@@ -162,7 +162,7 @@ struct ContentView: View {
         return Button {
             selectedItem = item
         } label: {
-            Label(item.rawValue, systemImage: item.icon)
+            Label(item.title, systemImage: item.icon)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
@@ -273,12 +273,14 @@ struct SettingsContentView: View {
     @State private var importingBackup = false
     @State private var backupDocument = BackupService.makeDocument(projects: [], commandConfigs: [])
     @State private var backupAlert: BackupAlertContext?
+    @State private var selectedApplicationLanguage = ApplicationLanguage.selected()
+    @State private var showingLanguageRelaunchConfirmation = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
-                    settingsSectionHeader("基础设置", systemImage: "cpu")
+                    settingsSectionHeader("通用", systemImage: "cpu")
 
                     GroupBox {
                         HStack {
@@ -288,6 +290,24 @@ struct SettingsContentView: View {
                             @Bindable var settings = launchSettings
                             Toggle("", isOn: $settings.isLaunchAtLoginEnabled)
                                 .toggleStyle(.switch)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+
+                        Divider()
+                            .padding(.horizontal, 16)
+
+                        HStack {
+                            Label("应用语言", systemImage: "globe")
+                                .font(.headline)
+                            Spacer()
+                            Picker("应用语言", selection: $selectedApplicationLanguage) {
+                                ForEach(ApplicationLanguage.allCases, id: \.self) { language in
+                                    Text(language.displayName).tag(language)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
@@ -306,7 +326,7 @@ struct SettingsContentView: View {
 
                             HStack(spacing: 10) {
                                 CleanMyMacButton(
-                                    title: "导出备份",
+                                    title: AppLocalized("导出备份"),
                                     icon: nil,
                                     action: {
                                         backupDocument = BackupService.makeDocument(
@@ -320,7 +340,7 @@ struct SettingsContentView: View {
                                 )
 
                                 CleanMyMacButton(
-                                    title: "导入备份",
+                                    title: AppLocalized("导入备份"),
                                     icon: nil,
                                     action: {
                                         importingBackup = true
@@ -330,7 +350,7 @@ struct SettingsContentView: View {
                                 )
 
                                 CleanMyMacButton(
-                                    title: "打开数据目录",
+                                    title: AppLocalized("打开数据目录"),
                                     icon: nil,
                                     action: {
                                         BackupService.revealAppSupportDirectory()
@@ -361,7 +381,7 @@ struct SettingsContentView: View {
             defaultFilename: BackupService.defaultFilename
         ) { result in
             if case .failure(let error) = result {
-                backupAlert = .init(title: "备份导出失败", message: error.localizedDescription)
+                backupAlert = .init(title: AppLocalized("备份导出失败"), message: error.localizedDescription)
             }
         }
         .fileImporter(
@@ -380,10 +400,10 @@ struct SettingsContentView: View {
                         commandConfigService: commandConfigService
                     )
                 } catch {
-                    backupAlert = .init(title: "备份导入失败", message: error.localizedDescription)
+                    backupAlert = .init(title: AppLocalized("备份导入失败"), message: error.localizedDescription)
                 }
             case .failure(let error):
-                backupAlert = .init(title: "备份导入失败", message: error.localizedDescription)
+                backupAlert = .init(title: AppLocalized("备份导入失败"), message: error.localizedDescription)
             }
         }
         .alert(item: $backupAlert) { context in
@@ -393,12 +413,24 @@ struct SettingsContentView: View {
                 dismissButton: .default(Text("知道了"))
             )
         }
+        .alert("语言更改将在重新启动后生效", isPresented: $showingLanguageRelaunchConfirmation) {
+            Button("稍后", role: .cancel) {}
+            Button("重新启动") {
+                ApplicationRelaunchController.shared.requestRelaunch()
+            }
+        } message: {
+            Text("Techne 将在重新启动后使用所选语言。")
+        }
+        .onChange(of: selectedApplicationLanguage) { _, language in
+            showingLanguageRelaunchConfirmation = ApplicationLanguage.select(language)
+        }
     }
 
     private func settingsSectionHeader(_ title: String, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
+        Label(AppLocalized(title), systemImage: systemImage)
             .font(.headline)
     }
+
 }
 
 private struct BackupAlertContext: Identifiable {
@@ -433,16 +465,16 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         }
     }
 
-    var title: String { return rawValue }
+    var title: String { AppLocalized(rawValue) }
 
     var subtitle: String {
         switch self {
-        case .devEnvironment: return "统一管理开发服务和关联的浏览器实例"
-        case .miniApp: return "管理微信小程序项目，快速切换分支并构建"
-        case .adbDeploy: return "通过 ADB 快速部署 APK 到 Android 设备"
-        case .settings: return "管理启动选项、数据与备份"
-        case .logs: return "查看和筛选应用操作日志"
-        case .about: return "查看版本信息并检查更新"
+        case .devEnvironment: return AppLocalized("统一管理开发服务和关联的浏览器实例")
+        case .miniApp: return AppLocalized("管理微信小程序项目，快速切换分支并构建")
+        case .adbDeploy: return AppLocalized("通过 ADB 快速部署 APK 到 Android 设备")
+        case .settings: return AppLocalized("管理启动选项、数据与备份")
+        case .logs: return AppLocalized("查看和筛选应用操作日志")
+        case .about: return AppLocalized("查看版本信息并检查更新")
         }
     }
 }

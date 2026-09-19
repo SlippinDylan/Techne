@@ -86,7 +86,13 @@ private struct LockedResultBox<T: Sendable>: Sendable {
 
     nonisolated var value: Result<T, Error> {
         storage.withLock { state in
-            state ?? .failure(NSError(domain: errorDomain, code: -1, userInfo: [NSLocalizedDescriptionKey: "进程等待结果缺失"]))
+            state ?? .failure(
+                NSError(
+                    domain: errorDomain,
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: AppLocalized("error.process.wait_result_missing")]
+                )
+            )
         }
     }
 }

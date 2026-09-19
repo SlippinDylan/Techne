@@ -49,6 +49,14 @@ struct ProjectStartupCoordinator {
     nonisolated static let installCompletedMessage = "[系统] 依赖安装完成"
     nonisolated static let controlSignalPrefix = "__TECHNE_STARTUP_PHASE__:"
 
+    static func startPhaseMessage(command: String) -> String {
+        AppLocalized("terminal.startup.preparing_start_prefix") + command
+    }
+
+    static var localizedInstallCompletedMessage: String {
+        AppLocalized("terminal.startup.dependencies_installed")
+    }
+
     static func shouldInstallDependencies(
         for project: Project,
         fileManager: FileManager = .default
@@ -121,7 +129,8 @@ struct ProjectStartupCoordinator {
     }
 
     nonisolated static func containsStartPhaseMessage(_ output: String) -> Bool {
-        output.contains(startPhaseMessagePrefix)
+        output.contains(startPhaseMessagePrefix) ||
+            output.contains(AppLocalized("terminal.startup.preparing_start_prefix"))
     }
 
     nonisolated static func event(forControlLine line: String) -> ProjectStartupEvent? {
@@ -145,15 +154,15 @@ struct ProjectStartupCoordinator {
         let installMessage: String
         switch project.installStrategy {
         case .ifMissing:
-            installMessage = "[系统] 检测到缺少依赖，准备执行安装命令: \(installCommand)"
+            installMessage = AppLocalizedFormat("terminal.startup.missing_dependencies", installCommand)
         case .always:
-            installMessage = "[系统] 根据安装策略，准备执行安装命令: \(installCommand)"
+            installMessage = AppLocalizedFormat("terminal.startup.install_required", installCommand)
         case .never:
-            installMessage = "[系统] 准备执行安装命令: \(installCommand)"
+            installMessage = AppLocalizedFormat("terminal.startup.preparing_install", installCommand)
         }
 
         return [
-            "[系统] 正在检查依赖...",
+            AppLocalized("terminal.startup.checking_dependencies"),
             installMessage
         ]
     }
@@ -177,11 +186,11 @@ struct ProjectStartupCoordinator {
             case .install(let command):
                 lines.append(command)
                 lines.append(shellPrintLine("\(controlSignalPrefix)install-completed"))
-                lines.append(shellPrintLine(installCompletedMessage))
+                lines.append(shellPrintLine(localizedInstallCompletedMessage))
             case .clean(let command):
                 lines.append(command)
             case .start(let command):
-                lines.append(shellPrintLine("\(startPhaseMessagePrefix)\(command)"))
+                lines.append(shellPrintLine(startPhaseMessage(command: command)))
                 lines.append(command)
             }
         }

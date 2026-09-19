@@ -95,11 +95,11 @@ struct ServerCardWithInstances: View {
 
     private var serverMetadata: some View {
         HStack(spacing: AppConfig.UI.largePadding) {
-            Label("localhost:\(String(server.port))", systemImage: "network")
+            Label(AppLocalizedFormat("localhost: %lld", Int64(server.port)), systemImage: "network")
                 .font(.system(size: AppConfig.UI.smallFontSize))
                 .foregroundStyle(.secondary)
 
-            Label("PID: \(String(server.id))", systemImage: "number")
+            Label(AppLocalizedFormat("PID: %lld", Int64(server.id)), systemImage: "number")
                 .font(.system(size: AppConfig.UI.smallFontSize))
                 .foregroundStyle(.secondary)
         }
@@ -112,20 +112,20 @@ struct ServerCardWithInstances: View {
             ActionButton(
                 icon: "safari",
                 action: presentBrowserSelector,
-                tooltip: "在浏览器中打开"
+                tooltip: AppLocalized("在浏览器中打开")
             )
 
             ActionButton(
                 icon: "terminal",
                 action: openInTerminal,
-                tooltip: "在终端打开",
+                tooltip: AppLocalized("在终端打开"),
                 isDisabled: server.projectPath.isEmpty
             )
 
             ActionButton(
                 icon: "xmark.circle.fill",
                 action: onKillServer,
-                tooltip: "关闭服务器",
+                tooltip: AppLocalized("关闭服务器"),
                 isDestructive: true
             )
         }
@@ -153,7 +153,7 @@ struct ServerCardWithInstances: View {
         do {
             try task.run()
         } catch {
-            LogService.shared.error("在终端打开失败: \(error.localizedDescription)", category: "终端")
+            LogService.shared.error(AppLocalizedFormat("在终端打开失败: %@", error.localizedDescription), category: AppLocalized("终端"))
         }
     }
 
@@ -177,10 +177,10 @@ struct ServerCardWithInstances: View {
 
         switch result {
         case .success(let pid):
-            LogService.shared.success("成功启动浏览器 (PID: \(pid))", category: "浏览器")
+            LogService.shared.success(AppLocalizedFormat("成功启动浏览器 (PID: %lld)", Int64(pid)), category: AppLocalized("浏览器"))
             return .success(())
         case .failure(let error):
-            LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
+            LogService.shared.error(AppLocalizedFormat("启动浏览器失败: %@", error.localizedDescription), category: AppLocalized("浏览器"))
             return .failure(error)
         }
     }

@@ -68,14 +68,14 @@ final class GitService: Sendable {
         let restoreResult = executeGitCommand(
             at: path,
             arguments: ["restore", "."],
-            operation: "恢复文件更改"
+            operation: AppLocalized("operation.git.restore_changes")
         )
 
         // 清理未跟踪的文件
         let cleanResult = executeGitCommand(
             at: path,
             arguments: ["clean", "-fd"],
-            operation: "清理未跟踪文件"
+            operation: AppLocalized("operation.git.clean_untracked_files")
         )
 
         // 检查两个操作的结果
@@ -103,7 +103,7 @@ final class GitService: Sendable {
             try repository.switch(to: targetBranch)
             return .success(())
         } catch {
-            return .failure(.gitOperationFailed(operation: "切换分支到 \(branch)", reason: error.localizedDescription))
+            return .failure(.gitOperationFailed(operation: AppLocalizedFormat("operation.git.switch_to_branch", branch), reason: error.localizedDescription))
         }
     }
 
@@ -123,8 +123,8 @@ final class GitService: Sendable {
         // 验证命令安全性：使用基于模式的验证
         guard isCleanCommandSafe(trimmedCommand) else {
             return .failure(.gitOperationFailed(
-                operation: "清理缓存",
-                reason: "不允许执行的命令: \(command)"
+                operation: AppLocalized("operation.git.clean_cache"),
+                reason: AppLocalizedFormat("error.git.command_not_allowed", command)
             ))
         }
 
@@ -145,13 +145,13 @@ final class GitService: Sendable {
                 return .success(())
             } else {
                 let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-                let error = String(data: errorData, encoding: .utf8) ?? "清理缓存失败"
+                let error = String(data: errorData, encoding: .utf8) ?? AppLocalized("error.git.clean_cache_failed")
                 // 不在这里记录日志，由调用方负责
-                return .failure(.gitOperationFailed(operation: "清理缓存", reason: error))
+                return .failure(.gitOperationFailed(operation: AppLocalized("operation.git.clean_cache"), reason: error))
             }
         } catch {
             // 不在这里记录日志，由调用方负责
-            return .failure(.gitOperationFailed(operation: "清理缓存", reason: error.localizedDescription))
+            return .failure(.gitOperationFailed(operation: AppLocalized("operation.git.clean_cache"), reason: error.localizedDescription))
         }
     }
 
@@ -263,7 +263,7 @@ final class GitService: Sendable {
             } else {
                 // 读取错误输出
                 let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-                let errorMessage = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "未知错误"
+                let errorMessage = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? AppLocalized("error.unknown")
 
                 // 不在这里记录日志，由调用方负责
                 return .failure(.gitOperationFailed(operation: operation, reason: errorMessage))

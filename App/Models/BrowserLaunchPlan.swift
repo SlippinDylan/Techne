@@ -7,9 +7,9 @@ enum BrowserLaunchPlanningError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL(let url):
-            return "无效的浏览器地址：\(url)"
+            return AppLocalizedFormat("error.browser.invalid_url", url)
         case .missingProfileDirectory:
-            return "缺少浏览器实例目录"
+            return AppLocalized("error.browser.missing_profile_directory")
         }
     }
 }

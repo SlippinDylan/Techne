@@ -28,7 +28,7 @@ final class ChromeDetectionService {
     func refresh() {
         guard !isLoading else { return }
 
-        logService.info("开始扫描浏览器实例", category: "浏览器检测")
+        logService.info(AppLocalized("log.browser.scan_started"), category: AppLocalized("log.category.browser_detection"))
         isLoading = true
 
         let instanceStore = self.instanceStore
@@ -40,13 +40,13 @@ final class ChromeDetectionService {
                     guard let self else { return }
                     self.instances = foundInstances
                     self.isLoading = false
-                    self.logService.success("扫描完成，找到 \(foundInstances.count) 个浏览器实例", category: "浏览器检测")
+                    self.logService.success(AppLocalizedFormat("log.browser.scan_completed", Int64(foundInstances.count)), category: AppLocalized("log.category.browser_detection"))
                 }
             } catch {
                 await MainActor.run { [weak self] in
                     guard let self else { return }
                     self.isLoading = false
-                    self.logService.error("扫描浏览器实例失败: \(error.localizedDescription)", category: "浏览器检测")
+                    self.logService.error(AppLocalizedFormat("log.browser.scan_failed", error.localizedDescription), category: AppLocalized("log.category.browser_detection"))
                 }
             }
         }
@@ -56,7 +56,7 @@ final class ChromeDetectionService {
 
     /// 关闭单个实例
     func killInstance(_ instance: ChromeInstance) -> Bool {
-        logService.info("关闭浏览器实例: \(instance.displayName) (PID: \(instance.id))", category: "浏览器")
+        logService.info(AppLocalizedFormat("log.browser.closing", instance.displayName, instance.id), category: AppLocalized("log.category.browser"))
 
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/kill")
@@ -68,22 +68,22 @@ final class ChromeDetectionService {
             let success = terminationStatus == 0
 
             if success {
-                logService.success("成功关闭浏览器实例: \(instance.displayName)", category: "浏览器")
+                logService.success(AppLocalizedFormat("log.browser.closed", instance.displayName), category: AppLocalized("log.category.browser"))
                 refreshUntilInstanceDisappears(pid: instance.id)
             } else {
-                logService.error("关闭浏览器实例失败: \(instance.displayName)", category: "浏览器")
+                logService.error(AppLocalizedFormat("log.browser.close_failed", instance.displayName), category: AppLocalized("log.category.browser"))
             }
 
             return success
         } catch {
-            logService.error("关闭浏览器实例异常: \(error.localizedDescription)", category: "浏览器")
+            logService.error(AppLocalizedFormat("log.browser.close_error", error.localizedDescription), category: AppLocalized("log.category.browser"))
             return false
         }
     }
 
     /// 关闭所有实例
     func killAllInstances() {
-        logService.info("关闭所有浏览器实例 (共 \(instances.count) 个)", category: "浏览器")
+        logService.info(AppLocalizedFormat("log.browser.closing_all", Int64(instances.count)), category: AppLocalized("log.category.browser"))
 
         for instance in instances {
             _ = killInstance(instance)

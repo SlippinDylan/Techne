@@ -50,7 +50,7 @@ struct CommandConfigEditSheet: View {
 
     private var headerView: some View {
         HStack {
-            Text(config == nil ? "添加命令配置" : "编辑命令配置")
+            Text(AppLocalized(config == nil ? "添加命令配置" : "编辑命令配置"))
                 .font(.system(size: AppConfig.UI.titleFontSize, weight: .semibold))
 
             Spacer()
@@ -101,50 +101,50 @@ struct CommandConfigEditSheet: View {
 
                 // 启动命令
                 commandField(
-                    title: "启动命令",
-                    placeholder: "例如：pnpm dev",
+                    title: AppLocalized("启动命令"),
+                    placeholder: AppLocalized("例如：pnpm dev"),
                     text: $startCommand,
-                    description: "用于启动开发服务器"
+                    description: AppLocalized("用于启动开发服务器")
                 )
 
                 // 编译命令
                 commandField(
-                    title: "编译命令",
-                    placeholder: "例如：pnpm build",
+                    title: AppLocalized("编译命令"),
+                    placeholder: AppLocalized("例如：pnpm build"),
                     text: $buildCommand,
-                    description: "用于构建生产版本"
+                    description: AppLocalized("用于构建生产版本")
                 )
 
                 // 清理缓存命令
                 commandField(
-                    title: "清理缓存命令",
-                    placeholder: "例如：rm -rf dist node_modules/.cache",
+                    title: AppLocalized("清理缓存命令"),
+                    placeholder: AppLocalized("例如：rm -rf dist node_modules/.cache"),
                     text: $cleanCommand,
-                    description: "用于清除编译产物和缓存"
+                    description: AppLocalized("用于清除编译产物和缓存")
                 )
 
                 // 丢弃更改命令
                 commandField(
-                    title: "丢弃更改命令",
-                    placeholder: "例如：git reset --hard && git clean -fd",
+                    title: AppLocalized("丢弃更改命令"),
+                    placeholder: AppLocalized("例如：git reset --hard && git clean -fd"),
                     text: $discardChangesCommand,
-                    description: "用于丢弃工作区的所有更改"
+                    description: AppLocalized("用于丢弃工作区的所有更改")
                 )
 
                 // 安装依赖命令
                 commandField(
-                    title: "安装依赖命令",
-                    placeholder: "例如：pnpm install",
+                    title: AppLocalized("安装依赖命令"),
+                    placeholder: AppLocalized("例如：pnpm install"),
                     text: $installCommand,
-                    description: "用于安装项目依赖"
+                    description: AppLocalized("用于安装项目依赖")
                 )
 
                 // 停止命令
                 commandField(
-                    title: "停止命令",
-                    placeholder: "通常留空，使用 kill 命令",
+                    title: AppLocalized("停止命令"),
+                    placeholder: AppLocalized("通常留空，使用 kill 命令"),
                     text: $stopCommand,
-                    description: "用于停止服务器（可选）"
+                    description: AppLocalized("用于停止服务器（可选）")
                 )
             }
             .padding(AppConfig.UI.extraLargePadding)
@@ -158,7 +158,7 @@ struct CommandConfigEditSheet: View {
             HStack(spacing: 4) {
                 Text(title)
                     .font(.system(size: AppConfig.UI.mediumFontSize, weight: .medium))
-                Text("(\(description))")
+                Text(AppLocalizedFormat("(%@)", description))
                     .font(.system(size: AppConfig.UI.smallFontSize))
                     .foregroundStyle(.secondary)
             }

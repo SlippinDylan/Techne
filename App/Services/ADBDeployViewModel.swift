@@ -22,13 +22,13 @@ enum DeployStatus: Equatable {
     
     var description: String {
         switch self {
-        case .idle: return "就绪"
-        case .parsingAPK: return "正在解析 APK 包名..."
-        case .cleaning: return "正在强力清除旧版本..."
-        case .installing: return "正在执行深度安装 (-r -d -t)..."
-        case .launching: return "正在强制激活应用..."
-        case .success: return "部署成功 (已校验物理更新)"
-        case .failure(let msg): return "部署失败: \(msg)"
+        case .idle: return AppLocalized("deploy.status.ready")
+        case .parsingAPK: return AppLocalized("deploy.status.parsing_apk")
+        case .cleaning: return AppLocalized("deploy.status.cleaning")
+        case .installing: return AppLocalized("deploy.status.installing")
+        case .launching: return AppLocalized("deploy.status.launching")
+        case .success: return AppLocalized("deploy.status.success")
+        case .failure(let msg): return AppLocalizedFormat("deploy.status.failure", msg)
         }
     }
 }
@@ -118,7 +118,7 @@ final class ADBDeployViewModel {
                     sdkVersion: parts[3].trimmingCharacters(in: .whitespaces)
                 )
             } else {
-                self.device = ADBDevice(serial: serial, brand: "未知设备", model: "", androidVersion: "", sdkVersion: "")
+                self.device = ADBDevice(serial: serial, brand: AppLocalized("deploy.device.unknown"), model: "", androidVersion: "", sdkVersion: "")
             }
         } catch {
             self.device = nil
@@ -153,8 +153,8 @@ final class ADBDeployViewModel {
     func deploy() {
         guard let apk = selectedAPK, let device = device else { return }
 
-        AppLogInfo("开始部署安卓 APK：\(apk.name)")
-        terminalOutput = "[系统] 启动暴力部署模式 (对齐 adb_deploy.sh)...\n"
+        AppLogInfo(AppLocalizedFormat("log.adb.deployment_started", apk.name))
+        terminalOutput = AppLocalized("terminal.adb.deployment_started")
         
         Task {
             do {
@@ -163,18 +163,18 @@ final class ADBDeployViewModel {
                 
                 // 1. 自动探测包名
                 status = .parsingAPK
-                appendToTerminal("[1/5] 正在解析 APK 内部包名...\n")
+                appendToTerminal(AppLocalized("terminal.adb.parsing_package_name"))
                 let packageName = try await detectPackageName(apkPath: apkPath)
-                appendToTerminal("   识别到有效包名: \(packageName)\n")
+                appendToTerminal(AppLocalizedFormat("terminal.adb.package_name_found", packageName))
                 
                 // 2. 获取安装前的时间戳
-                appendToTerminal("[2/5] 正在读取当前应用物理状态...\n")
+                appendToTerminal(AppLocalized("terminal.adb.reading_package_state"))
                 let timeBefore = await getPackageUpdateTime(packageName: packageName, serial: serial)
-                appendToTerminal("   当前最后更新时间: \(timeBefore.isEmpty ? "未安装" : timeBefore)\n")
+                appendToTerminal(AppLocalizedFormat("terminal.adb.current_update_time", timeBefore.isEmpty ? AppLocalized("deploy.not_installed") : timeBefore))
                 
                 // 3. 强力卸载
                 status = .cleaning
-                appendToTerminal("[3/5] 正在执行强力物理卸载 (清除残留缓存)...\n")
+                appendToTerminal(AppLocalized("terminal.adb.uninstalling"))
                 _ = try await ModernProcessExecutor.execute(
                     command: "adb -s \(serial) uninstall \(packageName)",
                     in: URL(fileURLWithPath: "/tmp"),
@@ -183,7 +183,7 @@ final class ADBDeployViewModel {
                 
                 // 4. 深度安装
                 status = .installing
-                appendToTerminal("\n[4/5] 正在执行深度安装 (-r -d -t)...\n")
+                appendToTerminal(AppLocalized("terminal.adb.installing"))
                 self.currentSuccessFlag = false
                 let result = try await ModernProcessExecutor.execute(
                     command: "adb -s \(serial) install -r -d -t \"\(apkPath)\"",
@@ -201,21 +201,21 @@ final class ADBDeployViewModel {
                 self.terminalOutput += result.finalOutput
                 
                 guard self.currentSuccessFlag && result.exitCode == 0 else {
-                    throw NSError(domain: "ADBDeploy", code: 2, userInfo: [NSLocalizedDescriptionKey: "ADB 安装阶段返回失败"])
+                    throw NSError(domain: "ADBDeploy", code: 2, userInfo: [NSLocalizedDescriptionKey: AppLocalized("error.adb.install_failed")])
                 }
                 
                 // 5. 校验物理更新
                 let timeAfter = await getPackageUpdateTime(packageName: packageName, serial: serial)
                 if timeBefore == timeAfter && !timeAfter.isEmpty {
-                    appendToTerminal("\n[严重警告] 检测到物理时间戳未改变！安装可能未生效。\n")
-                    status = .failure("安装未生效，请手动确认手机弹窗")
+                    appendToTerminal(AppLocalized("terminal.adb.timestamp_unchanged"))
+                    status = .failure(AppLocalized("error.adb.install_not_applied"))
                     return
                 }
-                appendToTerminal("   物理校验通过：更新时间已变更为 \(timeAfter)\n")
+                appendToTerminal(AppLocalizedFormat("terminal.adb.install_verified", timeAfter))
                 
                 // 6. 强制激活
                 status = .launching
-                appendToTerminal("[5/5] 正在通过 Monkey 强制激活应用...\n")
+                appendToTerminal(AppLocalized("terminal.adb.launching"))
                 let monkeyCommand = "adb -s \(serial) shell monkey -p \(packageName) -c android.intent.category.LAUNCHER 1"
                 let monkeyResult = try await ModernProcessExecutor.execute(
                     command: monkeyCommand,
@@ -224,19 +224,19 @@ final class ADBDeployViewModel {
                 )
 
                 self.terminalOutput += monkeyResult.finalOutput
-                appendToTerminal("   Monkey exit code: \(monkeyResult.exitCode)\n")
+                appendToTerminal(AppLocalizedFormat("terminal.adb.monkey_exit_code", monkeyResult.exitCode))
                 guard monkeyResult.exitCode == 0 else {
-                    throw NSError(domain: "ADBDeploy", code: 3, userInfo: [NSLocalizedDescriptionKey: "Monkey 激活阶段返回失败"])
+                    throw NSError(domain: "ADBDeploy", code: 3, userInfo: [NSLocalizedDescriptionKey: AppLocalized("error.adb.monkey_failed")])
                 }
 
                 status = .success
                 
-                AppLogSuccess("安卓 APK 部署成功：\(apk.name)")
+                AppLogSuccess(AppLocalizedFormat("log.adb.deployment_succeeded", apk.name))
                 
             } catch {
-                AppLogError("安卓 APK 部署失败：\(error.localizedDescription)")
+                AppLogError(AppLocalizedFormat("log.adb.deployment_failed", error.localizedDescription))
                 status = .failure(error.localizedDescription)
-                appendToTerminal("\n[严重错误] \(error.localizedDescription)\n")
+                appendToTerminal(AppLocalizedFormat("terminal.adb.fatal_error", error.localizedDescription))
             }
         }
     }
@@ -272,7 +272,7 @@ final class ADBDeployViewModel {
             domain: "ADBDeploy",
             code: 1,
             userInfo: [
-                NSLocalizedDescriptionKey: "未找到可用的 aapt2/aapt，或无法从 APK 解析包名。请安装 Android SDK Build Tools。"
+                NSLocalizedDescriptionKey: AppLocalized("error.adb.build_tools_not_found")
             ]
         )
     }

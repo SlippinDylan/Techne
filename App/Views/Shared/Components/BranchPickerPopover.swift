@@ -55,7 +55,7 @@ struct BranchPickerPopover: View {
                     .controlSize(.small)
             }
 
-            Text(viewModel.isLoading ? "正在加载分支..." : "未检测到本地分支")
+            Text(AppLocalized(viewModel.isLoading ? "正在加载分支..." : "未检测到本地分支"))
                 .font(.system(size: AppConfig.UI.mediumFontSize))
                 .foregroundStyle(.secondary)
         }

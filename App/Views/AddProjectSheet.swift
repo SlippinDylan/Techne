@@ -55,7 +55,7 @@ struct AddProjectSheet: View {
 
     private var headerView: some View {
         HStack {
-            Text(projectType == .devServer ? "添加开发项目" : "添加小程序项目")
+            Text(AppLocalized(projectType == .devServer ? "添加开发项目" : "添加小程序项目"))
                 .font(.system(size: AppConfig.UI.titleFontSize, weight: .semibold))
 
             Spacer()
@@ -136,7 +136,7 @@ struct AddProjectSheet: View {
                     .font(.system(size: AppConfig.UI.smallFontSize))
                     .foregroundStyle(.secondary)
             } else {
-                previewRow("启动", snapshot.startCommand)
+                previewRow(AppLocalized("启动"), snapshot.startCommand)
                 if !snapshot.startupModes.isEmpty {
                     Divider()
                         .padding(.vertical, AppConfig.UI.smallSpacing)
@@ -146,12 +146,12 @@ struct AddProjectSheet: View {
                         previewRow(mode.displayName, mode.startCommand)
                     }
                 }
-                previewRow("安装依赖", snapshot.installCommand)
-                previewRow("构建", snapshot.buildCommand)
-                previewRow("清理", snapshot.cleanCommand)
-                previewRow("停止", snapshot.stopCommand)
+                previewRow(AppLocalized("安装依赖"), snapshot.installCommand)
+                previewRow(AppLocalized("构建"), snapshot.buildCommand)
+                previewRow(AppLocalized("清理"), snapshot.cleanCommand)
+                previewRow(AppLocalized("停止"), snapshot.stopCommand)
             }
-            previewRow("丢弃更改", snapshot.discardChangesCommand)
+            previewRow(AppLocalized("丢弃更改"), snapshot.discardChangesCommand)
         }
     }
 

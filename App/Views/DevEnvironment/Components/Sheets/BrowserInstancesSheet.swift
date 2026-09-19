@@ -127,12 +127,12 @@ struct InstanceDetailCard: View {
             }
 
             HStack(spacing: AppConfig.UI.largeSpacing) {
-                Label("PID: \(instance.id)", systemImage: "number")
+                Label(AppLocalizedFormat("PID: %lld", Int64(instance.id)), systemImage: "number")
                     .font(.system(size: AppConfig.UI.smallFontSize))
                     .foregroundStyle(.secondary)
 
                 if let debugPort = instance.debugPort {
-                    Label("端口: \(debugPort)", systemImage: "network")
+                    Label(AppLocalizedFormat("端口: %lld", Int64(debugPort)), systemImage: "network")
                         .font(.system(size: AppConfig.UI.smallFontSize))
                         .foregroundStyle(.green)
                 }

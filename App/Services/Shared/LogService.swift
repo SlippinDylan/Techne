@@ -23,6 +23,15 @@ enum LogLevel: String, Codable, Sendable {
         case .error: return "xmark.circle.fill"
         }
     }
+
+    var displayName: String {
+        switch self {
+        case .info: return AppLocalized("log_level.info")
+        case .success: return AppLocalized("log_level.success")
+        case .warning: return AppLocalized("log_level.warning")
+        case .error: return AppLocalized("log_level.error")
+        }
+    }
 }
 
 /// 日志条目
@@ -46,7 +55,7 @@ struct LogEntry: Identifiable, Codable, Sendable {
     }
 
     var formattedLine: String {
-        "[\(formattedTimestamp)] [\(level.rawValue)] [\(category)] \(message)"
+        "[\(formattedTimestamp)] [\(level.displayName)] [\(category)] \(message)"
     }
 
     enum CodingKeys: String, CodingKey {

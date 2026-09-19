@@ -27,7 +27,7 @@ final class DevServerDetectionService {
     func refresh() {
         guard !isLoading else { return }
 
-        logService.info("开始扫描开发服务器", category: "服务器检测")
+        logService.info(AppLocalized("log.dev_server.scan_started"), category: AppLocalized("log.category.server_detection"))
         isLoading = true
 
         Task.detached { [weak self] in
@@ -38,11 +38,11 @@ final class DevServerDetectionService {
                 self.servers = foundServers
                 self.isLoading = false
                 if foundServers.isEmpty {
-                    self.logService.warning("未找到开发服务器", category: "服务器检测")
+                    self.logService.warning(AppLocalized("log.dev_server.none_found"), category: AppLocalized("log.category.server_detection"))
                 } else {
-                    self.logService.success("扫描完成，找到 \(foundServers.count) 个开发服务器", category: "服务器检测")
+                    self.logService.success(AppLocalizedFormat("log.dev_server.scan_completed", Int64(foundServers.count)), category: AppLocalized("log.category.server_detection"))
                     for server in foundServers {
-                        self.logService.info("  - \(server.projectName) (端口: \(server.port))", category: "服务器检测")
+                        self.logService.info(AppLocalizedFormat("log.dev_server.found", server.projectName, Int64(server.port)), category: AppLocalized("log.category.server_detection"))
                     }
                 }
             }
@@ -116,7 +116,7 @@ final class DevServerDetectionService {
 
     /// 关闭单个服务器
     func killServer(_ server: DevServer) -> Bool {
-        logService.info("关闭服务器: \(server.projectName) (PID: \(server.id))", category: "服务器")
+        logService.info(AppLocalizedFormat("log.dev_server.closing", server.projectName, server.id), category: AppLocalized("log.category.server"))
 
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/kill")
@@ -128,9 +128,9 @@ final class DevServerDetectionService {
             let success = terminationStatus == 0
 
             if success {
-                logService.success("成功关闭服务器: \(server.projectName)", category: "服务器")
+                logService.success(AppLocalizedFormat("log.dev_server.closed", server.projectName), category: AppLocalized("log.category.server"))
             } else {
-                logService.error("关闭服务器失败: \(server.projectName)", category: "服务器")
+                logService.error(AppLocalizedFormat("log.dev_server.close_failed", server.projectName), category: AppLocalized("log.category.server"))
             }
 
             // 等待一下再刷新
@@ -141,14 +141,14 @@ final class DevServerDetectionService {
 
             return success
         } catch {
-            logService.error("关闭服务器异常: \(error.localizedDescription)", category: "服务器")
+            logService.error(AppLocalizedFormat("log.dev_server.close_error", error.localizedDescription), category: AppLocalized("log.category.server"))
             return false
         }
     }
 
     /// 关闭所有服务器
     func killAllServers() {
-        logService.info("关闭所有服务器 (共 \(servers.count) 个)", category: "服务器")
+        logService.info(AppLocalizedFormat("log.dev_server.closing_all", Int64(servers.count)), category: AppLocalized("log.category.server"))
 
         for server in servers {
             _ = killServer(server)

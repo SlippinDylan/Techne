@@ -20,38 +20,38 @@ enum ProjectServiceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .pathNotFound(let path):
-            return "路径不存在: \(path)"
+            return AppLocalizedFormat("error.project.path_not_found", path)
         case .projectAlreadyExists(let name):
-            return "项目已存在: \(name)"
+            return AppLocalizedFormat("error.project.already_exists", name)
         case .gitOperationFailed(let operation, let reason):
-            return "Git 操作失败 (\(operation)): \(reason)"
+            return AppLocalizedFormat("error.project.git_operation_failed", operation, reason)
         case .processStartFailed(let message):
-            return "进程启动失败: \(message)"
+            return AppLocalizedFormat("error.project.process_start_failed", message)
         case .processStopFailed(let message):
-            return "进程停止失败: \(message)"
+            return AppLocalizedFormat("error.project.process_stop_failed", message)
         case .persistenceFailed(let message):
-            return "持久化失败: \(message)"
+            return AppLocalizedFormat("error.project.persistence_failed", message)
         case .invalidConfiguration(let message):
-            return "配置无效: \(message)"
+            return AppLocalizedFormat("error.project.invalid_configuration", message)
         }
     }
 
     var recoverySuggestion: String? {
         switch self {
         case .pathNotFound:
-            return "请检查路径是否正确，确保目录存在"
+            return AppLocalized("error.project.path_not_found.recovery")
         case .projectAlreadyExists:
-            return "请使用不同的项目名称或路径"
+            return AppLocalized("error.project.already_exists.recovery")
         case .gitOperationFailed:
-            return "请确保项目是有效的 Git 仓库，并且没有未提交的更改"
+            return AppLocalized("error.project.git_operation_failed.recovery")
         case .processStartFailed:
-            return "请检查启动命令是否正确，确保依赖已安装"
+            return AppLocalized("error.project.process_start_failed.recovery")
         case .processStopFailed:
-            return "请尝试手动终止进程或重启应用"
+            return AppLocalized("error.project.process_stop_failed.recovery")
         case .persistenceFailed:
-            return "请检查磁盘空间和文件权限"
+            return AppLocalized("error.project.persistence_failed.recovery")
         case .invalidConfiguration:
-            return "请检查配置文件格式是否正确"
+            return AppLocalized("error.project.invalid_configuration.recovery")
         }
     }
 }

@@ -44,6 +44,7 @@ Techne 是面向 macOS 26 及以上版本的原生开发工具，使用 Swift、
 - `ProjectService` 负责项目状态和业务编排；进程执行、依赖准备、Git、浏览器等细节留在对应服务或模型中。
 - `Project`、备份 payload 等持久化结构变更必须考虑旧数据解码和迁移，并增加兼容性测试。
 - `PersistenceService` 的读取失败回退和备份 schema 校验是已知缺口，见架构文档。不要复制或扩大这些行为；任务触及相关路径时应修复根因并补回归测试。
+- 用户可见文本维护在三语 String Catalog；持久化 raw value、命令和外部工具原始输出不得作为翻译边界修改。
 - SwiftUI 页面负责展示和触发动作，不复制服务层业务判断。AppKit bridge 只处理 SwiftUI 无法可靠表达的 macOS 行为。
 - 共享可观察状态遵守现有 `@MainActor` 和 Observation 设计；不要用 `@unchecked Sendable`、宽泛转换或空 catch 绕过并发和错误问题。
 - 错误在能够恢复或向用户说明的层级处理。不要吞掉启动、部署、导入或持久化失败。
@@ -58,6 +59,7 @@ xcodebuild test -project Techne.xcodeproj -scheme Techne -destination 'platform=
 xcodebuild build -project Techne.xcodeproj -scheme Techne -configuration Debug -destination 'platform=macOS,arch=arm64'
 node .github/scripts/release-manifest.mjs validate
 node .github/scripts/sync-version.mjs --check
+node .github/scripts/validate-localizations.mjs
 node --test .github/scripts/*.test.mjs
 ```
 

@@ -145,7 +145,7 @@ final class ProcessService: Sendable {
         )
 
         guard plan.isEmpty == false else {
-            return .failure(.processStopFailed("未找到匹配项目路径的运行进程"))
+            return .failure(.processStopFailed(AppLocalized("error.process.no_matching_project_process")))
         }
 
         var failureMessages: [String] = []
@@ -166,14 +166,14 @@ final class ProcessService: Sendable {
                 fallbackPIDs: fallbackPIDs
             )
             if case .failure(let error) = result {
-                failureMessages.append("进程组 \(processGroupID): \(error.localizedDescription)")
+                failureMessages.append(AppLocalizedFormat("error.process.group_failure", processGroupID, error.localizedDescription))
             }
         }
 
         for pid in plan.fallbackProcessIDs {
             let result = await stopSingleProcess(pid: pid)
             if case .failure(let error) = result {
-                failureMessages.append("进程 \(pid): \(error.localizedDescription)")
+                failureMessages.append(AppLocalizedFormat("error.process.failure", pid, error.localizedDescription))
             }
         }
 
@@ -216,7 +216,7 @@ final class ProcessService: Sendable {
 
         runtime.sendSignalToProcessGroup(processGroupID, SIGKILL)
         if await waitUntilProcessesStop(verificationPIDs, attempts: 2) == false {
-            return .failure(.processStopFailed("进程组 (\(processGroupID)) 强制停止无效，可能存在权限限制"))
+            return .failure(.processStopFailed(AppLocalizedFormat("error.process.group_force_stop_failed", processGroupID)))
         }
 
         return .success(())
@@ -235,7 +235,7 @@ final class ProcessService: Sendable {
 
         runtime.sendSignalToProcess(pid, SIGKILL)
         if await waitUntilProcessesStop([pid], attempts: 2) == false {
-            return .failure(.processStopFailed("进程 \(pid) 停止失败"))
+            return .failure(.processStopFailed(AppLocalizedFormat("error.process.stop_failed", pid)))
         }
 
         return .success(())

@@ -61,29 +61,29 @@ struct CommandConfigCard: View {
     private var commandsList: some View {
         VStack(alignment: .leading, spacing: AppConfig.UI.smallSpacing) {
             if !config.startCommand.isEmpty {
-                commandRow(label: "启动", command: config.startCommand)
+                commandRow(label: AppLocalized("启动"), command: config.startCommand)
             }
             if !config.buildCommand.isEmpty {
-                commandRow(label: "编译", command: config.buildCommand)
+                commandRow(label: AppLocalized("编译"), command: config.buildCommand)
             }
             if !config.cleanCommand.isEmpty {
-                commandRow(label: "清理", command: config.cleanCommand)
+                commandRow(label: AppLocalized("清理"), command: config.cleanCommand)
             }
             if !config.discardChangesCommand.isEmpty {
-                commandRow(label: "丢弃更改", command: config.discardChangesCommand)
+                commandRow(label: AppLocalized("丢弃更改"), command: config.discardChangesCommand)
             }
             if !config.installCommand.isEmpty {
-                commandRow(label: "安装依赖", command: config.installCommand)
+                commandRow(label: AppLocalized("安装依赖"), command: config.installCommand)
             }
             if !config.stopCommand.isEmpty {
-                commandRow(label: "停止", command: config.stopCommand)
+                commandRow(label: AppLocalized("停止"), command: config.stopCommand)
             }
         }
     }
 
     private func commandRow(label: String, command: String) -> some View {
         HStack(spacing: AppConfig.UI.mediumSpacing) {
-            Text(label + ":")
+            Text(AppLocalizedFormat("%@:", label))
                 .font(.system(size: AppConfig.UI.smallFontSize))
                 .foregroundStyle(.secondary)
                 .frame(width: 60, alignment: .leading)
@@ -102,13 +102,13 @@ struct CommandConfigCard: View {
             ActionButton(
                 icon: "square.and.pencil",
                 action: onEdit,
-                tooltip: "编辑配置"
+                tooltip: AppLocalized("编辑配置")
             )
 
             ActionButton(
                 icon: "trash",
                 action: onDelete,
-                tooltip: "删除配置",
+                tooltip: AppLocalized("删除配置"),
                 isDestructive: true
             )
         }

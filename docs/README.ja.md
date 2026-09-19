@@ -79,6 +79,10 @@ sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 5. Web プロジェクトでは、検出されたサーバーをインストール済みブラウザで開けます。
 6. Android 配布画面ではデバイスを接続し、APK を選んで配布します。
 
+### 言語
+
+Techne は英語、簡体字中国語、繁体字中国語に対応し、初期設定では macOS の言語に従います。「設定 > 一般」で言語を指定し、案内に従って Techne を再起動すると変更が反映されます。
+
 ### ブラウザと独立プロファイル
 
 インストール済みの Safari、Google Chrome、Chrome Beta、Chromium、Microsoft Edge、Brave、Arc を検出します。Safari は通常どおり URL を開きます。Chrome、Chrome Beta、Chromium、Edge、Brave、Arc は Chromium ベースです。管理対象の各インスタンスは別のプロファイルディレクトリと新しいウインドウで起動し、`9222` から利用可能なリモートデバッグポートを割り当てます。普段使いのブラウザや別の管理対象インスタンスの Cookie とサイトデータは共有しません。

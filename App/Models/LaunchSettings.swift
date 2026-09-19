@@ -32,7 +32,10 @@ final class LaunchSettings {
                     }
                 }
             } catch {
-                LogService.shared.error("设置登录项失败：\(error.localizedDescription)", category: "系统")
+                LogService.shared.error(
+                    AppLocalizedFormat("log.launch_settings.failed", error.localizedDescription),
+                    category: AppLocalized("log.category.system")
+                )
             }
         }
     }

@@ -150,7 +150,7 @@ final class ProjectService {
             return .failure(.pathNotFound(canonicalPath))
         }
         if ProjectPersistenceMigration.isTemporaryProjectPath(canonicalPath) {
-            return .failure(.invalidConfiguration("临时目录项目不会被持久化，请选择真实项目目录"))
+            return .failure(.invalidConfiguration(AppLocalized("error.project.temporary_directory")))
         }
         if projects.contains(where: { ProjectPath.canonical($0.path) == canonicalPath }) {
             return .failure(.projectAlreadyExists(canonicalPath))
@@ -159,7 +159,7 @@ final class ProjectService {
         let project: Project
         if let configId {
             guard let commandConfig = commandConfigService.getConfig(by: configId) else {
-                return .failure(.invalidConfiguration("所选命令配置不存在"))
+                return .failure(.invalidConfiguration(AppLocalized("error.project.selected_command_configuration_not_found")))
             }
             project = ProjectCommandSnapshotResolver.makeProject(
                 name: projectName,
@@ -318,7 +318,7 @@ final class ProjectService {
             return .failure(.pathNotFound(project.path))
         }
         guard projects[index].availableStartupModes.contains(where: { $0.id == modeID }) else {
-            return .failure(.invalidConfiguration("无效的启动模式"))
+            return .failure(.invalidConfiguration(AppLocalized("error.project.invalid_startup_mode")))
         }
 
         let wasRunning = projects[index].isRunning || projects[index].runningProcessPID != nil
@@ -326,7 +326,7 @@ final class ProjectService {
         let updatedProject = projects[index]
         saveProjects()
         appendSystemTerminalMessage(
-            "已切换启动模式为 \(updatedProject.selectedStartupMode?.displayName ?? "默认")",
+            AppLocalizedFormat("terminal.project.startup_mode_changed", updatedProject.selectedStartupMode?.displayName ?? AppLocalized("startup_mode.default")),
             for: updatedProject.id
         )
 
@@ -336,7 +336,7 @@ final class ProjectService {
 
         let stopResult = await stopServer(for: updatedProject)
         guard case .success = stopResult else {
-            appendSystemTerminalMessage("启动模式切换已保存，但停止旧进程失败", for: updatedProject.id)
+            appendSystemTerminalMessage(AppLocalized("terminal.project.startup_mode_changed_stop_failed"), for: updatedProject.id)
             return stopResult
         }
 
@@ -381,27 +381,27 @@ final class ProjectService {
         guard let currentProject = projects.first(where: { $0.id == project.id }) else {
             return .failure(.pathNotFound(project.path))
         }
-        appendSystemTerminalMessage("正在重新启动...", for: project.id)
+        appendSystemTerminalMessage(AppLocalized("terminal.project.restarting"), for: project.id)
         return startServer(for: currentProject)
     }
 
     @MainActor
     func resetMiniAppFileWatching(for project: Project) async -> Result<Void, ProjectServiceError> {
         guard project.type == .miniApp else {
-            return .failure(.invalidConfiguration("只有微信小程序项目支持重建文件监听"))
+            return .failure(.invalidConfiguration(AppLocalized("error.project.file_watching_requires_mini_program")))
         }
 
-        appendSystemTerminalMessage("正在请求微信开发者工具重建文件监听...", for: project.id)
+        appendSystemTerminalMessage(AppLocalized("terminal.wechat.rebuilding_file_watching"), for: project.id)
         let result = await weChatDevToolsService.resetFileWatching(for: project.path)
         switch result {
         case .success(let output):
             if output.isEmpty == false {
                 appendTerminalOutput("\(output)\n", for: project.id)
             }
-            appendSystemTerminalMessage("微信开发者工具文件监听已重建", for: project.id)
+            appendSystemTerminalMessage(AppLocalized("terminal.wechat.file_watching_rebuilt"), for: project.id)
             return .success(())
         case .failure(let error):
-            appendSystemTerminalMessage("重建文件监听失败: \(error.localizedDescription)", for: project.id)
+            appendSystemTerminalMessage(AppLocalizedFormat("terminal.wechat.file_watching_rebuild_failed", error.localizedDescription), for: project.id)
             return .failure(.processStartFailed(error.localizedDescription))
         }
     }
@@ -412,7 +412,7 @@ final class ProjectService {
             return .failure(.pathNotFound(project.path))
         }
         projects[index].transitionState = .starting
-        appendSystemTerminalMessage("正在通过微信开发者工具打开原生小程序...", for: project.id)
+        appendSystemTerminalMessage(AppLocalized("terminal.wechat.opening_native_mini_program"), for: project.id)
 
         Task { @MainActor in
             let result = await weChatDevToolsService.openProject(at: project.path)
@@ -424,10 +424,10 @@ final class ProjectService {
                 if output.isEmpty == false {
                     appendTerminalOutput("\(output)\n", for: project.id)
                 }
-                appendSystemTerminalMessage("微信开发者工具已打开项目", for: project.id)
+                appendSystemTerminalMessage(AppLocalized("terminal.wechat.project_opened"), for: project.id)
             case .failure(let error):
                 projects[currentIndex].isRunning = false
-                appendSystemTerminalMessage("打开微信开发者工具失败: \(error.localizedDescription)", for: project.id)
+                appendSystemTerminalMessage(AppLocalizedFormat("terminal.wechat.open_project_failed", error.localizedDescription), for: project.id)
             }
         }
         return .success(())
@@ -439,7 +439,7 @@ final class ProjectService {
             return .failure(.pathNotFound(project.path))
         }
         projects[index].transitionState = .stopping
-        appendSystemTerminalMessage("正在关闭微信开发者工具项目窗口...", for: project.id)
+        appendSystemTerminalMessage(AppLocalized("terminal.wechat.closing_project"), for: project.id)
         let result = await weChatDevToolsService.closeProject(at: project.path)
         guard let currentIndex = projects.firstIndex(where: { $0.id == project.id }) else {
             return .failure(.pathNotFound(project.path))
@@ -451,10 +451,10 @@ final class ProjectService {
             if output.isEmpty == false {
                 appendTerminalOutput("\(output)\n", for: project.id)
             }
-            appendSystemTerminalMessage("微信开发者工具项目窗口已关闭", for: project.id)
+            appendSystemTerminalMessage(AppLocalized("terminal.wechat.project_closed"), for: project.id)
             return .success(())
         case .failure(let error):
-            appendSystemTerminalMessage("关闭微信开发者工具失败: \(error.localizedDescription)", for: project.id)
+            appendSystemTerminalMessage(AppLocalizedFormat("terminal.wechat.close_project_failed", error.localizedDescription), for: project.id)
             return .failure(.processStopFailed(error.localizedDescription))
         }
     }
@@ -536,7 +536,7 @@ final class ProjectService {
 
     @MainActor
     private func stopDevServerWithoutOutput(for project: Project) async -> Result<Void, ProjectServiceError> {
-        appendSystemTerminalMessage("正在停止开发服务...", for: project.id)
+        appendSystemTerminalMessage(AppLocalized("terminal.project.stopping_development_service"), for: project.id)
 
         let result = await processManager.stopDevServer(
             for: project,
@@ -548,7 +548,7 @@ final class ProjectService {
         }
         
         if case .success = result {
-            appendSystemTerminalMessage("开发服务已停止", for: project.id)
+            appendSystemTerminalMessage(AppLocalized("terminal.project.development_service_stopped"), for: project.id)
             if let idx = self.projects.firstIndex(where: { $0.id == project.id }) {
                 self.projects[idx].runningProcessPID = nil
                 self.projects[idx].isRunning = false
@@ -558,7 +558,7 @@ final class ProjectService {
         } else if let idx = self.projects.firstIndex(where: { $0.id == project.id }) {
             self.projects[idx].transitionState = .idle
             if case .failure(let error) = result {
-                appendSystemTerminalMessage("开发服务停止失败: \(error.localizedDescription)", for: project.id)
+                appendSystemTerminalMessage(AppLocalizedFormat("terminal.project.development_service_stop_failed", error.localizedDescription), for: project.id)
             }
         }
         return result
@@ -684,7 +684,7 @@ final class ProjectService {
 
     @MainActor
     private func appendSystemTerminalMessage(_ message: String, for projectID: UUID) {
-        appendTerminalOutput("[系统] \(message)\n", for: projectID)
+        appendTerminalOutput(AppLocalizedFormat("terminal.system_message", message), for: projectID)
     }
 
     @MainActor
@@ -752,7 +752,9 @@ final class ProjectService {
         return kw
     }
 
-    private func getCategoryName(for type: ProjectType) -> String { return type == .devServer ? "开发项目" : "小程序" }
+    private func getCategoryName(for type: ProjectType) -> String {
+        type == .devServer ? AppLocalized("log.category.development_project") : AppLocalized("log.category.mini_program")
+    }
 
     @MainActor
     private func applyStartupBehavior(_ startupBehavior: ProjectServiceStartupBehavior) {

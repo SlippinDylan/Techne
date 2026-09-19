@@ -33,7 +33,7 @@ final class CommandConfigService {
 
         // 检查名称是否已存在
         if configs.contains(where: { $0.name == config.name }) {
-            return .failure(.invalidConfiguration("配置名称已存在: \(config.name)"))
+            return .failure(.invalidConfiguration(AppLocalizedFormat("error.command_configuration.name_exists", config.name)))
         }
 
         configs.append(config)
@@ -53,7 +53,7 @@ final class CommandConfigService {
             return .success(())
         }
 
-        return .failure(.invalidConfiguration("配置不存在"))
+        return .failure(.invalidConfiguration(AppLocalized("error.command_configuration.not_found")))
     }
 
     // MARK: - Validation
@@ -64,12 +64,12 @@ final class CommandConfigService {
     private func validateConfig(_ config: CommandConfig) -> ProjectServiceError? {
         // 验证名称
         if config.name.trimmingCharacters(in: .whitespaces).isEmpty {
-            return .invalidConfiguration("配置名称不能为空")
+            return .invalidConfiguration(AppLocalized("error.command_configuration.name_required"))
         }
 
         // 验证启动命令
         if config.startCommand.trimmingCharacters(in: .whitespaces).isEmpty {
-            return .invalidConfiguration("启动命令不能为空")
+            return .invalidConfiguration(AppLocalized("error.command_configuration.start_command_required"))
         }
 
         // 验证所有命令字段的安全性
@@ -99,7 +99,7 @@ final class CommandConfigService {
 
             for pattern in dangerousPatterns {
                 if command.contains(pattern) {
-                    return .invalidConfiguration("命令包含危险操作: \(pattern)")
+                    return .invalidConfiguration(AppLocalizedFormat("error.command_configuration.unsafe_command", pattern))
                 }
             }
         }

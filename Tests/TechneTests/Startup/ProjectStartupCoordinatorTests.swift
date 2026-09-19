@@ -4,6 +4,14 @@ import Testing
 
 struct ProjectStartupCoordinatorTests {
     @Test
+    func recognizesLocalizedStartPhaseMessageWithoutChangingControlProtocol() {
+        let message = ProjectStartupCoordinator.startPhaseMessage(command: "pnpm dev")
+
+        #expect(ProjectStartupCoordinator.containsStartPhaseMessage(message))
+        #expect(ProjectStartupCoordinator.controlSignalPrefix == "__TECHNE_STARTUP_PHASE__:")
+    }
+
+    @Test
     func ifMissingInstallsWhenPackageJSONExistsAndNodeModulesMissing() throws {
         let root = try makeProjectRoot(packageJSON: true, nodeModules: false)
         defer { try? FileManager.default.removeItem(at: root) }

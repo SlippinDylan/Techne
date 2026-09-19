@@ -43,10 +43,10 @@ class ProcessManager {
         onOutputUpdate: @escaping @Sendable (UUID, String) -> Void
     ) -> Result<Void, ProjectServiceError> {
         guard managedExecutions[project.id] == nil else {
-            return .failure(.processStartFailed("项目已有受管进程正在运行"))
+            return .failure(.processStartFailed(AppLocalized("error.process.managed_process_already_running")))
         }
 
-        logService.info("准备启动开发服务器：\(project.name)", category: category)
+        logService.info(AppLocalizedFormat("log.process.preparing_start", project.name), category: category)
         let logService = logService
         let terminalHandler = terminalHandler
         let startupOutputInterpreter = StartupOutputInterpreter()
@@ -60,8 +60,11 @@ class ProcessManager {
                     onOutputUpdate(project.id, "\(message)\n")
                 }
 
-                let startMessage = "\(ProjectStartupCoordinator.startPhaseMessagePrefix)\(project.startCommand)"
-                onOutputUpdate(project.id, "\n[系统] 正在启动进程组...\n命令: \(project.startCommand)\n\n")
+                let startMessage = ProjectStartupCoordinator.startPhaseMessage(command: project.startCommand)
+                onOutputUpdate(
+                    project.id,
+                    AppLocalizedFormat("terminal.process.starting_group", project.startCommand)
+                )
                 
                 let result = try await ModernProcessExecutor.execute(
                     command: plan.shellScript,
@@ -142,11 +145,11 @@ class ProcessManager {
                     }
                 )
                 
-                onOutputUpdate(project.id, "\n\n[系统] 进程已结束 (退出码: \(result.exitCode))\n")
+                onOutputUpdate(project.id, AppLocalizedFormat("terminal.process.exited", result.exitCode))
                 onCompletion(.exited(exitCode: result.exitCode))
             } catch {
-                logService.error("执行异常：\(error.localizedDescription)", category: category)
-                onOutputUpdate(project.id, "\n[错误] 进程启动失败: \(error.localizedDescription)\n")
+                logService.error(AppLocalizedFormat("log.process.execution_failed", error.localizedDescription), category: category)
+                onOutputUpdate(project.id, AppLocalizedFormat("terminal.process.start_failed", error.localizedDescription))
                 onCompletion(.executionFailed(description: error.localizedDescription))
             }
             self?.finishManagedExecution(projectID: project.id, runID: runID)
@@ -209,8 +212,8 @@ class ProcessManager {
         category: String,
         onOutputUpdate: @escaping @Sendable (UUID, String) -> Void
     ) async -> Result<Void, ProjectServiceError> {
-        logService.info("停止开发服务器：\(project.name)", category: category)
-        onOutputUpdate(project.id, "\n\n[系统] 正在请求停止进程组...\n")
+        logService.info(AppLocalizedFormat("log.process.stopping", project.name), category: category)
+        onOutputUpdate(project.id, AppLocalized("terminal.process.requesting_stop"))
 
         let result: Result<Void, ProjectServiceError>
         if let managedExecution = managedExecutions[project.id] {
@@ -226,7 +229,7 @@ class ProcessManager {
         }
 
         if case .success = result {
-            logService.success("成功停止开发服务器：\(project.name)", category: category)
+            logService.success(AppLocalizedFormat("log.process.stopped", project.name), category: category)
         }
 
         return result

@@ -246,6 +246,10 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$app/Contents/Info.plist")" = 'https://slippindylan.github.io/homebrew-tap/techne/appcast.xml'
           test "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$app/Contents/Info.plist")" = 'TLw+HvAZdTlZUmR3IRYPf+GNOZ1F5yH1repc6UCkrEA='
           test -d "$app/Contents/Frameworks/Sparkle.framework"
+          for language in en zh-Hans zh-Hant; do
+            test -s "$app/Contents/Resources/$language.lproj/Localizable.strings"
+            test -s "$app/Contents/Resources/$language.lproj/InfoPlist.strings"
+          done
           codesign --verify --strict --all-architectures --verbose=2 "$app"
 
           signature_details="$RUNNER_TEMP/codesign-details.txt"

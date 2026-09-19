@@ -91,10 +91,24 @@ bash -n Scripts/create-dmg.sh
 Scripts/create-dmg.sh --help >/dev/null
 node .github/scripts/release-manifest.mjs validate
 node .github/scripts/sync-version.mjs --check
+node .github/scripts/validate-localizations.mjs
 node --test .github/scripts/*.test.mjs
 ```
 
 `.github/workflows/ci.yml` 对纯 README、LICENSE、AGENTS 和 docs 改动跳过 macOS 构建，但仍运行轻量自动化检查。其他改动在 macOS 26 runner 上执行完整测试和 unsigned Release 构建，并验证架构、最低系统版本、Sparkle 配置和应用产物。
+
+## 本地化
+
+应用界面支持 `en`、`zh-Hans` 和 `zh-Hant`。UI 与应用生成的错误、日志和终端状态维护在 `App/Localizable.xcstrings`；权限说明维护在 `App/InfoPlist.xcstrings`。三种语言都必须提供完整且非空的翻译，并保留格式占位符。
+
+新增用户可见文本时：
+
+- SwiftUI 静态字面量使用可本地化的 `Text`、`Label`、`Button` 等 API。
+- 普通 `String`、动态错误或格式化文本通过 `AppLocalized` / `AppLocalizedFormat` 查询。
+- 不翻译用户输入、路径、命令、技术标识及外部工具原始输出。
+- 不修改 `ProjectType.rawValue`、命令快照等既有持久化值；需要本地化时增加展示属性。
+
+运行 `node .github/scripts/validate-localizations.mjs` 检查语言、空值、格式占位符和显式 helper 引用。应用构建后还需确认三个 `.lproj` 目录同时包含 `Localizable.strings` 与 `InfoPlist.strings`。
 
 ## 发布配置
 

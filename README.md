@@ -79,6 +79,10 @@ sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 5. For a web project, select an installed browser to open its detected server.
 6. For Android, open the deployment view, connect a device, select an APK, and deploy it.
 
+### Language
+
+Techne supports English, Simplified Chinese, and Traditional Chinese. It follows the macOS language by default. You can choose a specific language under Settings > General; restart Techne when prompted to apply the change.
+
 ### Browsers and isolated profiles
 
 Techne detects Safari, Google Chrome, Chrome Beta, Chromium, Microsoft Edge, Brave, and Arc when they are installed. Safari opens the address normally. Chrome, Chrome Beta, Chromium, Edge, Brave, and Arc are Chromium-based: Techne launches each managed instance in a separate profile directory, opens a new window, and assigns an available remote-debugging port beginning at `9222`. This keeps cookies and site storage separate from your normal browser profile and from other managed instances.

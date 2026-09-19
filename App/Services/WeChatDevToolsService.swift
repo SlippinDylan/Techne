@@ -8,11 +8,11 @@ enum WeChatDevToolsError: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         switch self {
         case .cliNotFound:
-            return "未找到微信开发者工具 CLI，请确认已安装微信开发者工具"
+            return AppLocalized("error.wechat.cli_not_found")
         case .projectConfigurationNotFound:
-            return "未找到可供微信开发者工具打开的 project.config.json"
+            return AppLocalized("error.wechat.project_configuration_not_found")
         case .commandFailed(let output):
-            return output.isEmpty ? "微信开发者工具命令执行失败" : output
+            return output.isEmpty ? AppLocalized("error.wechat.command_failed") : output
         }
     }
 }

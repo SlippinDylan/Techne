@@ -96,7 +96,7 @@ struct ProjectListView: View {
             }
         } message: {
             if let project = projectToRemove {
-                Text("项目 '\(project.name)' 将从列表中移除，但不会删除磁盘上的文件。")
+                Text(AppLocalizedFormat("项目 '%@' 将从列表中移除，但不会删除磁盘上的文件。", project.name))
             }
         }
         .alert("错误", isPresented: $showingError) {
@@ -121,7 +121,7 @@ struct ProjectListView: View {
                 chromeService.killAllInstances()
             }
         } message: {
-            Text("确定要关闭所有 \(allBrowserInstances.count) 个浏览器实例吗？此操作不可撤销。")
+            Text(AppLocalizedFormat("确定要关闭所有 %lld 个浏览器实例吗？此操作不可撤销。", Int64(allBrowserInstances.count)))
         }
     }
 
@@ -131,19 +131,19 @@ struct ProjectListView: View {
         HStack(spacing: AppConfig.UI.largePadding) {
             StatCard(
                 icon: "folder",
-                label: "已添加项目",
+                label: AppLocalized("已添加项目"),
                 value: "\(filteredProjects.count)",
                 iconColor: .blue
             )
             StatCard(
                 icon: "play.circle",
-                label: "运行中项目",
+                label: AppLocalized("运行中项目"),
                 value: "\(filteredProjects.filter { $0.isRunning || findRelatedServer(for: $0) != nil }.count)",
                 iconColor: .green
             )
             StatCard(
                 icon: "doc.badge.ellipsis",
-                label: "未提交变更",
+                label: AppLocalized("未提交变更"),
                 value: "\(filteredProjects.reduce(0) { $0 + $1.uncommittedFileCount })",
                 iconColor: .orange
             )
@@ -151,7 +151,7 @@ struct ProjectListView: View {
             if projectType == .devServer {
                 StatCard(
                     icon: "globe",
-                    label: "运行中的实例",
+                    label: AppLocalized("运行中的实例"),
                     value: "\(allBrowserInstances.count)",
                     iconColor: .blue,
                     isClickable: true,
@@ -160,8 +160,8 @@ struct ProjectListView: View {
             } else {
                 StatCard(
                     icon: "app.badge",
-                    label: "微信工具",
-                    value: "READY",
+                    label: AppLocalized("微信工具"),
+                    value: AppLocalized("READY"),
                     iconColor: .green
                 )
             }
@@ -174,11 +174,11 @@ struct ProjectListView: View {
                 .font(.system(size: 64))
                 .foregroundStyle(.secondary)
             
-            Text(projectType == .devServer ? "暂无开发项目" : "暂无小程序项目")
+            Text(AppLocalized(projectType == .devServer ? "暂无开发项目" : "暂无小程序项目"))
                 .font(.title2)
                 .bold()
             
-            Text(projectType == .devServer ? "点击右上角 + 按钮添加开发项目" : "点击右上角 + 按钮添加微信小程序项目")
+            Text(AppLocalized(projectType == .devServer ? "点击右上角 + 按钮添加开发项目" : "点击右上角 + 按钮添加微信小程序项目"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

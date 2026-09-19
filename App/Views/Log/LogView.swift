@@ -38,10 +38,10 @@ struct LogView: View {
 
     private var statisticsSection: some View {
         StatCardsRow(cards: [
-            StatCardData(icon: "doc.text.fill", label: "总日志数", value: "\(logService.logs.count)"),
-            StatCardData(icon: "checkmark.circle.fill", label: "成功", value: "\(successCount)", iconColor: .green),
-            StatCardData(icon: "exclamationmark.triangle.fill", label: "警告", value: "\(warningCount)", iconColor: .orange),
-            StatCardData(icon: "xmark.circle.fill", label: "错误", value: "\(errorCount)", iconColor: .red)
+            StatCardData(icon: "doc.text.fill", label: AppLocalized("总日志数"), value: "\(logService.logs.count)"),
+            StatCardData(icon: "checkmark.circle.fill", label: AppLocalized("成功"), value: "\(successCount)", iconColor: .green),
+            StatCardData(icon: "exclamationmark.triangle.fill", label: AppLocalized("警告"), value: "\(warningCount)", iconColor: .orange),
+            StatCardData(icon: "xmark.circle.fill", label: AppLocalized("错误"), value: "\(errorCount)", iconColor: .red)
         ])
     }
 
@@ -100,7 +100,7 @@ struct LogView: View {
             } label: {
                 HStack {
                     Image(systemName: "line.3.horizontal.decrease.circle")
-                    Text(selectedLevel?.rawValue ?? "全部级别")
+                    Text(selectedLevel.map { AppLocalized($0.rawValue) } ?? AppLocalized("全部级别"))
                 }
                 .padding(.horizontal, AppConfig.UI.mediumPadding)
                 .padding(.vertical, AppConfig.UI.mediumSpacing)
@@ -113,7 +113,7 @@ struct LogView: View {
 
             // 显示选中数量
             if !selection.isEmpty {
-                Text("已选择 \(selection.count) 条")
+                Text(AppLocalizedFormat("已选择 %lld 条", Int64(selection.count)))
                     .font(.system(size: AppConfig.UI.smallFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, AppConfig.UI.mediumPadding)
@@ -125,7 +125,7 @@ struct LogView: View {
             // 复制选中按钮（仅在有选中时显示）
             if !selection.isEmpty {
                 CleanMyMacButton(
-                    title: "复制选中",
+                    title: AppLocalized("复制选中"),
                     icon: "doc.on.doc",
                     action: {
                         copySelectedLogs()
@@ -137,7 +137,7 @@ struct LogView: View {
 
             // 复制所有日志按钮
             CleanMyMacButton(
-                title: "复制所有",
+                title: AppLocalized("复制所有"),
                 icon: "doc.on.doc.fill",
                 action: {
                     copyAllLogs()
@@ -148,7 +148,7 @@ struct LogView: View {
 
             // 清空按钮
             CleanMyMacButton(
-                title: "清空日志",
+                title: AppLocalized("清空日志"),
                 icon: "trash",
                 action: {
                     logService.clearLogs()

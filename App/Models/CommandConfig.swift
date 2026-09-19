@@ -13,7 +13,12 @@ enum ProjectType: String, Codable, CaseIterable, Sendable {
     case miniApp = "微信小程序构建"
 
     var displayName: String {
-        return self.rawValue
+        switch self {
+        case .devServer:
+            return AppLocalized("project_type.development_services")
+        case .miniApp:
+            return AppLocalized("project_type.mini_program_build")
+        }
     }
 }
 

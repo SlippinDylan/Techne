@@ -17,22 +17,22 @@ struct ProjectCommandDetails: Equatable {
     init(project: Project) {
         let trimmedProfileName = project.commandProfileName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-        profileDisplayName = trimmedProfileName.isEmpty ? "自定义命令" : trimmedProfileName
+        profileDisplayName = trimmedProfileName.isEmpty ? AppLocalized("自定义命令") : trimmedProfileName
         sections = [
-            Section(title: "当前启动模式", value: project.selectedStartupMode?.displayName ?? "默认"),
-            Section(title: "启动命令", value: project.startCommand),
+            Section(title: AppLocalized("当前启动模式"), value: project.selectedStartupMode?.displayName ?? AppLocalized("默认")),
+            Section(title: AppLocalized("启动命令"), value: project.startCommand),
             Section(
-                title: "可选启动模式",
+                title: AppLocalized("可选启动模式"),
                 value: project.availableStartupModes
                     .map { "\($0.displayName): \($0.startCommand)" }
                     .joined(separator: "\n")
             ),
-            Section(title: "安装依赖命令", value: project.installCommand),
-            Section(title: "构建命令", value: project.buildCommand),
-            Section(title: "清理命令", value: project.cleanCommand),
-            Section(title: "停止命令", value: project.stopCommand),
-            Section(title: "丢弃更改命令", value: project.discardChangesCommand),
-            Section(title: "安装策略", value: project.installStrategy.displayName)
+            Section(title: AppLocalized("安装依赖命令"), value: project.installCommand),
+            Section(title: AppLocalized("构建命令"), value: project.buildCommand),
+            Section(title: AppLocalized("清理命令"), value: project.cleanCommand),
+            Section(title: AppLocalized("停止命令"), value: project.stopCommand),
+            Section(title: AppLocalized("丢弃更改命令"), value: project.discardChangesCommand),
+            Section(title: AppLocalized("安装策略"), value: project.installStrategy.displayName)
         ]
     }
 }
@@ -97,11 +97,11 @@ private extension InstallStrategy {
     var displayName: String {
         switch self {
         case .never:
-            return "从不安装"
+            return AppLocalized("从不安装")
         case .ifMissing:
-            return "缺失时安装"
+            return AppLocalized("缺失时安装")
         case .always:
-            return "总是安装"
+            return AppLocalized("总是安装")
         }
     }
 }

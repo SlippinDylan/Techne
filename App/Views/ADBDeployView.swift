@@ -48,8 +48,8 @@ struct ADBDeployView: View {
                             Text("\(device.brand) \(device.model)")
                                 .font(.headline)
                             Group {
-                                Text("Android 版本: \(device.androidVersion) (SDK \(device.sdkVersion))")
-                                Text("序列号: \(device.serial)")
+                                Text(AppLocalizedFormat("Android 版本: %@ (SDK %@)", device.androidVersion, device.sdkVersion))
+                                Text(AppLocalizedFormat("序列号: %@", device.serial))
                             }
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -101,7 +101,7 @@ struct ADBDeployView: View {
                 InteractivePathField(
                     leadingSystemImage: "doc.badge.plus",
                     text: viewModel.selectedAPK?.url.path,
-                    placeholder: "点击选择或拖入 APK 文件...",
+                    placeholder: AppLocalized("点击选择或拖入 APK 文件..."),
                     height: deployControlOuterHeight,
                     action: { viewModel.selectAPK() },
                     onDropProviders: handleAPKDrop(providers:)
@@ -119,7 +119,7 @@ struct ADBDeployView: View {
                 .frame(maxWidth: .infinity)
 
                 CleanMyMacButton(
-                    title: "立即部署",
+                    title: AppLocalized("立即部署"),
                     icon: "arrow.down.doc.fill",
                     action: {
                         guard canDeploy else { return }
@@ -134,7 +134,7 @@ struct ADBDeployView: View {
             if viewModel.status != .idle {
                 VStack(spacing: 8) {
                     HStack {
-                        Text(viewModel.status.description)
+                        Text(deploymentStatusDescription)
                             .font(.caption)
                         Spacer()
                         if case .failure = viewModel.status {
@@ -156,7 +156,7 @@ struct ADBDeployView: View {
     private var consoleSection: some View {
         EmbeddedConsoleSection(
             output: viewModel.terminalOutput,
-            emptyText: "等待任务启动...",
+            emptyText: AppLocalized("等待任务启动..."),
             outerPadding: 0
         )
     }
@@ -203,6 +203,25 @@ struct ADBDeployView: View {
         (viewModel.status == .idle || viewModel.status == .success)
     }
 
+    private var deploymentStatusDescription: String {
+        switch viewModel.status {
+        case .idle:
+            AppLocalized("就绪")
+        case .parsingAPK:
+            AppLocalized("正在解析 APK 包名...")
+        case .cleaning:
+            AppLocalized("正在强力清除旧版本...")
+        case .installing:
+            AppLocalized("正在执行深度安装 (-r -d -t)...")
+        case .launching:
+            AppLocalized("正在强制激活应用...")
+        case .success:
+            AppLocalized("部署成功 (已校验物理更新)")
+        case .failure(let message):
+            AppLocalizedFormat("部署失败: %@", message)
+        }
+    }
+
     private func handleAPKDrop(providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }) else {
             return false
@@ -232,7 +251,7 @@ struct ADBDeployView: View {
     }
 
     private func sectionHeader(_ title: String, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
+        Label(AppLocalized(title), systemImage: systemImage)
             .font(.headline)
     }
 }

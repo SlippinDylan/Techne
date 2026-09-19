@@ -36,7 +36,7 @@ struct AboutView: View {
                     Text("Techne")
                         .font(.system(size: 32, weight: .bold))
 
-                    Text("版本 \(appVersion)")
+                    Text(AppLocalizedFormat("版本 %@", appVersion))
                         .font(.system(size: AppConfig.UI.mediumFontSize))
                         .padding(.horizontal, 9)
                         .frame(height: 22)

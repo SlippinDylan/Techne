@@ -77,6 +77,7 @@ jobs:
           Scripts/create-dmg.sh --help >/dev/null
           node .github/scripts/release-manifest.mjs validate
           node .github/scripts/sync-version.mjs --check
+          node .github/scripts/validate-localizations.mjs
           node --test .github/scripts/*.test.mjs
 
   macos-check:
@@ -139,6 +140,10 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$app/Contents/Info.plist")" = 'TLw+HvAZdTlZUmR3IRYPf+GNOZ1F5yH1repc6UCkrEA='
           test "$(/usr/libexec/PlistBuddy -c 'Print :TechneUpdaterEnabled' "$app/Contents/Info.plist")" = 'YES'
           test -d "$app/Contents/Frameworks/Sparkle.framework"
+          for language in en zh-Hans zh-Hant; do
+            test -s "$app/Contents/Resources/$language.lproj/Localizable.strings"
+            test -s "$app/Contents/Resources/$language.lproj/InfoPlist.strings"
+          done
 
   build-check:
     name: Build Check

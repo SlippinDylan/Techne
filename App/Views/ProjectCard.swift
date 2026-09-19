@@ -119,7 +119,7 @@ struct ProjectCard: View {
                 onRemove()
             }
         } message: {
-            Text("确定要从列表中移除\"\(project.name)\"吗？这不会删除项目文件。")
+            Text(AppLocalizedFormat("确定要从列表中移除\"%@\"吗？这不会删除项目文件。", project.name))
         }
         .alert("确认放弃更改", isPresented: $showingDiscardAlert) {
             Button("取消", role: .cancel) { }
@@ -262,7 +262,7 @@ struct ProjectCard: View {
             ClickablePathLabel(path: project.path)
 
             ClickableBranchLabel(
-                branchName: project.currentBranch.isEmpty ? "未知分支" : project.currentBranch,
+                branchName: project.currentBranch.isEmpty ? AppLocalized("未知分支") : project.currentBranch,
                 onTap: {
                     branchPickerViewModel.updateProjectContext(path: project.path, currentBranch: project.currentBranch)
                     showingBranchPicker = true
@@ -280,7 +280,7 @@ struct ProjectCard: View {
             }
 
             if project.uncommittedFileCount > 0 {
-                Label("\(project.uncommittedFileCount) 个未提交的文件", systemImage: "doc.badge.ellipsis")
+                Label(AppLocalizedFormat("%lld 个未提交的文件", Int64(project.uncommittedFileCount)), systemImage: "doc.badge.ellipsis")
                     .font(.system(size: AppConfig.UI.smallFontSize))
                     .foregroundStyle(.orange)
             }
@@ -290,11 +290,11 @@ struct ProjectCard: View {
     private var serverInfo: some View {
         let displayPID: String
         if let pid = project.runningProcessPID {
-            displayPID = "PID: \(pid)"
+            displayPID = AppLocalizedFormat("PID: %lld", Int64(pid))
         } else if let server = relatedServer {
-            displayPID = "PID: \(server.id)"
+            displayPID = AppLocalizedFormat("PID: %lld", Int64(server.id))
         } else {
-            displayPID = "PID: -"
+            displayPID = AppLocalized("PID: -")
         }
 
         return HStack(spacing: AppConfig.UI.largePadding) {
@@ -303,14 +303,14 @@ struct ProjectCard: View {
                     HStack(spacing: AppConfig.UI.smallSpacing) {
                         Image(systemName: "network")
                             .font(.system(size: AppConfig.UI.smallFontSize))
-                        Text("localhost:\(String(server.port))")
+                        Text(AppLocalizedFormat("localhost: %lld", Int64(server.port)))
                             .font(.system(size: AppConfig.UI.smallFontSize))
                     }
                     .foregroundStyle(.blue)
                 }
                 .buttonStyle(.plain)
             } else {
-                Label("localhost:-", systemImage: "network")
+                Label(AppLocalized("localhost: -"), systemImage: "network")
                     .font(.system(size: AppConfig.UI.smallFontSize))
                     .foregroundStyle(.secondary)
             }
@@ -334,18 +334,18 @@ struct ProjectCard: View {
                 ActionButton(
                     icon: "arrow.clockwise",
                     action: onRestartServer,
-                    tooltip: "重新启动"
+                    tooltip: AppLocalized("重新启动")
                 )
                 ActionButton(
                     icon: "stop.fill",
                     action: onStopServer,
-                    tooltip: "停止服务器"
+                    tooltip: AppLocalized("停止服务器")
                 )
             } else {
                 ActionButton(
                     icon: "play.fill",
                     action: onStartServer,
-                    tooltip: "启动服务器"
+                    tooltip: AppLocalized("启动服务器")
                 )
             }
 
@@ -353,7 +353,7 @@ struct ProjectCard: View {
                 ActionButton(
                     icon: "rectangle.bottomthird.inset.filled",
                     action: { isProjectTerminalExpanded.toggle() },
-                    tooltip: "显示或隐藏日志"
+                    tooltip: AppLocalized("显示或隐藏日志")
                 )
             }
 
@@ -361,20 +361,20 @@ struct ProjectCard: View {
                 ActionButton(
                     icon: "arrow.trianglehead.2.clockwise.rotate.90",
                     action: onResetMiniAppFileWatching,
-                    tooltip: "重建微信文件监听"
+                    tooltip: AppLocalized("重建微信文件监听")
                 )
             }
 
             ActionButton(
                 icon: "terminal",
                 action: openInTerminal,
-                tooltip: "在终端打开"
+                tooltip: AppLocalized("在终端打开")
             )
 
             ActionButton(
                 icon: "trash",
                 action: { showingRemoveAlert = true },
-                tooltip: "移除项目",
+                tooltip: AppLocalized("移除项目"),
                 isDestructive: true
             )
         }
@@ -388,7 +388,7 @@ struct ProjectCard: View {
                 .font(.system(size: AppConfig.UI.largePadding))
                 .foregroundStyle(.orange)
 
-            Text("工作目录有 \(project.uncommittedFileCount) 个未提交的文件")
+            Text(AppLocalizedFormat("工作目录有 %lld 个未提交的文件", Int64(project.uncommittedFileCount)))
                 .font(.system(size: AppConfig.UI.mediumFontSize))
                 .foregroundStyle(.secondary)
 
@@ -421,7 +421,7 @@ struct ProjectCard: View {
     private var terminalOutputView: some View {
         EmbeddedConsoleSection(
             output: project.terminalOutput,
-            emptyText: "等待任务启动...",
+            emptyText: AppLocalized("等待任务启动..."),
             height: ConsolePanelStyle.embeddedTerminalViewportHeight
         )
     }
@@ -459,11 +459,11 @@ struct ProjectCard: View {
         case .idle:
             return nil
         case .installing:
-            return "安装中"
+            return AppLocalized("安装中")
         case .starting:
-            return "启动中"
+            return AppLocalized("启动中")
         case .stopping:
-            return "停止中"
+            return AppLocalized("停止中")
         }
     }
 
@@ -497,10 +497,10 @@ struct ProjectCard: View {
 
         switch result {
         case .success(let pid):
-            LogService.shared.success("成功启动浏览器实例 (PID: \(pid))", category: "浏览器")
+            LogService.shared.success(AppLocalizedFormat("成功启动浏览器实例 (PID: %lld)", Int64(pid)), category: AppLocalized("浏览器"))
             return .success(())
         case .failure(let error):
-            LogService.shared.error("启动浏览器失败: \(error.localizedDescription)", category: "浏览器")
+            LogService.shared.error(AppLocalizedFormat("启动浏览器失败: %@", error.localizedDescription), category: AppLocalized("浏览器"))
             return .failure(error)
         }
     }

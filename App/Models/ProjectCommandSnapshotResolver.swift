@@ -51,13 +51,13 @@ enum ProjectAnalysisError: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         switch self {
         case .missingPackageManifest:
-            return "未找到 package.json，无法确认项目的安装和启动方式"
+            return AppLocalized("error.project_analysis.missing_package_manifest")
         case .invalidPackageManifest:
-            return "package.json 格式无效，无法读取项目命令"
+            return AppLocalized("error.project_analysis.invalid_package_manifest")
         case .missingDevelopmentScript(.devServer):
-            return "package.json 未声明可运行的 dev、dev:*、start 或 serve 脚本"
+            return AppLocalized("error.project_analysis.missing_development_script")
         case .missingDevelopmentScript(.miniApp):
-            return "package.json 未声明可运行的微信小程序开发脚本"
+            return AppLocalized("error.project_analysis.missing_mini_program_script")
         }
     }
 }

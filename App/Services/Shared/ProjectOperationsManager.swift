@@ -47,15 +47,15 @@ class ProjectOperationsManager {
         category: String
     ) -> Result<Void, ProjectServiceError> {
         // 使用全局辅助函数，彻底解决隔离冲突
-        AppLogInfo("放弃更改：\(projectName)", category: category)
+        AppLogInfo(AppLocalizedFormat("log.git.discarding_changes", projectName), category: category)
 
         let result = GitService.shared.discardChanges(at: path)
 
         switch result {
         case .success:
-            AppLogSuccess("成功放弃更改：\(projectName)", category: category)
+            AppLogSuccess(AppLocalizedFormat("log.git.discarded_changes", projectName), category: category)
         case .failure(let error):
-            AppLogError("放弃更改失败：\(projectName) - \(error.localizedDescription)", category: category)
+            AppLogError(AppLocalizedFormat("log.git.discard_changes_failed", projectName, error.localizedDescription), category: category)
         }
 
         return result
@@ -73,7 +73,7 @@ class ProjectOperationsManager {
         autoStart: Bool,
         onStatusUpdate: ((Int) -> Void)? = nil
     ) async -> Result<Void, ProjectServiceError> {
-        AppLogInfo("开始异步切换分支：\(projectName) -> \(branch)", category: category)
+        AppLogInfo(AppLocalizedFormat("log.git.switching_branch", projectName, branch), category: category)
 
         // 1. 在后台线程检查工作区状态
         let workingDirStatus = await Task.detached(priority: .userInitiated) {
@@ -81,16 +81,16 @@ class ProjectOperationsManager {
         }.value
 
         if workingDirStatus.hasChanges {
-            let errorMsg = "工作区有 \(workingDirStatus.fileCount) 个未提交的文件，请先提交或放弃更改"
-            AppLogError("切换分支熔断：\(projectName) - \(errorMsg)", category: category)
+            let errorMsg = AppLocalizedFormat("error.git.uncommitted_files", Int64(workingDirStatus.fileCount))
+            AppLogError(AppLocalizedFormat("log.git.branch_switch_blocked", projectName, errorMsg), category: category)
             onStatusUpdate?(workingDirStatus.fileCount)
-            return .failure(.gitOperationFailed(operation: "切换分支", reason: errorMsg))
+            return .failure(.gitOperationFailed(operation: AppLocalized("operation.git.switch_branch"), reason: errorMsg))
         }
 
         // 2. 停止进程 (本身已是异步方法)
         let stopResult = await stopProcess()
         if case .failure(let error) = stopResult {
-            AppLogWarning("停止进程时出现问题: \(error.localizedDescription)", category: category)
+            AppLogWarning(AppLocalizedFormat("log.process.stop_warning", error.localizedDescription), category: category)
         }
 
         try? await Task.sleep(nanoseconds: UInt64(AppConfig.Process.startupDelay * 1_000_000_000))
@@ -101,7 +101,7 @@ class ProjectOperationsManager {
         }.value
         
         if case .failure(let error) = cleanResultBefore {
-            AppLogError("前置清理失败：\(projectName) - \(error.localizedDescription)", category: category)
+            AppLogError(AppLocalizedFormat("log.git.pre_cleanup_failed", projectName, error.localizedDescription), category: category)
             return .failure(error)
         }
 
@@ -111,7 +111,7 @@ class ProjectOperationsManager {
         }.value
         
         if case .failure(let error) = switchResult {
-            AppLogError("Git 切换失败：\(projectName) - \(error.localizedDescription)", category: category)
+            AppLogError(AppLocalizedFormat("log.git.switch_failed", projectName, error.localizedDescription), category: category)
             return .failure(error)
         }
 
@@ -121,11 +121,11 @@ class ProjectOperationsManager {
         }.value
         
         if case .failure(let error) = cleanResultAfter {
-            AppLogError("后置清理失败：\(projectName) - \(error.localizedDescription)", category: category)
+            AppLogError(AppLocalizedFormat("log.git.post_cleanup_failed", projectName, error.localizedDescription), category: category)
             return .failure(error)
         }
 
-        AppLogSuccess("分支切换流水线完成：\(projectName) -> \(branch)", category: category)
+        AppLogSuccess(AppLocalizedFormat("log.git.branch_switch_completed", projectName, branch), category: category)
 
         if autoStart {
             if case .failure(let error) = startProcess() {

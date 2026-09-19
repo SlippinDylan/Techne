@@ -60,7 +60,7 @@ struct BrowserInstanceRow: View {
                 }
 
                 if let debugPort = instance.debugPort {
-                    Label("调试端口: \(debugPort)", systemImage: "antenna.radiowaves.left.and.right")
+                    Label(AppLocalizedFormat("调试端口: %lld", Int64(debugPort)), systemImage: "antenna.radiowaves.left.and.right")
                         .font(.system(size: AppConfig.UI.smallFontSize))
                         .foregroundStyle(.green)
                 }
@@ -74,7 +74,7 @@ struct BrowserInstanceRow: View {
         ActionButton(
             icon: "xmark.circle.fill",
             action: onKill,
-            tooltip: "关闭实例",
+            tooltip: AppLocalized("关闭实例"),
             isDestructive: true
         )
     }

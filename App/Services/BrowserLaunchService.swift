@@ -9,11 +9,11 @@ enum BrowserLaunchError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .launchAlreadyInProgress:
-            return "浏览器正在启动中，请勿重复点击"
+            return AppLocalized("error.browser.launch_in_progress")
         case .debugPortUnavailable:
-            return "未找到可用的浏览器调试端口"
+            return AppLocalized("error.browser.debug_port_unavailable")
         case .missingTrackingDirectory:
-            return "浏览器实例目录创建失败"
+            return AppLocalized("error.browser.tracking_directory_creation_failed")
         }
     }
 }

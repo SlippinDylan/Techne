@@ -31,6 +31,6 @@ struct StartupModePicker: View {
     }
 
     private var currentLabel: String {
-        modes.first(where: { $0.id == selectedModeID })?.displayName ?? "默认"
+        modes.first(where: { $0.id == selectedModeID })?.displayName ?? AppLocalized("默认")
     }
 }

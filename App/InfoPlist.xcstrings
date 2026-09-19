@@ -1,0 +1,50 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSAppleEventsUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Techne needs permission to open Terminal and switch to the project directory."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Techne 需要权限来打开终端并切换到项目目录。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Techne 需要權限來開啟終端機並切換到專案目錄。"
+          }
+        }
+      }
+    },
+    "NSSystemAdministrationUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Techne needs access to system process information to detect and manage development servers and browser instances."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Techne 需要访问系统进程信息来检测和管理开发服务器及浏览器实例。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Techne 需要存取系統程序資訊，以偵測及管理開發伺服器與瀏覽器實例。"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

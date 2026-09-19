@@ -79,6 +79,10 @@ sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 5. Web 项目可选择已安装的浏览器打开检测到的服务。
 6. Android 部署页中连接设备、选择 APK，然后部署。
 
+### 语言
+
+Techne 支持英文、简体中文和繁体中文，默认跟随 macOS。你也可以在“设置 > 通用”中指定语言，并按提示重启 Techne 使更改生效。
+
 ### 浏览器与独立 profile
 
 Techne 会检测已安装的 Safari、Google Chrome、Chrome Beta、Chromium、Microsoft Edge、Brave 和 Arc。Safari 按普通方式打开地址。Chrome、Chrome Beta、Chromium、Edge、Brave 和 Arc 使用 Chromium 内核：每个受管理实例都有独立 profile、新窗口和远程调试端口，端口从 `9222` 起自动寻找可用值。这样不会复用日常浏览器或其他受管理实例的 cookie 与站点存储。
