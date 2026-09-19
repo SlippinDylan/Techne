@@ -29,6 +29,11 @@ final class StatusItemController: NSObject {
             return
         }
 
+        configure(button)
+        statusItem = item
+    }
+
+    func configure(_ button: NSStatusBarButton) {
         let image = NSImage(
             systemSymbolName: "macbook.and.iphone",
             accessibilityDescription: "Techne"
@@ -36,16 +41,9 @@ final class StatusItemController: NSObject {
         image?.isTemplate = true
         button.image = image
         button.toolTip = "Techne"
-
-        let primaryClick = NSClickGestureRecognizer(target: self, action: #selector(handlePrimaryClick))
-        primaryClick.buttonMask = 0x1
-        button.addGestureRecognizer(primaryClick)
-
-        let secondaryClick = NSClickGestureRecognizer(target: self, action: #selector(handleSecondaryClick))
-        secondaryClick.buttonMask = 0x2
-        button.addGestureRecognizer(secondaryClick)
-
-        statusItem = item
+        button.target = self
+        button.action = #selector(handlePrimaryClick)
+        button.menu = makeMenu()
     }
 
     func makeMenu() -> NSMenu {
@@ -79,19 +77,8 @@ final class StatusItemController: NSObject {
     }
 
     @objc
-    private func handlePrimaryClick() {
+    private func handlePrimaryClick(_ sender: NSStatusBarButton) {
         mainWindowNavigation.showMainWindow()
-    }
-
-    @objc
-    private func handleSecondaryClick(_ recognizer: NSClickGestureRecognizer) {
-        guard let button = recognizer.view as? NSStatusBarButton else {
-            return
-        }
-
-        button.highlight(true)
-        makeMenu().popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.minY), in: button)
-        button.highlight(false)
     }
 
     @objc

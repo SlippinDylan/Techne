@@ -5,6 +5,35 @@ import Testing
 @MainActor
 struct StatusItemControllerTests {
     @Test
+    func configuredButtonUsesNativePrimaryActionAndContextMenu() throws {
+        var openCount = 0
+        let navigation = makeNavigationCoordinator()
+        navigation.registerOpenMainWindowAction {
+            openCount += 1
+        }
+        let controller = StatusItemController(
+            mainWindowNavigation: navigation,
+            terminateApplication: { }
+        )
+        let button = NSStatusBarButton(frame: .zero)
+
+        controller.configure(button)
+
+        #expect(button.menu?.items.map(\.title) == [
+            SidebarItem.devEnvironment.title,
+            SidebarItem.miniApp.title,
+            SidebarItem.adbDeploy.title,
+            "",
+            AppLocalized("退出 Techne")
+        ])
+        #expect(button.gestureRecognizers.contains { $0 is NSClickGestureRecognizer } == false)
+
+        _ = try #require(button.action)
+        button.performClick(nil)
+        #expect(openCount == 1)
+    }
+
+    @Test
     func contextMenuContainsOnlyBusinessEntriesAndQuitWithoutShortcut() throws {
         let controller = makeController()
         let menu = controller.makeMenu()
