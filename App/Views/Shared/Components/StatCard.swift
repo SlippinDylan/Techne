@@ -20,25 +20,7 @@ struct StatCard: View {
 
     var body: some View {
         AppPanelCard {
-            HStack(spacing: AppConfig.UI.largeSpacing) {
-                Image(systemName: icon)
-                    .font(.system(size: AppConfig.UI.iconSize))
-                    .foregroundStyle(iconColor)
-
-                VStack(alignment: .leading, spacing: AppConfig.UI.smallSpacing) {
-                    Text(label)
-                        .font(.system(size: AppConfig.UI.smallFontSize))
-                        .foregroundStyle(.secondary)
-
-                    Text(value)
-                        .font(.system(size: AppConfig.UI.mediumFontSize + 1, weight: .medium))
-                        .foregroundStyle(.primary)
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(AppConfig.UI.largePadding)
-            .frame(maxWidth: .infinity)
+            StatCardContent(icon: icon, label: label, value: value, iconColor: iconColor)
         }
         .contentShape(Rectangle())
         .onTapGesture {
@@ -51,20 +33,79 @@ struct StatCard: View {
 /// 用于水平排列多个统计卡片，自动等分宽度
 struct StatCardsRow: View {
     let cards: [StatCardData]
+    var joinsCards = false
+
+    var body: some View {
+        if joinsCards {
+            HStack(spacing: 0) {
+                ForEach(cards.indices, id: \.self) { index in
+                    if index > cards.startIndex {
+                        Divider()
+                            .frame(height: 48)
+                    }
+
+                    let card = cards[index]
+                    StatCardContent(
+                        icon: card.icon,
+                        label: card.label,
+                        value: card.value,
+                        iconColor: card.iconColor
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        card.action?()
+                    }
+                }
+            }
+            .background(.blue.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
+            .overlay {
+                RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius)
+                    .stroke(.blue.opacity(0.1), lineWidth: 1)
+            }
+        } else {
+            HStack(spacing: AppConfig.UI.largeSpacing) {
+                ForEach(cards) { card in
+                    StatCard(
+                        icon: card.icon,
+                        label: card.label,
+                        value: card.value,
+                        iconColor: card.iconColor,
+                        isClickable: card.isClickable,
+                        action: card.action
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct StatCardContent: View {
+    let icon: String
+    let label: String
+    let value: String
+    let iconColor: Color
 
     var body: some View {
         HStack(spacing: AppConfig.UI.largeSpacing) {
-            ForEach(cards) { card in
-                StatCard(
-                    icon: card.icon,
-                    label: card.label,
-                    value: card.value,
-                    iconColor: card.iconColor,
-                    isClickable: card.isClickable,
-                    action: card.action
-                )
+            Image(systemName: icon)
+                .font(.system(size: AppConfig.UI.iconSize))
+                .foregroundStyle(iconColor)
+
+            VStack(alignment: .leading, spacing: AppConfig.UI.smallSpacing) {
+                Text(label)
+                    .font(.system(size: AppConfig.UI.smallFontSize))
+                    .foregroundStyle(.secondary)
+
+                Text(value)
+                    .font(.system(size: AppConfig.UI.mediumFontSize + 1, weight: .medium))
+                    .foregroundStyle(.primary)
             }
+
+            Spacer(minLength: 0)
         }
+        .padding(AppConfig.UI.largePadding)
+        .frame(maxWidth: .infinity)
     }
 }
 

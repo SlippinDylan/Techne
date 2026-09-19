@@ -21,7 +21,15 @@ struct ClickableBranchLabel: View {
                     .font(.system(size: AppConfig.UI.smallFontSize))
                 Text(branchName)
                     .font(.system(size: AppConfig.UI.smallFontSize))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: AppConfig.UI.smallFontSize - 2, weight: .semibold))
             }
+            .padding(.horizontal, AppConfig.UI.smallPadding)
+            .padding(.vertical, 3)
+            .background(
+                Color.secondary.opacity(isHovered ? 0.14 : 0.08),
+                in: Capsule()
+            )
             .foregroundStyle(isHovered ? Color.blue : Color.secondary)
         }
         .buttonStyle(.plain)

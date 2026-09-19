@@ -36,6 +36,7 @@ struct ProjectCard: View {
     @State private var showingBrowserSelector = false
     @State private var showingCommandDetails = false
     @State private var isProjectTerminalExpanded = true
+    @State private var isDiscardHovered = false
     private let browserLaunchService = BrowserLaunchService()
 
     init(
@@ -80,28 +81,23 @@ struct ProjectCard: View {
 
     var body: some View {
         AppPanelCard {
-            VStack(spacing: 0) {
+            VStack(spacing: AppConfig.UI.mediumPadding) {
                 projectInfoSection
 
                 if project.uncommittedFileCount > 0 {
-                    Divider()
-                        .padding(.horizontal, AppConfig.UI.largePadding)
                     workingDirectoryWarning
                 }
 
                 // 开发服务：显示浏览器实例
                 if project.type == .devServer && !relatedInstances.isEmpty {
-                    Divider()
-                        .padding(.horizontal, AppConfig.UI.largePadding)
                     relatedInstancesList
                 }
 
                 if shouldShowProjectTerminalSection {
-                    Divider()
-                        .padding(.horizontal, AppConfig.UI.largePadding)
                     terminalOutputView
                 }
             }
+            .padding(AppConfig.UI.largePadding)
         }
         .sheet(isPresented: $showingBrowserSelector) {
             if let server = relatedServer {
@@ -151,7 +147,6 @@ struct ProjectCard: View {
             Spacer()
             actionButtons
         }
-        .padding(AppConfig.UI.largePadding)
     }
 
     // MARK: - Project Icon
@@ -165,11 +160,11 @@ struct ProjectCard: View {
             } else {
                 Image(systemName: iconName)
                     .font(.system(size: AppConfig.UI.iconSize))
-                    .foregroundStyle(isRunning ? Color.green : Color.blue)
+                    .foregroundStyle(Color.blue)
             }
         }
         .frame(width: AppConfig.UI.iconContainerSize, height: AppConfig.UI.iconContainerSize)
-        .background((isRunning ? Color.green : Color.blue).opacity(0.1))
+        .background(Color.blue.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
         .onTapGesture {
             if project.type == .devServer {
@@ -203,9 +198,6 @@ struct ProjectCard: View {
         VStack(alignment: .leading, spacing: AppConfig.UI.mediumSpacing) {
             projectNameAndStatus
             projectMetadata
-            if project.type == .devServer {
-                serverInfo
-            }
         }
     }
 
@@ -237,6 +229,24 @@ struct ProjectCard: View {
                 )
             }
 
+            ClickableBranchLabel(
+                branchName: project.currentBranch.isEmpty ? AppLocalized("未知分支") : project.currentBranch,
+                onTap: {
+                    branchPickerViewModel.updateProjectContext(path: project.path, currentBranch: project.currentBranch)
+                    showingBranchPicker = true
+                    branchPickerViewModel.open()
+                }
+            )
+            .popover(isPresented: $showingBranchPicker, arrowEdge: .top) {
+                BranchPickerPopover(
+                    viewModel: branchPickerViewModel,
+                    onSelect: { branch in
+                        showingBranchPicker = false
+                        onSwitchBranch(branch)
+                    }
+                )
+            }
+
             if let statusLabel = transitionStatusLabel {
                 Text(statusLabel)
                     .font(.system(size: AppConfig.UI.smallFontSize))
@@ -259,30 +269,19 @@ struct ProjectCard: View {
 
     private var projectMetadata: some View {
         HStack(spacing: AppConfig.UI.largePadding) {
-            ClickablePathLabel(path: project.path)
+            HStack(spacing: AppConfig.UI.smallSpacing) {
+                ClickablePathLabel(path: project.path)
 
-            ClickableBranchLabel(
-                branchName: project.currentBranch.isEmpty ? AppLocalized("未知分支") : project.currentBranch,
-                onTap: {
-                    branchPickerViewModel.updateProjectContext(path: project.path, currentBranch: project.currentBranch)
-                    showingBranchPicker = true
-                    branchPickerViewModel.open()
-                }
-            )
-            .popover(isPresented: $showingBranchPicker, arrowEdge: .top) {
-                BranchPickerPopover(
-                    viewModel: branchPickerViewModel,
-                    onSelect: { branch in
-                        showingBranchPicker = false
-                        onSwitchBranch(branch)
-                    }
+                ActionButton(
+                    icon: "terminal",
+                    action: openInTerminal,
+                    tooltip: AppLocalized("在终端打开"),
+                    presentation: .grouped
                 )
             }
 
-            if project.uncommittedFileCount > 0 {
-                Label(AppLocalizedFormat("%lld 个未提交的文件", Int64(project.uncommittedFileCount)), systemImage: "doc.badge.ellipsis")
-                    .font(.system(size: AppConfig.UI.smallFontSize))
-                    .foregroundStyle(.orange)
+            if project.type == .devServer {
+                serverInfo
             }
         }
     }
@@ -324,60 +323,85 @@ struct ProjectCard: View {
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        HStack(spacing: AppConfig.UI.largeSpacing) {
+        HStack(spacing: 0) {
             // 如果检测到关联的服务器或项目标记为运行中，显示停止按钮
             if isTransitioning {
                 ProgressView()
                     .controlSize(.small)
                     .frame(width: 28, height: 28)
+                actionButtonDivider
             } else if isRunning {
                 ActionButton(
-                    icon: "arrow.clockwise",
+                    icon: "restart",
                     action: onRestartServer,
-                    tooltip: AppLocalized("重新启动")
+                    tooltip: AppLocalized("重新启动"),
+                    presentation: .grouped
                 )
                 ActionButton(
                     icon: "stop.fill",
                     action: onStopServer,
-                    tooltip: AppLocalized("停止服务器")
+                    tooltip: AppLocalized("停止服务器"),
+                    presentation: .grouped
                 )
+                actionButtonDivider
             } else {
                 ActionButton(
                     icon: "play.fill",
                     action: onStartServer,
-                    tooltip: AppLocalized("启动服务器")
+                    tooltip: AppLocalized("启动服务器"),
+                    presentation: .grouped
+                )
+                actionButtonDivider
+            }
+
+            if project.type == .miniApp {
+                ActionButton(
+                    icon: "folder.badge.gearshape",
+                    action: onResetMiniAppFileWatching,
+                    tooltip: AppLocalized("重建微信文件监听"),
+                    presentation: .grouped
                 )
             }
 
             if shouldShowProjectTerminalToggle {
                 ActionButton(
-                    icon: "rectangle.bottomthird.inset.filled",
+                    icon: "apple.terminal.on.rectangle",
                     action: { isProjectTerminalExpanded.toggle() },
-                    tooltip: AppLocalized("显示或隐藏日志")
+                    tooltip: AppLocalized("显示或隐藏日志"),
+                    presentation: .grouped
                 )
+            }
+
+            if project.type == .miniApp || shouldShowProjectTerminalToggle {
+                actionButtonDivider
             }
 
             if project.type == .miniApp {
                 ActionButton(
-                    icon: "arrow.trianglehead.2.clockwise.rotate.90",
-                    action: onResetMiniAppFileWatching,
-                    tooltip: AppLocalized("重建微信文件监听")
+                    icon: "arrow.clockwise",
+                    action: onRefresh,
+                    tooltip: AppLocalized("刷新状态"),
+                    presentation: .grouped
                 )
+                actionButtonDivider
             }
-
-            ActionButton(
-                icon: "terminal",
-                action: openInTerminal,
-                tooltip: AppLocalized("在终端打开")
-            )
 
             ActionButton(
                 icon: "trash",
                 action: { showingRemoveAlert = true },
                 tooltip: AppLocalized("移除项目"),
-                isDestructive: true
+                isDestructive: true,
+                presentation: .grouped
             )
         }
+        .padding(4)
+        .glassEffect(.regular.interactive(), in: Capsule())
+    }
+
+    private var actionButtonDivider: some View {
+        Divider()
+            .frame(height: 16)
+            .padding(.horizontal, 2)
     }
 
     // MARK: - Working Directory Warning
@@ -397,23 +421,42 @@ struct ProjectCard: View {
             Button(action: { showingDiscardAlert = true }) {
                 Text("放弃更改")
                     .font(.system(size: AppConfig.UI.smallFontSize, weight: .medium))
+                    .foregroundStyle(Color.red)
+                    .padding(.horizontal, AppConfig.UI.mediumPadding)
+                    .padding(.vertical, AppConfig.UI.smallSpacing)
+                    .background(
+                        Color.red.opacity(isDiscardHovered ? 0.12 : 0),
+                        in: Capsule()
+                    )
+                    .contentShape(Capsule())
             }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.capsule)
-            .tint(.red)
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                isDiscardHovered = hovering
+            }
         }
-        .padding(AppConfig.UI.largePadding)
+        .padding(AppConfig.UI.mediumPadding)
+        .background(
+            Color.orange.opacity(0.06),
+            in: RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius)
+        )
     }
 
     // MARK: - Related Instances List (DevServer only)
 
     private var relatedInstancesList: some View {
-        ForEach(relatedInstances) { instance in
-            BrowserInstanceRow(
-                instance: instance,
-                onKill: { onKillInstance(instance) }
-            )
+        VStack(spacing: 0) {
+            ForEach(relatedInstances) { instance in
+                BrowserInstanceRow(
+                    instance: instance,
+                    onKill: { onKillInstance(instance) }
+                )
+            }
         }
+        .background(
+            Color.secondary.opacity(0.06),
+            in: RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius)
+        )
     }
 
     // MARK: - Terminal Output View
@@ -422,7 +465,8 @@ struct ProjectCard: View {
         EmbeddedConsoleSection(
             output: project.terminalOutput,
             emptyText: AppLocalized("等待任务启动..."),
-            height: ConsolePanelStyle.embeddedTerminalViewportHeight
+            height: ConsolePanelStyle.embeddedTerminalViewportHeight,
+            outerPadding: 0
         )
     }
 

@@ -128,44 +128,50 @@ struct ProjectListView: View {
     // MARK: - Subviews
 
     private var statisticsSection: some View {
-        HStack(spacing: AppConfig.UI.largePadding) {
-            StatCard(
+        StatCardsRow(cards: statisticsCards, joinsCards: true)
+    }
+
+    private var statisticsCards: [StatCardData] {
+        var cards = [
+            StatCardData(
                 icon: "folder",
                 label: AppLocalized("已添加项目"),
                 value: "\(filteredProjects.count)",
                 iconColor: .blue
-            )
-            StatCard(
+            ),
+            StatCardData(
                 icon: "play.circle",
                 label: AppLocalized("运行中项目"),
                 value: "\(filteredProjects.filter { $0.isRunning || findRelatedServer(for: $0) != nil }.count)",
                 iconColor: .green
-            )
-            StatCard(
+            ),
+            StatCardData(
                 icon: "doc.badge.ellipsis",
                 label: AppLocalized("未提交变更"),
                 value: "\(filteredProjects.reduce(0) { $0 + $1.uncommittedFileCount })",
                 iconColor: .orange
             )
-            
-            if projectType == .devServer {
-                StatCard(
-                    icon: "globe",
-                    label: AppLocalized("运行中的实例"),
-                    value: "\(allBrowserInstances.count)",
-                    iconColor: .blue,
-                    isClickable: true,
-                    action: { showingBrowserInstances = true }
-                )
-            } else {
-                StatCard(
-                    icon: "app.badge",
-                    label: AppLocalized("微信工具"),
-                    value: AppLocalized("READY"),
-                    iconColor: .green
-                )
-            }
+        ]
+
+        if projectType == .devServer {
+            cards.append(StatCardData(
+                icon: "globe",
+                label: AppLocalized("运行中的实例"),
+                value: "\(allBrowserInstances.count)",
+                iconColor: .blue,
+                isClickable: true,
+                action: { showingBrowserInstances = true }
+            ))
+        } else {
+            cards.append(StatCardData(
+                icon: "app.badge",
+                label: AppLocalized("微信工具"),
+                value: AppLocalized("READY"),
+                iconColor: .green
+            ))
         }
+
+        return cards
     }
 
     private var emptyStateView: some View {
@@ -188,14 +194,15 @@ struct ProjectListView: View {
     }
 
     private var contentView: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: AppConfig.UI.extraLargePadding) {
                 // 项目列表
                 if !filteredProjects.isEmpty {
                     projectsListSection
                 }
             }
-            .padding(AppConfig.UI.extraLargePadding)
+            .padding(.horizontal, AppConfig.UI.extraLargePadding)
+            .padding(.bottom, AppConfig.UI.extraLargePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
