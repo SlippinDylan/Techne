@@ -71,7 +71,7 @@ struct BrowserInstancesSheet: View {
     // MARK: - Instance List View
 
     private var instanceListView: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: AppConfig.UI.largeSpacing) {
                 ForEach(instances) { instance in
                     InstanceDetailCard(instance: instance)

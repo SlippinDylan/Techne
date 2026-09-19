@@ -78,20 +78,15 @@ struct ADBDeployView: View {
                 }
             }
 
-            GroupBox {
-                VStack(spacing: 0) {
-                    deployControlsSection
-                        .padding(AppConfig.UI.largePadding)
+            VStack(spacing: AppConfig.UI.largePadding) {
+                deployControlsSection
 
-                    Divider()
-                        .padding(.horizontal, AppConfig.UI.largePadding)
-
+                if !viewModel.terminalOutput.isEmpty {
                     consoleSection
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(AppConfig.UI.largePadding)
                 }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
 
@@ -128,7 +123,7 @@ struct ADBDeployView: View {
                     style: .primary,
                     isDestructive: false
                 )
-                .allowsHitTesting(canDeploy)
+                .disabled(!canDeploy)
             }
 
             if viewModel.status != .idle {
@@ -140,6 +135,7 @@ struct ADBDeployView: View {
                         if case .failure = viewModel.status {
                             Button("重置") { viewModel.status = .idle }
                                 .buttonStyle(.glass)
+                                .buttonBorderShape(.capsule)
                                 .controlSize(.small)
                         }
                     }
@@ -168,10 +164,12 @@ struct ADBDeployView: View {
                 NSPasteboard.general.setString(viewModel.terminalOutput, forType: .string)
             }
             .buttonStyle(.glass)
+            .buttonBorderShape(.capsule)
             .controlSize(.small)
 
             Button("清除日志") { viewModel.clearTerminal() }
                 .buttonStyle(.glass)
+                .buttonBorderShape(.capsule)
                 .controlSize(.small)
         }
     }

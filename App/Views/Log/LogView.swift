@@ -26,6 +26,45 @@ struct LogView: View {
             logContentView
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .searchable(text: $searchText, placement: .toolbar, prompt: Text("搜索日志..."))
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                levelFilterMenu
+            }
+
+            ToolbarSpacer(.fixed, placement: .primaryAction)
+
+            ToolbarItemGroup(placement: .primaryAction) {
+                if !selection.isEmpty {
+                    Button(action: copySelectedLogs) {
+                        Label("复制选中", systemImage: "doc.on.doc")
+                        .labelStyle(.iconOnly)
+                    }
+                    .help("复制选中")
+                }
+
+                Button(action: copyAllLogs) {
+                    Label("复制所有", systemImage: "doc.on.doc.fill")
+                        .labelStyle(.iconOnly)
+                }
+                .help("复制所有")
+                .disabled(filteredLogs.isEmpty)
+            }
+
+            ToolbarSpacer(.fixed, placement: .primaryAction)
+
+            ToolbarItem(placement: .primaryAction) {
+                Button(role: .destructive) {
+                    logService.clearLogs()
+                    selection.removeAll()
+                } label: {
+                    Label("清空日志", systemImage: "trash")
+                        .labelStyle(.iconOnly)
+                }
+                .help("清空日志")
+                .disabled(logService.logs.isEmpty)
+            }
+        }
         .onAppear {
             selection = Self.reconciledSelection(selection, visibleLogs: filteredLogs)
         }
@@ -48,119 +87,37 @@ struct LogView: View {
     // MARK: - Log Content View
 
     private var logContentView: some View {
-        VStack(spacing: AppConfig.UI.largeSpacing) {
-            filterBarCard
-            logListCard
-        }
+        logListCard
         .padding(.horizontal, AppConfig.UI.extraLargePadding)
         .padding(.bottom, AppConfig.UI.extraLargePadding)
     }
 
-    // MARK: - Filter Bar Card
-
-    private var filterBarCard: some View {
-        HStack(spacing: AppConfig.UI.largeSpacing) {
-            // 搜索框
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("搜索日志...", text: $searchText)
-                    .textFieldStyle(.plain)
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
+    private var levelFilterMenu: some View {
+        Menu {
+            Button("全部") {
+                selectedLevel = nil
             }
-            .padding(.horizontal, AppConfig.UI.mediumPadding)
-            .padding(.vertical, AppConfig.UI.mediumSpacing)
-            .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius))
-
-            // 级别筛选
-            Menu {
-                Button("全部") {
-                    selectedLevel = nil
-                }
-                Divider()
-                Button("信息") {
-                    selectedLevel = .info
-                }
-                Button("成功") {
-                    selectedLevel = .success
-                }
-                Button("警告") {
-                    selectedLevel = .warning
-                }
-                Button("错误") {
-                    selectedLevel = .error
-                }
-            } label: {
-                HStack {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                    Text(selectedLevel.map { AppLocalized($0.rawValue) } ?? AppLocalized("全部级别"))
-                }
-                .padding(.horizontal, AppConfig.UI.mediumPadding)
-                .padding(.vertical, AppConfig.UI.mediumSpacing)
-                .background(Color(nsColor: .textBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius))
+            Divider()
+            Button("信息") {
+                selectedLevel = .info
             }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            // 显示选中数量
-            if !selection.isEmpty {
-                Text(AppLocalizedFormat("已选择 %lld 条", Int64(selection.count)))
-                    .font(.system(size: AppConfig.UI.smallFontSize))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, AppConfig.UI.mediumPadding)
-                    .padding(.vertical, AppConfig.UI.mediumSpacing)
-                    .background(.blue.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.mediumCornerRadius))
+            Button("成功") {
+                selectedLevel = .success
             }
-
-            // 复制选中按钮（仅在有选中时显示）
-            if !selection.isEmpty {
-                CleanMyMacButton(
-                    title: AppLocalized("复制选中"),
-                    icon: "doc.on.doc",
-                    action: {
-                        copySelectedLogs()
-                    },
-                    style: .secondary,
-                    isDestructive: false
-                )
+            Button("警告") {
+                selectedLevel = .warning
             }
-
-            // 复制所有日志按钮
-            CleanMyMacButton(
-                title: AppLocalized("复制所有"),
-                icon: "doc.on.doc.fill",
-                action: {
-                    copyAllLogs()
-                },
-                style: .primary,
-                isDestructive: false
+            Button("错误") {
+                selectedLevel = .error
+            }
+        } label: {
+            Label(
+                selectedLevel.map { AppLocalized($0.rawValue) } ?? AppLocalized("全部级别"),
+                systemImage: "line.3.horizontal.decrease.circle"
             )
-
-            // 清空按钮
-            CleanMyMacButton(
-                title: AppLocalized("清空日志"),
-                icon: "trash",
-                action: {
-                    logService.clearLogs()
-                    selection.removeAll()
-                },
-                style: .secondary,
-                isDestructive: true
-            )
+            .labelStyle(.iconOnly)
         }
-        .padding(AppConfig.UI.largePadding)
-        .background(Color.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppConfig.UI.largeCornerRadius))
+        .help(selectedLevel.map { AppLocalized($0.rawValue) } ?? AppLocalized("全部级别"))
     }
 
     // MARK: - Log List Card

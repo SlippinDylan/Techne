@@ -68,7 +68,7 @@ struct CommandConfigEditSheet: View {
     // MARK: - Content View
 
     private var contentView: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: AppConfig.UI.largePadding) {
                 // 配置名称（必填）
                 VStack(alignment: .leading, spacing: AppConfig.UI.smallSpacing) {

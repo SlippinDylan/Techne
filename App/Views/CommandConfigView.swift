@@ -62,7 +62,7 @@ struct CommandConfigView: View {
     // MARK: - Content View
 
     private var contentView: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: AppConfig.UI.largeSpacing) {
                 ForEach(commandConfigService.configs) { config in
                     CommandConfigCard(

@@ -188,7 +188,7 @@ struct ConsolePanelStyleTests {
 
     @MainActor
     @Test
-    func logViewRenderedChromeIncludesLogWindowShellAndViewportCornerRadii() {
+    func logViewRenderedChromeIncludesViewportCornerRadius() {
         let configuration = ConsolePanelStyle.configuration(for: .logWindow)
         let logService = makeTestLogService(logs: [
             LogEntry(level: .success, message: "Corner radius smoke test", category: "ConsolePanelStyleTests")
@@ -197,7 +197,6 @@ struct ConsolePanelStyleTests {
         let hostedView = makeHostedLogView(logService: logService)
         let cornerRadii = hostedView.allDescendantCornerRadii()
 
-        #expect(cornerRadii.containsApproximately(configuration.shell.outerCornerRadius))
         #expect(cornerRadii.containsApproximately(configuration.viewport.cornerRadius))
     }
 
@@ -380,6 +379,8 @@ struct ConsolePanelStyleTests {
         #expect(scrollView.borderType == .noBorder)
         #expect(scrollView.hasVerticalScroller)
         #expect(scrollView.hasHorizontalScroller == false)
+        #expect(scrollView.scrollerStyle == .overlay)
+        #expect(scrollView.verticalScroller?.controlSize == .small)
     }
 
 }
