@@ -39,37 +39,7 @@ jobs:
           CURRENT_SHA: ${{ github.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          changed_files="$RUNNER_TEMP/changed-files"
-
-          if [[ "$EVENT_NAME" == 'workflow_dispatch' ]]; then
-            run_macos=true
-          else
-            if [[ "$EVENT_NAME" == 'pull_request' ]]; then
-              git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$changed_files"
-            elif [[ -n "$BEFORE_SHA" && ! "$BEFORE_SHA" =~ ^0+$ ]]; then
-              git diff --name-only -z "$BEFORE_SHA" "$CURRENT_SHA" > "$changed_files"
-            elif git rev-parse "${CURRENT_SHA}^" >/dev/null 2>&1; then
-              git diff --name-only -z "${CURRENT_SHA}^" "$CURRENT_SHA" > "$changed_files"
-            else
-              git ls-tree -r --name-only -z "$CURRENT_SHA" > "$changed_files"
-            fi
-
-            run_macos=false
-            while IFS= read -r -d '' path; do
-              case "$path" in
-                README.md | LICENSE | AGENTS.md | docs/*) ;;
-                *) run_macos=true; break ;;
-              esac
-            done < "$changed_files"
-
-            if node -e "const manifest = require('./Config/Release/manifest.json'); process.exit(manifest.release === true ? 0 : 1)"; then
-              run_macos=true
-            fi
-          fi
-
-          echo "run_macos=$run_macos" >> "$GITHUB_OUTPUT"
+        run: node .github/scripts/ci-change-classifier.mjs
 
       - name: Validate automation
         run: |
