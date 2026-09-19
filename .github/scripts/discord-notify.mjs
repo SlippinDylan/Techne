@@ -274,6 +274,27 @@ function buildRelease(event) {
   };
 }
 
+function buildReleaseDispatch(event) {
+  const repoUrl = repositoryUrl(event);
+  const payload = event.client_payload ?? {};
+  const highlights = extractReleaseHighlights(payload.changelog);
+  return {
+    title: `${productName(event)} ${payload.version ?? '未知版本'} 发布成功`,
+    details: commonDetails(event, [
+      `类型：${payload.prerelease ? 'Pre-release' : 'Stable'}`,
+      payload.dmg_name ? `制品：${payload.dmg_name}` : '',
+      '架构：arm64',
+      '签名：Apple Development（未公证）',
+      ...highlights,
+    ]),
+    button: { text: '查看版本', url: safeGitHubUrl(payload.release_url, repoUrl) },
+    secondaryButton: payload.download_url
+      ? { text: '下载 DMG', url: safeGitHubUrl(payload.download_url, repoUrl) }
+      : null,
+    color: 'green',
+  };
+}
+
 function buildReleaseStarted(event) {
   const repoUrl = repositoryUrl(event);
   const payload = event.client_payload ?? {};
@@ -292,6 +313,7 @@ function buildReleaseStarted(event) {
 
 function buildRepositoryDispatch(event) {
   if (event.action === 'release_started') return buildReleaseStarted(event);
+  if (event.action === 'release_published') return buildReleaseDispatch(event);
   return null;
 }
 

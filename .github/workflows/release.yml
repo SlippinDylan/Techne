@@ -421,6 +421,32 @@ jobs:
             '{event_type: "distribution_metadata_requested", client_payload: {tag: $tag}}' \
             | gh api --method POST "repos/${GITHUB_REPOSITORY}/dispatches" --input -
 
+      - name: Dispatch release notification
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          changelog="$(node .github/scripts/release-manifest.mjs notes)"
+          jq -n \
+            --arg version "$VERSION" \
+            --argjson prerelease "$PRERELEASE" \
+            --arg dmg_name "$DMG_NAME" \
+            --arg changelog "$changelog" \
+            --arg release_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}" \
+            --arg download_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${TAG}/${DMG_NAME}" \
+            '{
+              event_type: "release_published",
+              client_payload: {
+                version: $version,
+                prerelease: $prerelease,
+                dmg_name: $dmg_name,
+                changelog: $changelog,
+                release_url: $release_url,
+                download_url: $download_url
+              }
+            }' \
+            | gh api --method POST "repos/${GITHUB_REPOSITORY}/dispatches" --input -
+
       - name: Remove signing keychain
         if: always()
         run: |

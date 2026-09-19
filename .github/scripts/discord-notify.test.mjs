@@ -142,6 +142,27 @@ test('builds release and packaging notifications with Techne fields', () => {
   assert.equal(buildDiscordPayload(started).embeds[0].color, 0x5865F2);
 });
 
+test('builds a release-published dispatch with Techne fields', () => {
+  const notification = buildNotification('repository_dispatch', {
+    repository,
+    sender,
+    action: 'release_published',
+    client_payload: {
+      version: '0.1.0-beta.1',
+      prerelease: true,
+      dmg_name: 'Techne-0.1.0-beta.1.dmg',
+      changelog: '- Added automation.',
+      release_url: 'https://github.com/owner/Techne/releases/tag/v0.1.0-beta.1',
+      download_url: 'https://github.com/owner/Techne/releases/download/v0.1.0-beta.1/Techne-0.1.0-beta.1.dmg',
+    },
+  });
+  const payload = buildDiscordPayload(notification);
+  assert.equal(notification.title, 'Techne 0.1.0-beta.1 发布成功');
+  assert.equal(notification.color, 'green');
+  assert.ok(notification.details.includes('签名：Apple Development（未公证）'));
+  assert.match(payload.embeds[0].description, /\[下载 DMG\]/);
+});
+
 test('extracts at most three release highlights', () => {
   assert.deepEqual(extractReleaseHighlights('- One\n- Two\nText\n* Three\n- Four'), [
     '• One',

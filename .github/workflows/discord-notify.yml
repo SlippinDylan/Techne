@@ -36,6 +36,7 @@ on: # zizmor: ignore[dangerous-triggers] Every privileged event executes only th
   repository_dispatch:
     types:
       - release_started
+      - release_published
 
 permissions:
   contents: read
