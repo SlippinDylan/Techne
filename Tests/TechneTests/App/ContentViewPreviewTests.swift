@@ -7,7 +7,8 @@ struct ContentViewPreviewTests {
     @Test
     func sidebarGroupsKeepUtilityNavigationAtTheBottomInRequiredOrder() {
         #expect(SidebarItem.primaryItems == [.devEnvironment, .miniApp, .adbDeploy])
-        #expect(SidebarItem.utilityItems == [.settings, .logs, .about])
+        #expect(SidebarItem.utilityItems == [.settings, .logs])
+        #expect(SettingsPane.allCases == [.general, .about])
     }
 
     @MainActor

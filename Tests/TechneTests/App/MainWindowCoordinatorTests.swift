@@ -150,4 +150,26 @@ struct MainWindowCoordinatorTests {
         #expect(navigation.consumePendingSidebarItem() == .miniApp)
         #expect(navigation.consumePendingSidebarItem() == nil)
     }
+
+    @Test
+    @MainActor
+    func showSettingsAboutStoresSidebarAndPaneIntentUntilConsumed() {
+        let navigation = MainWindowNavigationCoordinator(
+            makeWindowCoordinator: { openWindow in
+                MainWindowCoordinator(
+                    findWindow: { _ in nil },
+                    activateApp: { },
+                    openWindow: openWindow,
+                    focusWindow: { _ in }
+                )
+            }
+        )
+        navigation.registerOpenMainWindowAction { }
+
+        navigation.showMainWindow(selecting: .settings, settingsPane: .about)
+
+        #expect(navigation.consumePendingSidebarItem() == .settings)
+        #expect(navigation.consumePendingSettingsPane() == .about)
+        #expect(navigation.consumePendingSettingsPane() == nil)
+    }
 }

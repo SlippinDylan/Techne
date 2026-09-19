@@ -49,13 +49,19 @@ struct TechneAppCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
             Button("关于 Techne") {
-                MainWindowNavigationCoordinator.shared.showMainWindow(selecting: .about)
+                MainWindowNavigationCoordinator.shared.showMainWindow(
+                    selecting: .settings,
+                    settingsPane: .about
+                )
             }
         }
 
         CommandGroup(replacing: .appSettings) {
             Button("设置…") {
-                MainWindowNavigationCoordinator.shared.showMainWindow(selecting: .settings)
+                MainWindowNavigationCoordinator.shared.showMainWindow(
+                    selecting: .settings,
+                    settingsPane: .general
+                )
             }
         }
 

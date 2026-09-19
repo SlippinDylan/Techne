@@ -33,18 +33,17 @@ struct ContentView: View {
                     .tag(item)
                     .padding(.vertical, 4)
             }
+            .scrollIndicators(.hidden)
             .listStyle(.sidebar)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            .safeAreaBar(edge: .bottom, alignment: .leading, spacing: 0) {
                 VStack(spacing: 2) {
-                    Divider()
-                        .padding(.bottom, 4)
-
                     ForEach(SidebarItem.utilityItems) { item in
                         utilitySidebarRow(item)
                     }
                 }
                 .padding(.horizontal, 8)
-                .padding(.bottom, 8)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
@@ -70,13 +69,12 @@ struct ContentView: View {
                 case .settings:
                     SettingsContentView(
                         projectService: projectService,
-                        commandConfigService: commandConfigService
+                        commandConfigService: commandConfigService,
+                        updateController: updateController
                     )
                 case .logs:
                     LogView()
                         .environment(logService)
-                case .about:
-                    AboutView(updateController: updateController)
                 }
             }
             .navigationTitle(navigationTitle)
@@ -95,7 +93,7 @@ struct ContentView: View {
             .toolbar {
                 let item = selectedItem ?? .devEnvironment
                 if item == .devEnvironment || item == .miniApp {
-                    ToolbarItemGroup(placement: .primaryAction) {
+                    ToolbarItem(placement: .primaryAction) {
                         if projectService.isLoading {
                             ProgressView()
                                 .controlSize(.small)
@@ -108,8 +106,12 @@ struct ContentView: View {
                             .help("刷新状态 (Cmd+R)")
                             .keyboardShortcut("r", modifiers: .command)
                         }
+                    }
 
-                        if item == .devEnvironment {
+                    if item == .devEnvironment {
+                        ToolbarSpacer(.fixed, placement: .primaryAction)
+
+                        ToolbarItem(placement: .primaryAction) {
                             Button(action: presentManualBrowserLaunch) {
                                 Label("新建浏览器实例", systemImage: "globe.badge.chevron.backward")
                                     .labelStyle(.iconOnly)
@@ -264,10 +266,24 @@ struct ContentViewPreviewEnvironment {
     }
 }
 
+enum SettingsPane: String, CaseIterable {
+    case general
+    case about
+
+    var title: String {
+        switch self {
+        case .general: AppLocalized("通用")
+        case .about: AppLocalized("关于")
+        }
+    }
+}
+
 struct SettingsContentView: View {
     @Environment(LaunchSettings.self) private var launchSettings
+    @Environment(MainWindowNavigationCoordinator.self) private var mainWindowNavigation
     let projectService: ProjectService
     let commandConfigService: CommandConfigService
+    let updateController: ApplicationUpdateController
 
     @State private var exportingBackup = false
     @State private var importingBackup = false
@@ -275,9 +291,88 @@ struct SettingsContentView: View {
     @State private var backupAlert: BackupAlertContext?
     @State private var selectedApplicationLanguage = ApplicationLanguage.selected()
     @State private var showingLanguageRelaunchConfirmation = false
+    @State private var selectedPane: SettingsPane = .general
+    @Namespace private var paneSelectorNamespace
 
     var body: some View {
-        ScrollView {
+        selectedPaneContent
+            .toolbar(removing: .title)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    paneSelector
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
+        .fileExporter(
+            isPresented: $exportingBackup,
+            document: backupDocument,
+            contentType: .json,
+            defaultFilename: BackupService.defaultFilename
+        ) { result in
+            if case .failure(let error) = result {
+                backupAlert = .init(title: AppLocalized("备份导出失败"), message: error.localizedDescription)
+            }
+        }
+        .fileImporter(
+            isPresented: $importingBackup,
+            allowedContentTypes: TechneBackupDocument.readableContentTypes,
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+
+                do {
+                    try BackupService.mergeImport(
+                        from: url,
+                        projectService: projectService,
+                        commandConfigService: commandConfigService
+                    )
+                } catch {
+                    backupAlert = .init(title: AppLocalized("备份导入失败"), message: error.localizedDescription)
+                }
+            case .failure(let error):
+                backupAlert = .init(title: AppLocalized("备份导入失败"), message: error.localizedDescription)
+            }
+        }
+        .alert(item: $backupAlert) { context in
+            Alert(
+                title: Text(context.title),
+                message: Text(context.message),
+                dismissButton: .default(Text("知道了"))
+            )
+        }
+        .alert("语言更改将在重新启动后生效", isPresented: $showingLanguageRelaunchConfirmation) {
+            Button("稍后", role: .cancel) {}
+            Button("重新启动") {
+                ApplicationRelaunchController.shared.requestRelaunch()
+            }
+        } message: {
+            Text("Techne 将在重新启动后使用所选语言。")
+        }
+        .onAppear {
+            selectedPane = mainWindowNavigation.consumePendingSettingsPane() ?? .general
+        }
+        .onChange(of: mainWindowNavigation.selectionRevision) { _, _ in
+            applyPendingSettingsPane()
+        }
+        .onChange(of: selectedApplicationLanguage) { _, language in
+            showingLanguageRelaunchConfirmation = ApplicationLanguage.select(language)
+        }
+    }
+
+    @ViewBuilder
+    private var selectedPaneContent: some View {
+        switch selectedPane {
+        case .general:
+            generalSettingsPane
+        case .about:
+            AboutView(updateController: updateController)
+        }
+    }
+
+    private var generalSettingsPane: some View {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
                     settingsSectionHeader("通用", systemImage: "cpu")
@@ -335,7 +430,7 @@ struct SettingsContentView: View {
                                         )
                                         exportingBackup = true
                                     },
-                                    style: .primary,
+                                    style: .secondary,
                                     isDestructive: false
                                 )
 
@@ -345,7 +440,7 @@ struct SettingsContentView: View {
                                     action: {
                                         importingBackup = true
                                     },
-                                    style: .primary,
+                                    style: .secondary,
                                     isDestructive: false
                                 )
 
@@ -355,7 +450,7 @@ struct SettingsContentView: View {
                                     action: {
                                         BackupService.revealAppSupportDirectory()
                                     },
-                                    style: .primary,
+                                    style: .secondary,
                                     isDestructive: false
                                 )
                             }
@@ -374,56 +469,53 @@ struct SettingsContentView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .fileExporter(
-            isPresented: $exportingBackup,
-            document: backupDocument,
-            contentType: .json,
-            defaultFilename: BackupService.defaultFilename
-        ) { result in
-            if case .failure(let error) = result {
-                backupAlert = .init(title: AppLocalized("备份导出失败"), message: error.localizedDescription)
-            }
-        }
-        .fileImporter(
-            isPresented: $importingBackup,
-            allowedContentTypes: TechneBackupDocument.readableContentTypes,
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case .success(let urls):
-                guard let url = urls.first else { return }
+    }
 
-                do {
-                    try BackupService.mergeImport(
-                        from: url,
-                        projectService: projectService,
-                        commandConfigService: commandConfigService
-                    )
-                } catch {
-                    backupAlert = .init(title: AppLocalized("备份导入失败"), message: error.localizedDescription)
+    private var paneSelector: some View {
+        GlassEffectContainer(spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(SettingsPane.allCases, id: \.self) { pane in
+                    paneButton(for: pane)
                 }
-            case .failure(let error):
-                backupAlert = .init(title: AppLocalized("备份导入失败"), message: error.localizedDescription)
+            }
+            .padding(3)
+            .glassEffect(.regular.interactive(), in: Capsule())
+        }
+        .frame(maxWidth: 200)
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private func paneButton(for pane: SettingsPane) -> some View {
+        let isSelected = selectedPane == pane
+
+        return Button {
+            withAnimation(.smooth(duration: 0.25)) {
+                selectedPane = pane
+            }
+        } label: {
+            Text(pane.title)
+                .font(.callout.weight(isSelected ? .semibold : .medium))
+                .foregroundStyle(isSelected ? Color.white : Color.primary)
+                .padding(.horizontal, AppConfig.UI.smallPadding)
+                .frame(minWidth: 80, minHeight: 32)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .background {
+            if isSelected {
+                Color.clear
+                    .glassEffect(.regular.tint(.accentColor).interactive(), in: Capsule())
+                    .glassEffectID("settings-pane-selection", in: paneSelectorNamespace)
             }
         }
-        .alert(item: $backupAlert) { context in
-            Alert(
-                title: Text(context.title),
-                message: Text(context.message),
-                dismissButton: .default(Text("知道了"))
-            )
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func applyPendingSettingsPane() {
+        guard let pane = mainWindowNavigation.consumePendingSettingsPane() else {
+            return
         }
-        .alert("语言更改将在重新启动后生效", isPresented: $showingLanguageRelaunchConfirmation) {
-            Button("稍后", role: .cancel) {}
-            Button("重新启动") {
-                ApplicationRelaunchController.shared.requestRelaunch()
-            }
-        } message: {
-            Text("Techne 将在重新启动后使用所选语言。")
-        }
-        .onChange(of: selectedApplicationLanguage) { _, language in
-            showingLanguageRelaunchConfirmation = ApplicationLanguage.select(language)
-        }
+        selectedPane = pane
     }
 
     private func settingsSectionHeader(_ title: String, systemImage: String) -> some View {
@@ -447,10 +539,9 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     case adbDeploy = "安卓应用部署"
     case settings = "设置"
     case logs = "日志"
-    case about = "关于"
 
     static let primaryItems: [SidebarItem] = [.devEnvironment, .miniApp, .adbDeploy]
-    static let utilityItems: [SidebarItem] = [.settings, .logs, .about]
+    static let utilityItems: [SidebarItem] = [.settings, .logs]
 
     var id: String { rawValue }
 
@@ -461,7 +552,6 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .adbDeploy: return "iphone.gen3"
         case .settings: return "gearshape"
         case .logs: return "doc.text"
-        case .about: return "info.circle"
         }
     }
 
@@ -474,7 +564,6 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .adbDeploy: return AppLocalized("通过 ADB 快速部署 APK 到 Android 设备")
         case .settings: return AppLocalized("管理启动选项、数据与备份")
         case .logs: return AppLocalized("查看和筛选应用操作日志")
-        case .about: return AppLocalized("查看版本信息并检查更新")
         }
     }
 }

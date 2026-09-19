@@ -47,6 +47,8 @@ struct AboutView: View {
                 Button("检查更新…") {
                     updateController.checkForUpdates()
                 }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.capsule)
                 .disabled(!updateController.canCheckForUpdates)
                 .padding(.bottom, AppConfig.UI.mediumSpacing)
 
@@ -58,7 +60,6 @@ struct AboutView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 

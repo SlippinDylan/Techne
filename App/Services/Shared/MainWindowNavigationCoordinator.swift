@@ -9,6 +9,7 @@ final class MainWindowNavigationCoordinator {
     private var openMainWindowAction: (() -> Void)?
 
     private(set) var pendingSidebarItem: SidebarItem?
+    private(set) var pendingSettingsPane: SettingsPane?
     private(set) var selectionRevision = 0
 
     init(
@@ -23,7 +24,13 @@ final class MainWindowNavigationCoordinator {
         openMainWindowAction = action
     }
 
-    func showMainWindow(selecting sidebarItem: SidebarItem? = nil) {
+    func showMainWindow(
+        selecting sidebarItem: SidebarItem? = nil,
+        settingsPane: SettingsPane? = nil
+    ) {
+        if let settingsPane {
+            pendingSettingsPane = settingsPane
+        }
         if let sidebarItem {
             pendingSidebarItem = sidebarItem
             selectionRevision &+= 1
@@ -40,5 +47,10 @@ final class MainWindowNavigationCoordinator {
     func consumePendingSidebarItem() -> SidebarItem? {
         defer { pendingSidebarItem = nil }
         return pendingSidebarItem
+    }
+
+    func consumePendingSettingsPane() -> SettingsPane? {
+        defer { pendingSettingsPane = nil }
+        return pendingSettingsPane
     }
 }
