@@ -40,6 +40,47 @@ struct MainWindowCoordinatorTests {
 
     @Test
     @MainActor
+    func focusesMainWindowCreatedByOpenAction() {
+        var openedWindow: NSWindow?
+        var focusedWindow: NSWindow?
+
+        let coordinator = MainWindowCoordinator(
+            findWindow: { _ in openedWindow },
+            activateApp: { },
+            openWindow: {
+                openedWindow = NSWindow()
+                openedWindow?.identifier = NSUserInterfaceItemIdentifier("main")
+            },
+            focusWindow: { focusedWindow = $0 }
+        )
+
+        coordinator.showMainWindow()
+
+        #expect(focusedWindow === openedWindow)
+    }
+
+    @Test
+    @MainActor
+    func closesOnlyTheExistingMainWindow() {
+        let existingWindow = NSWindow()
+        existingWindow.identifier = NSUserInterfaceItemIdentifier("main")
+        var closedWindow: NSWindow?
+
+        let coordinator = MainWindowCoordinator(
+            findWindow: { _ in existingWindow },
+            activateApp: { Issue.record("close should not activate the application") },
+            openWindow: { Issue.record("close should not open a window") },
+            focusWindow: { _ in Issue.record("close should not focus a window") },
+            closeWindow: { closedWindow = $0 }
+        )
+
+        coordinator.closeMainWindow()
+
+        #expect(closedWindow === existingWindow)
+    }
+
+    @Test
+    @MainActor
     func showMainWindowImmediatelyOpensMissingWindowWithoutDependingOnMenuBarLifecycle() {
         var openCount = 0
         let navigation = MainWindowNavigationCoordinator(

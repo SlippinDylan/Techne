@@ -10,6 +10,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let relaunchController: ApplicationRelaunchController
     private let reopenApplication: () -> Void
+    private var statusItemController: StatusItemController?
 
     override init() {
         relaunchController = .shared
@@ -27,20 +28,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+
+        let statusItemController = StatusItemController()
+        statusItemController.start()
+        self.statusItemController = statusItemController
+
         // 检测启动方式，开机自启动时不显示窗口
         if wasLaunchedAsLoginItem() {
-            NSApp.setActivationPolicy(.accessory)
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))
-                for window in NSApp.windows where window.identifier?.rawValue == "main" {
-                    window.close()
-                }
+                MainWindowNavigationCoordinator.shared.closeMainWindow()
             }
         }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        NSApp.setActivationPolicy(.accessory)
         return false
     }
 

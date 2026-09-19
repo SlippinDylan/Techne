@@ -4137,6 +4137,28 @@
         }
       }
     },
+    "关闭 Techne 窗口": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close Techne Window"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭 Techne 窗口"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "關閉 Techne 視窗"
+          }
+        }
+      }
+    },
     "关闭实例": {
       "localizations": {
         "en": {

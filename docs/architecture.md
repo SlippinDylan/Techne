@@ -30,7 +30,9 @@ Tests/TechneTests/         与上述职责对应的回归测试
 
 应用只有一个业务主窗口。`ContentView` 的侧边栏包含开发服务、微信小程序、Android 部署，以及固定在底部的设置、日志和关于页面。
 
-`MainWindowNavigationCoordinator` 接收菜单栏、系统菜单和应用重新激活产生的导航意图。它优先聚焦已存在的主窗口，只在窗口不存在时调用 SwiftUI `openWindow`。新增入口应复用该路径，不能直接创建另一份主窗口状态。
+`MainWindowNavigationCoordinator` 接收菜单栏、系统菜单和应用重新激活产生的导航意图。它优先聚焦已存在的主窗口，只在窗口不存在时调用 SwiftUI `openWindow`，并在窗口创建后将其置于前台。新增入口应复用该路径，不能直接创建另一份主窗口状态。
+
+应用以 accessory 形态运行，不显示 Dock 图标。菜单栏由 AppKit `NSStatusItem` 管理：左键显示或聚焦主窗口，右键打开业务菜单。`Command-Q` 只关闭主窗口并保留菜单栏进程，右键菜单中的退出项是用户彻底退出应用的唯一入口。
 
 菜单栏是快速入口，不承载设置、日志或更新业务。更新检查由关于页调用同一个长期存活的 `ApplicationUpdateController`。
 

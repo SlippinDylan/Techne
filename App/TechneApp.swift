@@ -42,13 +42,6 @@ struct TechneApp: App {
             MainWindowNavigationCommands()
             TechneAppCommands()
         }
-
-        // 菜单栏
-        MenuBarExtra("Techne", systemImage: "macbook.and.iphone") {
-            MenuBarView()
-                .environment(mainWindowNavigationCoordinator)
-        }
-        .menuBarExtraStyle(.menu)
     }
 }
 
@@ -72,6 +65,13 @@ struct TechneAppCommands: Commands {
             Button("操作日志") {
                 MainWindowNavigationCoordinator.shared.showMainWindow(selecting: .logs)
             }
+        }
+
+        CommandGroup(replacing: .appTermination) {
+            Button("关闭 Techne 窗口") {
+                MainWindowNavigationCoordinator.shared.closeMainWindow()
+            }
+            .keyboardShortcut("q", modifiers: .command)
         }
     }
 }

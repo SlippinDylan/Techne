@@ -33,6 +33,10 @@ final class MainWindowNavigationCoordinator {
         makeWindowCoordinator(openMainWindowAction).showMainWindow()
     }
 
+    func closeMainWindow() {
+        makeWindowCoordinator(openMainWindowAction ?? { }).closeMainWindow()
+    }
+
     func consumePendingSidebarItem() -> SidebarItem? {
         defer { pendingSidebarItem = nil }
         return pendingSidebarItem
