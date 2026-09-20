@@ -125,29 +125,8 @@ final class ProcessService: Sendable {
         return await stopSingleProcess(pid: pid)
     }
 
-    /// 使用项目根目录停止进程
-    func stopProjectProcesses(
-        at projectRootPath: String,
-        preferredPID: Int32? = nil
-    ) async -> Result<Void, ProjectServiceError> {
-        if let preferredPID,
-           let preferredSnapshot = await runtime.processSnapshotForPID(preferredPID),
-           ProjectRootProcessMatcher.matches(process: preferredSnapshot, projectRootPath: projectRootPath) {
-            if preferredSnapshot.processGroupID > 0 {
-                return await stopProcessGroup(
-                    processGroupID: preferredSnapshot.processGroupID,
-                    verificationPIDs: await verificationPIDsForProcessGroup(
-                        processGroupID: preferredSnapshot.processGroupID,
-                        fallbackPID: preferredPID
-                    ),
-                    fallbackPIDs: [preferredPID]
-                )
-            }
-
-            return await stopSingleProcess(pid: preferredPID)
-        }
-
-        let result = await stopAllProjectProcessesIfPresent(at: projectRootPath)
+    func stopProjectProcesses(for project: Project) async -> Result<Void, ProjectServiceError> {
+        let result = await stopAllProjectProcessesIfPresent(for: project)
         switch result {
         case .success(.stopped):
             return .success(())
@@ -159,7 +138,7 @@ final class ProcessService: Sendable {
     }
 
     func stopAllProjectProcessesIfPresent(
-        at projectRootPath: String,
+        for project: Project,
         using snapshots: [ProjectProcessSnapshot]? = nil
     ) async -> Result<ProjectProcessStopOutcome, ProjectServiceError> {
         let processSnapshots = if let snapshots {
@@ -167,25 +146,23 @@ final class ProcessService: Sendable {
         } else {
             await runtime.processSnapshots()
         }
-        let plan = ProjectRootProcessMatcher.stopPlan(
-            forProjectRootPath: projectRootPath,
-            processes: processSnapshots
-        )
-
-        guard plan.isEmpty == false else {
+        guard let runtimeMatch = ProjectRuntimeProcessMatcher.matches(
+            for: project,
+            in: processSnapshots
+        ) else {
             return .success(.notFound)
         }
 
         var failureMessages: [String] = []
 
-        for processGroupID in plan.processGroupIDs {
+        for processGroupID in runtimeMatch.processGroupIDs {
             let verificationPIDs = processSnapshots
                 .filter { $0.processGroupID == processGroupID }
                 .map(\.pid)
             let fallbackPIDs = processSnapshots
                 .filter {
                     $0.processGroupID == processGroupID &&
-                        ProjectRootProcessMatcher.matches(process: $0, projectRootPath: projectRootPath)
+                        ProjectProcessScope.contains(process: $0, projectRootPath: project.path)
                 }
                 .map(\.pid)
             let result = await stopProcessGroup(
@@ -198,23 +175,11 @@ final class ProcessService: Sendable {
             }
         }
 
-        for pid in plan.fallbackProcessIDs {
-            let result = await stopSingleProcess(pid: pid)
-            if case .failure(let error) = result {
-                failureMessages.append(AppLocalizedFormat("error.process.failure", pid, error.localizedDescription))
-            }
-        }
-
         guard failureMessages.isEmpty else {
             return .failure(.processStopFailed(failureMessages.joined(separator: "; ")))
         }
 
         return .success(.stopped)
-    }
-
-    /// 使用路径停止进程 (兼容旧调用，内部改为项目根目录范围)
-    func killProcessByPath(_ path: String) async -> Result<Void, ProjectServiceError> {
-        await stopProjectProcesses(at: path)
     }
 
     private func stopProcessGroup(

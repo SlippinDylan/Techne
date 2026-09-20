@@ -4,7 +4,7 @@ import Testing
 
 struct ProcessServiceProjectScopeTests {
     @Test
-    func preferredPIDMatchingManagedProjectStopsWithoutGlobalProcessSnapshotScan() async {
+    func matchingRuntimeCommandStopsItsProcessGroup() async {
         let recorder = ProcessServiceStopRecorder(
             aliveProcessIDs: [99752, 99767],
             processGroupIDs: [
@@ -20,7 +20,20 @@ struct ProcessServiceProjectScopeTests {
             runtime: .init(
                 processSnapshots: {
                     recorder.recordSnapshotScan()
-                    return []
+                    return [
+                        ProjectProcessSnapshot(
+                            pid: 99752,
+                            processGroupID: 99365,
+                            commandLine: "pnpm dev:mock",
+                            currentWorkingDirectory: "/Users/test/Portlens"
+                        ),
+                        ProjectProcessSnapshot(
+                            pid: 99767,
+                            processGroupID: 99365,
+                            commandLine: "next-server",
+                            currentWorkingDirectory: "/Users/test/Portlens/app"
+                        )
+                    ]
                 },
                 processSnapshotForPID: { pid in
                     ProjectProcessSnapshot(
@@ -39,23 +52,26 @@ struct ProcessServiceProjectScopeTests {
             )
         )
 
-        let result = await service.stopProjectProcesses(
-            at: "/Users/test/Portlens",
-            preferredPID: 99752
+        let project = Project(
+            name: "Portlens",
+            path: "/Users/test/Portlens",
+            type: .devServer,
+            startCommand: "pnpm dev:mock"
         )
+        let result = await service.stopProjectProcesses(for: project)
 
         guard case .success = result else {
             Issue.record("expected preferred PID stop to succeed")
             return
         }
 
-        #expect(recorder.snapshotScanCount() == 0)
+        #expect(recorder.snapshotScanCount() == 1)
         #expect(recorder.groupSignals() == [ProcessSignalEvent(target: 99365, signal: SIGINT)])
         #expect(recorder.processSignals().isEmpty)
     }
 
     @Test
-    func preferredPIDPathFailsWhenSiblingInSameProcessGroupSurvivesSignals() async {
+    func matchingRuntimeGroupFailureEscalatesSignals() async {
         let recorder = ProcessServiceStopRecorder(
             aliveProcessIDs: [99752, 99767],
             processGroupIDs: [
@@ -72,7 +88,20 @@ struct ProcessServiceProjectScopeTests {
             runtime: .init(
                 processSnapshots: {
                     recorder.recordSnapshotScan()
-                    return []
+                    return [
+                        ProjectProcessSnapshot(
+                            pid: 99752,
+                            processGroupID: 99365,
+                            commandLine: "pnpm dev:mock",
+                            currentWorkingDirectory: "/Users/test/Portlens"
+                        ),
+                        ProjectProcessSnapshot(
+                            pid: 99767,
+                            processGroupID: 99365,
+                            commandLine: "next-server",
+                            currentWorkingDirectory: "/Users/test/Portlens/app"
+                        )
+                    ]
                 },
                 processSnapshotForPID: { pid in
                     ProjectProcessSnapshot(
@@ -91,17 +120,20 @@ struct ProcessServiceProjectScopeTests {
             )
         )
 
-        let result = await service.stopProjectProcesses(
-            at: "/Users/test/Portlens",
-            preferredPID: 99752
+        let project = Project(
+            name: "Portlens",
+            path: "/Users/test/Portlens",
+            type: .devServer,
+            startCommand: "pnpm dev:mock"
         )
+        let result = await service.stopProjectProcesses(for: project)
 
         guard case .failure = result else {
             Issue.record("expected stop to fail when a sibling process survives both group signals")
             return
         }
 
-        #expect(recorder.snapshotScanCount() == 0)
+        #expect(recorder.snapshotScanCount() == 1)
         #expect(recorder.groupSignals() == [
             ProcessSignalEvent(target: 99365, signal: SIGINT),
             ProcessSignalEvent(target: 99365, signal: SIGTERM),
@@ -110,7 +142,7 @@ struct ProcessServiceProjectScopeTests {
     }
 
     @Test
-    func hostProcessGroupFallsBackToPreferredProcessSignal() async {
+    func hostProcessGroupSignalsOnlyProjectScopedMembers() async {
         let preferredPID: Int32 = 99752
         let unrelatedPID: Int32 = 99767
         let hostProcessGroup = getpgrp()
@@ -127,7 +159,22 @@ struct ProcessServiceProjectScopeTests {
         )
         let service = ProcessService(
             runtime: .init(
-                processSnapshots: { [] },
+                processSnapshots: {
+                    [
+                        ProjectProcessSnapshot(
+                            pid: preferredPID,
+                            processGroupID: hostProcessGroup,
+                            commandLine: "pnpm dev",
+                            currentWorkingDirectory: "/Users/test/Portlens"
+                        ),
+                        ProjectProcessSnapshot(
+                            pid: unrelatedPID,
+                            processGroupID: hostProcessGroup,
+                            commandLine: "pnpm dev",
+                            currentWorkingDirectory: "/Users/test/other-project"
+                        )
+                    ]
+                },
                 processSnapshotForPID: { pid in
                     ProjectProcessSnapshot(
                         pid: pid,
@@ -145,10 +192,13 @@ struct ProcessServiceProjectScopeTests {
             )
         )
 
-        let result = await service.stopProjectProcesses(
-            at: "/Users/test/Portlens",
-            preferredPID: preferredPID
+        let project = Project(
+            name: "Portlens",
+            path: "/Users/test/Portlens",
+            type: .devServer,
+            startCommand: "pnpm dev"
         )
+        let result = await service.stopProjectProcesses(for: project)
 
         guard case .success = result else {
             Issue.record("expected a safe single-process fallback")
@@ -171,7 +221,7 @@ struct ProcessServiceProjectScopeTests {
         )
 
         #expect(
-            ProjectRootProcessMatcher.matches(
+            ProjectProcessScope.contains(
                 process: process,
                 projectRootPath: "/Users/test/Portlens"
             )
@@ -188,7 +238,7 @@ struct ProcessServiceProjectScopeTests {
         )
 
         #expect(
-            ProjectRootProcessMatcher.matches(
+            ProjectProcessScope.contains(
                 process: process,
                 projectRootPath: "/Users/test/Portlens"
             )
@@ -205,7 +255,7 @@ struct ProcessServiceProjectScopeTests {
         )
 
         #expect(
-            ProjectRootProcessMatcher.matches(
+            ProjectProcessScope.contains(
                 process: process,
                 projectRootPath: "/Users/test/Portlens"
             ) == false
@@ -222,7 +272,7 @@ struct ProcessServiceProjectScopeTests {
         )
 
         #expect(
-            ProjectRootProcessMatcher.matches(
+            ProjectProcessScope.contains(
                 process: process,
                 projectRootPath: "/Users/test/Portlens"
             ) == false
@@ -230,59 +280,142 @@ struct ProcessServiceProjectScopeTests {
     }
 
     @Test
-    func stopPlanDeduplicatesMatchedProcessGroupsAndIgnoresUnrelatedStoredPID() {
-        let plan = ProjectRootProcessMatcher.stopPlan(
-            forProjectRootPath: "/Users/test/Portlens",
-            processes: [
-                ProjectProcessSnapshot(
-                    pid: 111,
-                    processGroupID: 111,
-                    commandLine: "node /tmp/other-project/dev.mjs",
-                    currentWorkingDirectory: "/tmp/other-project"
-                ),
-                ProjectProcessSnapshot(
-                    pid: 99751,
-                    processGroupID: 99365,
-                    commandLine: "node ./scripts/workspace-next.mjs dev mock",
-                    currentWorkingDirectory: "/Users/test/Portlens"
-                ),
-                ProjectProcessSnapshot(
-                    pid: 99752,
-                    processGroupID: 99365,
-                    commandLine: "node /Users/test/Portlens/app/node_modules/next/dist/bin/next dev",
-                    currentWorkingDirectory: "/Users/test/Portlens/app"
-                ),
-                ProjectProcessSnapshot(
-                    pid: 99767,
-                    processGroupID: 99365,
-                    commandLine: "next-server (v15.5.18)",
-                    currentWorkingDirectory: "/Users/test/Portlens/app"
-                )
-            ]
+    func stopIgnoresTerminalCodexAndUnrelatedNPMProcessesInProjectDirectory() async {
+        let project = Project(
+            name: "staff-miniapp",
+            path: "/Users/test/staff-miniapp",
+            type: .miniApp,
+            startCommand: "pnpm dev:weapp"
+        )
+        let snapshots = [
+            ProjectProcessSnapshot(
+                pid: 100,
+                processGroupID: 100,
+                commandLine: "-/bin/zsh",
+                currentWorkingDirectory: project.path
+            ),
+            ProjectProcessSnapshot(
+                pid: 200,
+                processGroupID: 200,
+                commandLine: "node /usr/local/bin/codex",
+                currentWorkingDirectory: project.path
+            ),
+            ProjectProcessSnapshot(
+                pid: 300,
+                processGroupID: 300,
+                commandLine: "npm exec context7-mcp",
+                currentWorkingDirectory: project.path
+            ),
+            ProjectProcessSnapshot(
+                pid: 400,
+                processGroupID: 400,
+                commandLine: "node /opt/pnpm dev:weapp",
+                currentWorkingDirectory: project.path
+            ),
+            ProjectProcessSnapshot(
+                pid: 401,
+                processGroupID: 400,
+                commandLine: "node ./node_modules/@tarojs/cli/bin/taro build --watch",
+                currentWorkingDirectory: project.path
+            )
+        ]
+        let recorder = ProcessServiceStopRecorder(
+            aliveProcessIDs: Set(snapshots.map(\.pid)),
+            processGroupIDs: Dictionary(uniqueKeysWithValues: snapshots.map { ($0.pid, $0.processGroupID) }),
+            currentWorkingDirectories: Dictionary(uniqueKeysWithValues: snapshots.compactMap { snapshot in
+                snapshot.currentWorkingDirectory.map { (snapshot.pid, $0) }
+            })
+        )
+        let service = ProcessService(
+            runtime: .init(
+                processSnapshots: { snapshots },
+                processSnapshotForPID: { _ in nil },
+                processIDsInGroup: { groupID in groupID == 400 ? [400, 401] : [] },
+                processGroupID: recorder.processGroupID(for:),
+                sendSignalToProcessGroup: recorder.sendGroupSignal(groupID:signal:),
+                sendSignalToProcess: recorder.sendProcessSignal(pid:signal:),
+                isProcessRunning: { pid in recorder.isRunning(pid: pid) },
+                sleep: { _ in }
+            )
         )
 
-        #expect(plan.processGroupIDs == [99365])
-        #expect(plan.fallbackProcessIDs.isEmpty)
-        #expect(plan.matchedPIDs == [99751, 99752, 99767])
+        let result = await service.stopAllProjectProcessesIfPresent(for: project)
+
+        guard case .success(.stopped) = result else {
+            Issue.record("expected only the matching development service to stop")
+            return
+        }
+        #expect(recorder.groupSignals() == [ProcessSignalEvent(target: 400, signal: SIGINT)])
+        #expect(recorder.isRunning(pid: 100))
+        #expect(recorder.isRunning(pid: 200))
+        #expect(recorder.isRunning(pid: 300))
     }
 
     @Test
-    func stopPlanDoesNotFallbackToStoredPIDWhenNoProjectScopedProcessMatches() {
-        let plan = ProjectRootProcessMatcher.stopPlan(
-            forProjectRootPath: "/Users/test/Portlens",
-            processes: [
-                ProjectProcessSnapshot(
-                    pid: 111,
-                    processGroupID: 111,
-                    commandLine: "node /tmp/other-project/dev.mjs",
-                    currentWorkingDirectory: "/tmp/other-project"
-                )
-            ]
+    func stopReturnsNotFoundWhenOnlyUnrelatedProjectProcessesExist() async {
+        let project = Project(
+            name: "Portlens",
+            path: "/Users/test/Portlens",
+            type: .devServer,
+            startCommand: "pnpm dev"
+        )
+        let snapshots = [
+            ProjectProcessSnapshot(
+                pid: 111,
+                processGroupID: 111,
+                commandLine: "node /usr/local/bin/codex",
+                currentWorkingDirectory: project.path
+            ),
+            ProjectProcessSnapshot(
+                pid: 222,
+                processGroupID: 222,
+                commandLine: "npm exec context7-mcp",
+                currentWorkingDirectory: project.path
+            )
+        ]
+        let recorder = ProcessServiceStopRecorder(
+            aliveProcessIDs: Set(snapshots.map(\.pid)),
+            processGroupIDs: Dictionary(uniqueKeysWithValues: snapshots.map { ($0.pid, $0.processGroupID) }),
+            currentWorkingDirectories: Dictionary(uniqueKeysWithValues: snapshots.compactMap { snapshot in
+                snapshot.currentWorkingDirectory.map { (snapshot.pid, $0) }
+            })
+        )
+        let service = ProcessService(
+            runtime: .init(
+                processSnapshots: { snapshots },
+                processSnapshotForPID: { _ in nil },
+                processIDsInGroup: { _ in [] },
+                processGroupID: recorder.processGroupID(for:),
+                sendSignalToProcessGroup: recorder.sendGroupSignal(groupID:signal:),
+                sendSignalToProcess: recorder.sendProcessSignal(pid:signal:),
+                isProcessRunning: { pid in recorder.isRunning(pid: pid) },
+                sleep: { _ in }
+            )
         )
 
-        #expect(plan.processGroupIDs.isEmpty)
-        #expect(plan.fallbackProcessIDs.isEmpty)
-        #expect(plan.matchedPIDs.isEmpty)
+        let result = await service.stopAllProjectProcessesIfPresent(for: project)
+
+        guard case .success(.notFound) = result else {
+            Issue.record("expected unrelated project-directory processes to be ignored")
+            return
+        }
+        #expect(recorder.groupSignals().isEmpty)
+        #expect(recorder.processSignals().isEmpty)
+    }
+
+    @Test
+    func projectScopeIgnoresUnrelatedStoredPID() {
+        let process = ProjectProcessSnapshot(
+            pid: 111,
+            processGroupID: 111,
+            commandLine: "node /tmp/other-project/dev.mjs",
+            currentWorkingDirectory: "/tmp/other-project"
+        )
+
+        #expect(ProjectProcessScope.contains(
+            process: process,
+            projectRootPath: "/Users/test/Portlens"
+        ) == false)
     }
 
     @Test

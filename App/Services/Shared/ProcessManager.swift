@@ -237,6 +237,11 @@ class ProcessManager {
         for project: Project,
         using snapshots: [ProjectProcessSnapshot]? = nil
     ) async -> Result<ProjectProcessStopOutcome, ProjectServiceError> {
+        let processSnapshots = if let snapshots {
+            snapshots
+        } else {
+            await processService.processSnapshots()
+        }
         let stoppedManagedExecution: Bool
         if let managedExecution = managedExecutions[project.id] {
             managedExecution.task.cancel()
@@ -248,8 +253,8 @@ class ProcessManager {
         }
 
         let discoveredResult = await processService.stopAllProjectProcessesIfPresent(
-            at: project.path,
-            using: snapshots
+            for: project,
+            using: processSnapshots
         )
         switch discoveredResult {
         case .success(.notFound) where stoppedManagedExecution:

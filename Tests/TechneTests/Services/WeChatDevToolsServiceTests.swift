@@ -149,10 +149,10 @@ struct WeChatDevToolsServiceTests {
 
     @Test
     @MainActor
-    func nativeShutdownFailureKeepsProjectRunningAndReportsFailure() async throws {
+    func nativeShutdownLeavesDeveloperToolsProjectOpen() async throws {
         let fixture = try makeFixture(configurationRelativePath: "project.config.json")
         defer { try? FileManager.default.removeItem(at: fixture.root) }
-        try "#!/bin/sh\nprintf 'close failed' 1>&2\nexit 1\n".write(
+        try "#!/bin/sh\nprintf 'unexpected invocation' 1>&2\nexit 1\n".write(
             to: fixture.cli,
             atomically: true,
             encoding: .utf8
@@ -186,14 +186,8 @@ struct WeChatDevToolsServiceTests {
 
         let failures = await service.shutdownAllProjects()
 
-        #expect(failures == [
-            ProjectShutdownFailure(
-                projectName: "native-mini-app",
-                message: ProjectServiceError.processStopFailed("close failed").localizedDescription
-            )
-        ])
-        #expect(service.projects[0].isRunning)
-        #expect(service.isShuttingDown == false)
+        #expect(failures.isEmpty)
+        #expect(service.isShuttingDown)
     }
 
     private func makeFixture(

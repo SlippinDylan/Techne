@@ -7,18 +7,8 @@ struct ProjectProcessSnapshot: Sendable, Equatable {
     let currentWorkingDirectory: String?
 }
 
-struct ProjectRootStopPlan: Sendable, Equatable {
-    let matchedPIDs: [Int32]
-    let processGroupIDs: [Int32]
-    let fallbackProcessIDs: [Int32]
-
-    var isEmpty: Bool {
-        processGroupIDs.isEmpty && fallbackProcessIDs.isEmpty
-    }
-}
-
-enum ProjectRootProcessMatcher {
-    static func matches(process: ProjectProcessSnapshot, projectRootPath: String) -> Bool {
+enum ProjectProcessScope {
+    static func contains(process: ProjectProcessSnapshot, projectRootPath: String) -> Bool {
         let normalizedProjectRoot = DevServerProjectMatcher.normalize(projectRootPath)
 
         if let currentWorkingDirectory = process.currentWorkingDirectory {
@@ -31,39 +21,6 @@ enum ProjectRootProcessMatcher {
         return commandLineContainsProjectPath(
             process.commandLine,
             normalizedProjectRoot: normalizedProjectRoot
-        )
-    }
-
-    static func stopPlan(
-        forProjectRootPath projectRootPath: String,
-        processes: [ProjectProcessSnapshot]
-    ) -> ProjectRootStopPlan {
-        let matchedProcesses = processes.filter {
-            matches(process: $0, projectRootPath: projectRootPath)
-        }
-
-        var seenGroupIDs = Set<Int32>()
-        var processGroupIDs: [Int32] = []
-        var seenFallbackPIDs = Set<Int32>()
-        var fallbackProcessIDs: [Int32] = []
-
-        for process in matchedProcesses {
-            if process.processGroupID > 0 {
-                if seenGroupIDs.insert(process.processGroupID).inserted {
-                    processGroupIDs.append(process.processGroupID)
-                }
-                continue
-            }
-
-            if seenFallbackPIDs.insert(process.pid).inserted {
-                fallbackProcessIDs.append(process.pid)
-            }
-        }
-
-        return ProjectRootStopPlan(
-            matchedPIDs: matchedProcesses.map(\.pid),
-            processGroupIDs: processGroupIDs,
-            fallbackProcessIDs: fallbackProcessIDs
         )
     }
 

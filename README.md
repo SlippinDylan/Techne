@@ -79,7 +79,7 @@ sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 5. For a web project, select an installed browser to open its detected server.
 6. For Android, open the deployment view, connect a device, select an APK, and deploy it.
 
-Closing the main window leaves projects running in the menu bar. Choosing Quit Techne from the status-item menu safely stops managed project processes before the app exits. When Techne opens, it reconciles surviving shell-based project processes; starting a project first replaces any existing process groups scoped to that project.
+Closing the main window leaves projects running in the menu bar. Choosing Quit Techne from the status-item menu safely stops managed shell development services before the app exits, while external applications such as WeChat Developer Tools remain open. When Techne opens, it reconciles surviving shell-based project processes by project path and start-command identity; starting a project first replaces only matching managed service groups.
 
 ### Language
 

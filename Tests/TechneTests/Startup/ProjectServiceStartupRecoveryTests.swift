@@ -35,7 +35,7 @@ struct ProjectServiceStartupRecoveryTests {
                 ProjectProcessSnapshot(
                     pid: process.processIdentifier,
                     processGroupID: getpgid(process.processIdentifier),
-                    commandLine: "sleep 30",
+                    commandLine: "pnpm dev",
                     currentWorkingDirectory: projectRoot.path
                 )
             ]
@@ -99,7 +99,7 @@ struct ProjectServiceStartupRecoveryTests {
                 ProjectProcessSnapshot(
                     pid: oldProcess.processIdentifier,
                     processGroupID: getpgid(oldProcess.processIdentifier),
-                    commandLine: "sleep 30",
+                    commandLine: "zsh -l -i -c 'touch restarted && sleep 0.2'",
                     currentWorkingDirectory: projectRoot.path
                 )
             ]
@@ -625,7 +625,7 @@ struct ProjectServiceStartupRecoveryTests {
 
     @Test
     @MainActor
-    func replaceAndStartStopsEveryExistingProjectGroupBeforeLaunching() async throws {
+    func replaceAndStartStopsEveryMatchingRuntimeGroupBeforeLaunching() async throws {
         let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: isolatedPersistenceRoot) }
@@ -636,13 +636,13 @@ struct ProjectServiceStartupRecoveryTests {
             ProjectProcessSnapshot(
                 pid: 1001,
                 processGroupID: 1001,
-                commandLine: "node /opt/pnpm dev:weapp",
+                commandLine: "/usr/bin/touch restarted",
                 currentWorkingDirectory: projectRoot.path
             ),
             ProjectProcessSnapshot(
                 pid: 2001,
                 processGroupID: 2001,
-                commandLine: "node /opt/pnpm icons:watch",
+                commandLine: "sh -c 'touch restarted'",
                 currentWorkingDirectory: projectRoot.path
             )
         ]

@@ -345,7 +345,8 @@ final class ProjectService {
             return .failure(.invalidConfiguration(AppLocalized("error.project.invalid_startup_mode")))
         }
 
-        let wasRunning = projects[index].isRunning || projects[index].runningProcessPID != nil
+        let runningProject = projects[index]
+        let wasRunning = runningProject.isRunning || runningProject.runningProcessPID != nil
         projects[index].selectStartupMode(id: modeID)
         let updatedProject = projects[index]
         saveProjects()
@@ -358,7 +359,7 @@ final class ProjectService {
             return .success(())
         }
 
-        let stopResult = await stopServer(for: updatedProject)
+        let stopResult = await stopServer(for: runningProject)
         guard case .success = stopResult else {
             appendSystemTerminalMessage(AppLocalized("terminal.project.startup_mode_changed_stop_failed"), for: updatedProject.id)
             return stopResult
@@ -481,16 +482,8 @@ final class ProjectService {
         for project in projectsToStop {
             let result: Result<Void, ProjectServiceError>
             if project.runtimeKind == .weChatNative {
-                if project.isRunning == false {
-                    result = .success(())
-                } else {
-                    switch await weChatDevToolsService.closeProject(at: project.path) {
-                    case .success:
-                        result = .success(())
-                    case .failure(let error):
-                        result = .failure(.processStopFailed(error.localizedDescription))
-                    }
-                }
+                // The developer tool is an external user-facing application, not a Techne-owned service.
+                result = .success(())
             } else {
                 switch await processManager.stopAllExistingProjectProcesses(
                     for: project,

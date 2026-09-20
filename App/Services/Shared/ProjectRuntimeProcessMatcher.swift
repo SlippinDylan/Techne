@@ -81,17 +81,12 @@ enum ProjectRuntimeProcessMatcher {
         command
             .split(whereSeparator: { $0.isWhitespace })
             .map(String.init)
-            .map { token in
-                token.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-            }
+            .map(normalizeCommandToken)
             .filter { token in
                 token.isEmpty == false
                     && token.hasPrefix("-") == false
                     && token.contains("=") == false
                     && ignoredCommandTokens.contains(token.lowercased()) == false
-            }
-            .map { token in
-                URL(fileURLWithPath: token).lastPathComponent.lowercased()
             }
     }
 
@@ -99,7 +94,27 @@ enum ProjectRuntimeProcessMatcher {
         _ commandLine: String,
         contains signatureTokens: [String]
     ) -> Bool {
-        let lowercasedCommandLine = commandLine.lowercased()
-        return signatureTokens.allSatisfy(lowercasedCommandLine.contains)
+        let commandTokens = Set(commandLine.split(whereSeparator: { $0.isWhitespace }).map {
+            normalizeCommandToken(String($0))
+        })
+        return signatureTokens.allSatisfy(commandTokens.contains)
+    }
+
+    private nonisolated static func normalizeCommandToken(_ token: String) -> String {
+        let trimmedToken = token.trimmingCharacters(in: CharacterSet(charactersIn: "\"'(),;"))
+        let basename = URL(fileURLWithPath: trimmedToken).lastPathComponent.lowercased()
+
+        switch basename {
+        case "npm-cli.js":
+            return "npm"
+        case "npx-cli.js":
+            return "npx"
+        case "pnpm.cjs", "pnpm.js":
+            return "pnpm"
+        case "yarn.js", "yarn.cjs":
+            return "yarn"
+        default:
+            return basename
+        }
     }
 }

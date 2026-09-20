@@ -54,6 +54,49 @@ struct ProjectRuntimeProcessMatcherTests {
     }
 
     @Test
+    func ignoresCodexMCPWhoseCommandContainsDevAsPartOfAnotherArgument() {
+        let project = Project(
+            name: "frontend",
+            path: "/Users/test/frontend",
+            type: .devServer,
+            startCommand: "npm run dev"
+        )
+        let snapshots = [
+            ProjectProcessSnapshot(
+                pid: 30321,
+                processGroupID: 30321,
+                commandLine: "npm exec chrome-devtools-mcp@latest --no-usage-statistics",
+                currentWorkingDirectory: project.path
+            )
+        ]
+
+        #expect(ProjectRuntimeProcessMatcher.matches(for: project, in: snapshots) == nil)
+    }
+
+    @Test
+    func recognizesPackageManagerScriptExecutablesByExactAlias() {
+        let project = Project(
+            name: "frontend",
+            path: "/Users/test/frontend",
+            type: .devServer,
+            startCommand: "pnpm dev"
+        )
+        let snapshots = [
+            ProjectProcessSnapshot(
+                pid: 8011,
+                processGroupID: 8011,
+                commandLine: "node /opt/homebrew/lib/node_modules/pnpm/bin/pnpm.cjs dev",
+                currentWorkingDirectory: project.path
+            )
+        ]
+
+        #expect(ProjectRuntimeProcessMatcher.matches(for: project, in: snapshots) == .init(
+            representativePID: 8011,
+            processGroupIDs: [8011]
+        ))
+    }
+
+    @Test
     func reportsAllDuplicateGroupsAndUsesTheLatestGroupLeader() {
         let project = Project(
             name: "staff-miniapp",
