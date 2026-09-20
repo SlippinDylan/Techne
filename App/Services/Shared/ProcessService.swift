@@ -7,6 +7,11 @@
 
 import Foundation
 
+enum ProjectProcessStopOutcome: Equatable, Sendable {
+    case notFound
+    case stopped
+}
+
 /// 进程管理服务
 /// 提供统一的进程启动、停止、监控接口
 final class ProcessService: Sendable {
@@ -30,6 +35,10 @@ final class ProcessService: Sendable {
     }
 
     // MARK: - Public Methods
+
+    nonisolated func processSnapshots() async -> [ProjectProcessSnapshot] {
+        await runtime.processSnapshots()
+    }
 
     /// 检查进程是否在运行 (增强版：路径 + 关键词双重过滤)
     nonisolated func isProcessRunning(at path: String, keywords: [String]) async -> Bool {
@@ -138,14 +147,33 @@ final class ProcessService: Sendable {
             return await stopSingleProcess(pid: preferredPID)
         }
 
-        let processSnapshots = await runtime.processSnapshots()
+        let result = await stopAllProjectProcessesIfPresent(at: projectRootPath)
+        switch result {
+        case .success(.stopped):
+            return .success(())
+        case .success(.notFound):
+            return .failure(.processStopFailed(AppLocalized("error.process.no_matching_project_process")))
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func stopAllProjectProcessesIfPresent(
+        at projectRootPath: String,
+        using snapshots: [ProjectProcessSnapshot]? = nil
+    ) async -> Result<ProjectProcessStopOutcome, ProjectServiceError> {
+        let processSnapshots = if let snapshots {
+            snapshots
+        } else {
+            await runtime.processSnapshots()
+        }
         let plan = ProjectRootProcessMatcher.stopPlan(
             forProjectRootPath: projectRootPath,
             processes: processSnapshots
         )
 
         guard plan.isEmpty == false else {
-            return .failure(.processStopFailed(AppLocalized("error.process.no_matching_project_process")))
+            return .success(.notFound)
         }
 
         var failureMessages: [String] = []
@@ -181,7 +209,7 @@ final class ProcessService: Sendable {
             return .failure(.processStopFailed(failureMessages.joined(separator: "; ")))
         }
 
-        return .success(())
+        return .success(.stopped)
     }
 
     /// 使用路径停止进程 (兼容旧调用，内部改为项目根目录范围)

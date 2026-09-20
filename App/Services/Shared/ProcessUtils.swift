@@ -36,21 +36,48 @@ enum ProcessUtils {
     nonisolated static func runAndCapture(_ process: Process) async throws -> CaptureResult {
         let standardOutput = Pipe()
         let standardError = Pipe()
+        let outputBuffer = LockedDataBuffer()
+        let errorBuffer = LockedDataBuffer()
         process.standardOutput = standardOutput
         process.standardError = standardError
 
-        async let stdoutData: Data = standardOutput.fileHandleForReading.bytes.reduce(into: Data()) { data, byte in
-            data.append(byte)
+        standardOutput.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty == false {
+                outputBuffer.append(data)
+            }
         }
-        async let stderrData: Data = standardError.fileHandleForReading.bytes.reduce(into: Data()) { data, byte in
-            data.append(byte)
+        standardError.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty == false {
+                errorBuffer.append(data)
+            }
         }
-        let terminationStatus = try await runAndWaitForTermination(process)
 
-        return try await CaptureResult(
+        let terminationStatus: Int32
+        do {
+            terminationStatus = try await runAndWaitForTermination(process)
+        } catch {
+            standardOutput.fileHandleForReading.readabilityHandler = nil
+            standardError.fileHandleForReading.readabilityHandler = nil
+            throw error
+        }
+
+        standardOutput.fileHandleForReading.readabilityHandler = nil
+        standardError.fileHandleForReading.readabilityHandler = nil
+        try? standardOutput.fileHandleForWriting.close()
+        try? standardError.fileHandleForWriting.close()
+        if let remainingOutput = try? standardOutput.fileHandleForReading.readToEnd() {
+            outputBuffer.append(remainingOutput)
+        }
+        if let remainingError = try? standardError.fileHandleForReading.readToEnd() {
+            errorBuffer.append(remainingError)
+        }
+
+        return CaptureResult(
             terminationStatus: terminationStatus,
-            standardOutput: stdoutData,
-            standardError: stderrData
+            standardOutput: outputBuffer.data,
+            standardError: errorBuffer.data
         )
     }
 
@@ -67,6 +94,20 @@ enum ProcessUtils {
                 continuation.resume(throwing: error)
             }
         }
+    }
+}
+
+private final class LockedDataBuffer: @unchecked Sendable {
+    private let storage = OSAllocatedUnfairLock<Data>(initialState: Data())
+
+    nonisolated func append(_ data: Data) {
+        storage.withLock { buffer in
+            buffer.append(data)
+        }
+    }
+
+    nonisolated var data: Data {
+        storage.withLock { $0 }
     }
 }
 

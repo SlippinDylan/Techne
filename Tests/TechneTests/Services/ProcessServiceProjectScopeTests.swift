@@ -196,6 +196,23 @@ struct ProcessServiceProjectScopeTests {
     }
 
     @Test
+    func unrelatedWorkingDirectoryOverridesEnvironmentPathMention() {
+        let process = ProjectProcessSnapshot(
+            pid: 99752,
+            processGroupID: 99365,
+            commandLine: "external-tool INIT_CWD=/Users/test/Portlens",
+            currentWorkingDirectory: "/Users/test/other-project"
+        )
+
+        #expect(
+            ProjectRootProcessMatcher.matches(
+                process: process,
+                projectRootPath: "/Users/test/Portlens"
+            ) == false
+        )
+    }
+
+    @Test
     func siblingPathsDoNotMatchManagedProjectRoot() {
         let process = ProjectProcessSnapshot(
             pid: 2201,

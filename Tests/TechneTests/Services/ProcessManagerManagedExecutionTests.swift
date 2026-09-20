@@ -5,7 +5,7 @@ import Testing
 struct ProcessManagerManagedExecutionTests {
     @Test
     @MainActor
-    func stopCancelsManagedExecutionWithoutProcessDiscoveryFallback() async throws {
+    func stopCancelsManagedExecutionAndScansOnceForResidualProcesses() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -66,7 +66,7 @@ struct ProcessManagerManagedExecutionTests {
             Issue.record("expected managed execution to stop")
             return
         }
-        #expect(fallbackRecorder.lookupCount() == 0)
+        #expect(fallbackRecorder.lookupCount() == 1)
         #expect(executionRecorder.completionCount() == 1)
     }
 

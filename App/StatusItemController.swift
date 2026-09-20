@@ -11,7 +11,7 @@ final class StatusItemController: NSObject {
     init(
         statusBar: NSStatusBar = .system,
         mainWindowNavigation: MainWindowNavigationCoordinator = .shared,
-        terminateApplication: @escaping () -> Void = { NSApp.terminate(nil) }
+        terminateApplication: @escaping () -> Void = { ApplicationQuitCoordinator.shared.requestQuit() }
     ) {
         self.statusBar = statusBar
         self.mainWindowNavigation = mainWindowNavigation

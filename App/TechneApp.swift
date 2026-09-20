@@ -20,8 +20,10 @@ struct TechneApp: App {
 
     init() {
         let commandConfigService = CommandConfigService()
+        let projectService = ProjectService(commandConfigService: commandConfigService)
         _commandConfigService = State(wrappedValue: commandConfigService)
-        _projectService = State(wrappedValue: ProjectService(commandConfigService: commandConfigService))
+        _projectService = State(wrappedValue: projectService)
+        ApplicationQuitCoordinator.shared.register(projectService: projectService)
     }
 
     var body: some Scene {

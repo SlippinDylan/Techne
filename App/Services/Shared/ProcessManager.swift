@@ -215,17 +215,15 @@ class ProcessManager {
         logService.info(AppLocalizedFormat("log.process.stopping", project.name), category: category)
         onOutputUpdate(project.id, AppLocalized("terminal.process.requesting_stop"))
 
+        let stopResult = await stopAllExistingProjectProcesses(for: project)
         let result: Result<Void, ProjectServiceError>
-        if let managedExecution = managedExecutions[project.id] {
-            managedExecution.task.cancel()
-            await managedExecution.task.value
-            finishManagedExecution(projectID: project.id, runID: managedExecution.runID)
+        switch stopResult {
+        case .success(.stopped):
             result = .success(())
-        } else {
-            result = await processService.stopProjectProcesses(
-                at: project.path,
-                preferredPID: project.runningProcessPID
-            )
+        case .success(.notFound):
+            result = .failure(.processStopFailed(AppLocalized("error.process.no_matching_project_process")))
+        case .failure(let error):
+            result = .failure(error)
         }
 
         if case .success = result {
@@ -233,6 +231,32 @@ class ProcessManager {
         }
 
         return result
+    }
+
+    func stopAllExistingProjectProcesses(
+        for project: Project,
+        using snapshots: [ProjectProcessSnapshot]? = nil
+    ) async -> Result<ProjectProcessStopOutcome, ProjectServiceError> {
+        let stoppedManagedExecution: Bool
+        if let managedExecution = managedExecutions[project.id] {
+            managedExecution.task.cancel()
+            await managedExecution.task.value
+            finishManagedExecution(projectID: project.id, runID: managedExecution.runID)
+            stoppedManagedExecution = true
+        } else {
+            stoppedManagedExecution = false
+        }
+
+        let discoveredResult = await processService.stopAllProjectProcessesIfPresent(
+            at: project.path,
+            using: snapshots
+        )
+        switch discoveredResult {
+        case .success(.notFound) where stoppedManagedExecution:
+            return .success(.stopped)
+        default:
+            return discoveredResult
+        }
     }
 }
 

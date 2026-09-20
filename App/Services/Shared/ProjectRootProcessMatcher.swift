@@ -21,9 +21,11 @@ enum ProjectRootProcessMatcher {
     static func matches(process: ProjectProcessSnapshot, projectRootPath: String) -> Bool {
         let normalizedProjectRoot = DevServerProjectMatcher.normalize(projectRootPath)
 
-        if let currentWorkingDirectory = process.currentWorkingDirectory,
-           DevServerProjectMatcher.belongs(serverPath: currentWorkingDirectory, toProjectPath: normalizedProjectRoot) {
-            return true
+        if let currentWorkingDirectory = process.currentWorkingDirectory {
+            return DevServerProjectMatcher.belongs(
+                serverPath: currentWorkingDirectory,
+                toProjectPath: normalizedProjectRoot
+            )
         }
 
         return commandLineContainsProjectPath(

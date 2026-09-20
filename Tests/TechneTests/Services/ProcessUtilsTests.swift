@@ -17,6 +17,22 @@ struct ProcessUtilsTests {
     }
 
     @Test
+    func runAndCaptureDrainsOutputLargerThanPipeCapacity() async throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = [
+            "-c",
+            "head -c 131072 /dev/zero; head -c 131072 /dev/zero 1>&2"
+        ]
+
+        let result = try await ProcessUtils.runAndCapture(process)
+
+        #expect(result.terminationStatus == 0)
+        #expect(result.standardOutput.count == 131_072)
+        #expect(result.standardError.count == 131_072)
+    }
+
+    @Test
     func runAndWaitForTerminationSyncReturnsProcessExitStatus() throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")

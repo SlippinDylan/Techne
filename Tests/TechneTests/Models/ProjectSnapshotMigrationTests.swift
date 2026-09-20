@@ -159,7 +159,8 @@ struct ProjectSnapshotMigrationTests {
 
         let service = ProjectService(
             commandConfigService: configService,
-            persistenceService: projectPersistence
+            persistenceService: projectPersistence,
+            startupBehavior: .restoreWithoutRefresh
         )
         let projectURL = makeNonTemporaryFixtureDirectory(named: "frontend-app")
         try FileManager.default.createDirectory(at: projectURL, withIntermediateDirectories: true)
@@ -316,7 +317,8 @@ struct ProjectSnapshotMigrationTests {
         let configService = CommandConfigService(persistenceService: configPersistence)
         let service = ProjectService(
             commandConfigService: configService,
-            persistenceService: projectPersistence
+            persistenceService: projectPersistence,
+            startupBehavior: .restoreWithoutRefresh
         )
 
         #expect(service.projects.map(\.name) == ["blog"])
@@ -379,7 +381,8 @@ struct ProjectSnapshotMigrationTests {
                     root: .custom(isolatedPersistenceRoot)
                 )
             ),
-            persistenceService: projectPersistence
+            persistenceService: projectPersistence,
+            startupBehavior: .restoreWithoutRefresh
         )
 
         let restored = try #require(service.projects.first)

@@ -79,6 +79,8 @@ sudo xattr -rd com.apple.quarantine /Applications/Techne.app
 5. Web 项目可选择已安装的浏览器打开检测到的服务。
 6. Android 部署页中连接设备、选择 APK，然后部署。
 
+关闭主窗口后，项目会继续在菜单栏后台运行；从菜单栏选择“退出 Techne”时，应用会先安全停止受管理的项目进程再退出。Techne 启动时会恢复仍然存活的 Shell 项目状态；点击启动会先替换该项目目录下已有的进程组，避免重复运行。
+
 ### 语言
 
 Techne 支持英文、简体中文和繁体中文，默认跟随 macOS。你也可以在“设置 > 通用”中指定语言，并按提示重启 Techne 使更改生效。

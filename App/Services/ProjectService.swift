@@ -14,6 +14,11 @@ enum ProjectServiceStartupBehavior: Sendable {
     case empty
 }
 
+struct ProjectShutdownFailure: Equatable, Sendable {
+    let projectName: String
+    let message: String
+}
+
 /// 统一的项目服务 (Step 4 任务熔断重构版)
 /// 
 /// 依据：
@@ -25,6 +30,7 @@ final class ProjectService {
 
     @MainActor var projects: [Project] = []
     @MainActor var isLoading = false
+    @MainActor private(set) var isShuttingDown = false
     
     // MARK: - Task 4: 任务熔断锁
     @MainActor private var currentRefreshTask: Task<Void, Never>?
@@ -67,17 +73,26 @@ final class ProjectService {
 
     /// 刷新所有项目状态
     func refreshAll() {
-        Task { @MainActor in
+        Task { @MainActor [self] in
             // 1. 取消旧任务 (协作式熔断)
             currentRefreshTask?.cancel()
             
             isLoading = true
             let currentProjects = projects
             let keywords = getProcessKeywords()
+            let processService = processService
             
             // 2. 开启新任务
             currentRefreshTask = Task.detached(priority: .userInitiated) { [weak self] in
                 var updated = currentProjects
+                let hasShellProjects = currentProjects.contains { $0.runtimeKind == .shell }
+                let processSnapshots = hasShellProjects
+                    ? await processService.processSnapshots()
+                    : []
+                let runtimeMatches = ProjectRuntimeProcessMatcher.reconcile(
+                    projects: currentProjects,
+                    snapshots: processSnapshots
+                )
                 
                 for i in 0..<updated.count {
                     // MARK: - 依据：在每一轮耗时计算前检查取消标志
@@ -86,7 +101,15 @@ final class ProjectService {
                     let status = await BackgroundWorker.shared.getProjectStatus(path: updated[i].path, keywords: keywords, pid: updated[i].runningProcessPID)
                     updated[i].currentBranch = status.branch
                     updated[i].uncommittedFileCount = status.fileCount
-                    updated[i].isRunning = status.isRunning
+                    if let runtimeMatch = runtimeMatches[updated[i].id] {
+                        updated[i].runningProcessPID = runtimeMatch.representativePID
+                        updated[i].isRunning = true
+                    } else {
+                        updated[i].isRunning = status.isRunning
+                        if status.isRunning == false {
+                            updated[i].runningProcessPID = nil
+                        }
+                    }
                 }
                 
                 // 最终提交前再次确认
@@ -103,6 +126,7 @@ final class ProjectService {
                         if self.projects[index].transitionState == .idle,
                            self.projects[index].runtimeKind != .weChatNative {
                             self.projects[index].isRunning = refreshedProject.isRunning
+                            self.projects[index].runningProcessPID = refreshedProject.runningProcessPID
                         }
                     }
                     self.isLoading = false
@@ -345,6 +369,9 @@ final class ProjectService {
 
     @MainActor
     func startServer(for project: Project) -> Result<Void, ProjectServiceError> {
+        guard isShuttingDown == false else {
+            return .failure(.processStartFailed(AppLocalized("退出 Techne")))
+        }
         if project.runtimeKind == .weChatNative {
             return openNativeMiniApp(project)
         }
@@ -374,15 +401,132 @@ final class ProjectService {
 
     @MainActor
     func restartServer(for project: Project) async -> Result<Void, ProjectServiceError> {
-        let stopResult = await stopServer(for: project)
-        guard case .success = stopResult else {
-            return stopResult
-        }
-        guard let currentProject = projects.first(where: { $0.id == project.id }) else {
+        await replaceAndStartServer(for: project)
+    }
+
+    @MainActor
+    func replaceAndStartServer(for project: Project) async -> Result<Void, ProjectServiceError> {
+        guard let index = projects.firstIndex(where: { $0.id == project.id }) else {
             return .failure(.pathNotFound(project.path))
         }
-        appendSystemTerminalMessage(AppLocalized("terminal.project.restarting"), for: project.id)
-        return startServer(for: currentProject)
+        guard isShuttingDown == false else {
+            return .failure(.processStartFailed(AppLocalized("退出 Techne")))
+        }
+        guard projects[index].transitionState == .idle else {
+            return .failure(.processStartFailed(AppLocalized("error.process.managed_process_already_running")))
+        }
+
+        if projects[index].runtimeKind == .weChatNative {
+            let wasRunning = projects[index].isRunning
+            projects[index].transitionState = .stopping
+            let closeResult = await weChatDevToolsService.closeProject(at: projects[index].path)
+            if case .failure(let error) = closeResult {
+                projects[index].transitionState = .idle
+                appendSystemTerminalMessage(
+                    AppLocalizedFormat("terminal.wechat.close_project_failed", error.localizedDescription),
+                    for: project.id
+                )
+                return .failure(.processStopFailed(error.localizedDescription))
+            }
+
+            projects[index].isRunning = false
+            guard isShuttingDown == false else {
+                projects[index].transitionState = .idle
+                return .failure(.processStartFailed(AppLocalized("退出 Techne")))
+            }
+            if wasRunning {
+                appendSystemTerminalMessage(AppLocalized("terminal.project.restarting"), for: project.id)
+            }
+            return openNativeMiniApp(projects[index])
+        }
+
+        projects[index].transitionState = .stopping
+        let stopResult = await processManager.stopAllExistingProjectProcesses(for: projects[index])
+        let stoppedExistingProcesses: Bool
+        switch stopResult {
+        case .failure(let error):
+            projects[index].transitionState = .idle
+            appendSystemTerminalMessage(
+                AppLocalizedFormat("terminal.project.development_service_stop_failed", error.localizedDescription),
+                for: project.id
+            )
+            return .failure(error)
+        case .success(let outcome):
+            stoppedExistingProcesses = outcome == .stopped
+        }
+
+        activeRunIDs[project.id] = nil
+        projects[index].runningProcessPID = nil
+        projects[index].isRunning = false
+        projects[index].transitionState = .idle
+        guard isShuttingDown == false else {
+            return .failure(.processStartFailed(AppLocalized("退出 Techne")))
+        }
+        if stoppedExistingProcesses {
+            appendSystemTerminalMessage(AppLocalized("terminal.project.restarting"), for: project.id)
+        }
+        return startServer(for: projects[index])
+    }
+
+    @MainActor
+    func shutdownAllProjects() async -> [ProjectShutdownFailure] {
+        isShuttingDown = true
+        let projectsToStop = projects
+        let hasShellProjects = projectsToStop.contains { $0.runtimeKind == .shell }
+        let processSnapshots = hasShellProjects
+            ? await processService.processSnapshots()
+            : []
+        var failures: [ProjectShutdownFailure] = []
+
+        for project in projectsToStop {
+            let result: Result<Void, ProjectServiceError>
+            if project.runtimeKind == .weChatNative {
+                if project.isRunning == false {
+                    result = .success(())
+                } else {
+                    switch await weChatDevToolsService.closeProject(at: project.path) {
+                    case .success:
+                        result = .success(())
+                    case .failure(let error):
+                        result = .failure(.processStopFailed(error.localizedDescription))
+                    }
+                }
+            } else {
+                switch await processManager.stopAllExistingProjectProcesses(
+                    for: project,
+                    using: processSnapshots
+                ) {
+                case .success:
+                    result = .success(())
+                case .failure(let error):
+                    result = .failure(error)
+                }
+            }
+
+            guard let index = projects.firstIndex(where: { $0.id == project.id }) else {
+                continue
+            }
+            projects[index].transitionState = .idle
+
+            switch result {
+            case .success:
+                activeRunIDs[project.id] = nil
+                projects[index].runningProcessPID = nil
+                projects[index].isRunning = false
+            case .failure(let error):
+                failures.append(
+                    ProjectShutdownFailure(
+                        projectName: project.name,
+                        message: error.localizedDescription
+                    )
+                )
+            }
+        }
+
+        if failures.isEmpty == false {
+            isShuttingDown = false
+        }
+        return failures
     }
 
     @MainActor

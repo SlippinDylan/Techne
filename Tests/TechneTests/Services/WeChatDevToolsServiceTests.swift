@@ -97,6 +97,105 @@ struct WeChatDevToolsServiceTests {
         #expect(service.projects[0].terminalOutput.contains("close --project"))
     }
 
+    @Test
+    @MainActor
+    func nativeReplaceAndStartClosesProjectBeforeOpeningIt() async throws {
+        let fixture = try makeFixture(configurationRelativePath: "project.config.json")
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let commandLog = fixture.root.appendingPathComponent("commands.log")
+        try """
+        #!/bin/sh
+        printf '%s\n' "$*" >> "\(commandLog.path)"
+        printf '%s\n' "$*"
+        """.write(to: fixture.cli, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: fixture.cli.path
+        )
+        let service = ProjectService(
+            commandConfigService: CommandConfigService(
+                persistenceService: PersistenceService<CommandConfig>(
+                    filename: "commandconfigs.json",
+                    root: .custom(fixture.root)
+                )
+            ),
+            weChatDevToolsService: WeChatDevToolsService(applicationDirectories: [fixture.applications]),
+            persistenceService: PersistenceService<Project>(
+                filename: "projects.json",
+                root: .custom(fixture.root)
+            ),
+            startupBehavior: .empty
+        )
+        let project = Project(
+            name: "native-mini-app",
+            path: fixture.project.path,
+            type: .miniApp,
+            runtimeKind: .weChatNative
+        )
+        service.projects = [project]
+
+        _ = try await service.replaceAndStartServer(for: project).get()
+        let didOpen = await waitUntil { service.projects[0].transitionState == .idle }
+        let commands = try String(contentsOf: commandLog, encoding: .utf8)
+            .split(whereSeparator: \.isNewline)
+            .map(String.init)
+
+        #expect(didOpen)
+        #expect(commands == [
+            "close --project \(fixture.project.path)",
+            "open --project \(fixture.project.path)"
+        ])
+    }
+
+    @Test
+    @MainActor
+    func nativeShutdownFailureKeepsProjectRunningAndReportsFailure() async throws {
+        let fixture = try makeFixture(configurationRelativePath: "project.config.json")
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        try "#!/bin/sh\nprintf 'close failed' 1>&2\nexit 1\n".write(
+            to: fixture.cli,
+            atomically: true,
+            encoding: .utf8
+        )
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: fixture.cli.path
+        )
+        let service = ProjectService(
+            commandConfigService: CommandConfigService(
+                persistenceService: PersistenceService<CommandConfig>(
+                    filename: "commandconfigs.json",
+                    root: .custom(fixture.root)
+                )
+            ),
+            weChatDevToolsService: WeChatDevToolsService(applicationDirectories: [fixture.applications]),
+            persistenceService: PersistenceService<Project>(
+                filename: "projects.json",
+                root: .custom(fixture.root)
+            ),
+            startupBehavior: .empty
+        )
+        var project = Project(
+            name: "native-mini-app",
+            path: fixture.project.path,
+            type: .miniApp,
+            runtimeKind: .weChatNative
+        )
+        project.isRunning = true
+        service.projects = [project]
+
+        let failures = await service.shutdownAllProjects()
+
+        #expect(failures == [
+            ProjectShutdownFailure(
+                projectName: "native-mini-app",
+                message: ProjectServiceError.processStopFailed("close failed").localizedDescription
+            )
+        ])
+        #expect(service.projects[0].isRunning)
+        #expect(service.isShuttingDown == false)
+    }
+
     private func makeFixture(
         configurationRelativePath: String?
     ) throws -> (root: URL, applications: URL, project: URL, cli: URL) {

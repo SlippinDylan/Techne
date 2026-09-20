@@ -582,6 +582,165 @@ struct ProjectServiceStartupRecoveryTests {
         ))
     }
 
+    @Test
+    @MainActor
+    func refreshRecoversRunningShellProjectFromSingleProcessSnapshot() async throws {
+        let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: isolatedPersistenceRoot) }
+
+        let projectRoot = isolatedPersistenceRoot.appendingPathComponent("staff-miniapp")
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+        let processService = makeProjectScopedTestProcessService(
+            snapshots: [
+                ProjectProcessSnapshot(
+                    pid: 7911,
+                    processGroupID: 7911,
+                    commandLine: "node /opt/pnpm dev:weapp",
+                    currentWorkingDirectory: projectRoot.path
+                )
+            ]
+        )
+        let service = makeProjectService(
+            persistenceRoot: isolatedPersistenceRoot,
+            processService: processService
+        )
+        service.projects = [
+            Project(
+                name: "staff-miniapp",
+                path: projectRoot.path,
+                type: .miniApp,
+                startCommand: "pnpm dev:weapp"
+            )
+        ]
+
+        service.refreshAll()
+        let recovered = await waitUntil(timeout: .seconds(3)) {
+            service.isLoading == false && service.projects[0].isRunning
+        }
+
+        #expect(recovered)
+        #expect(service.projects[0].runningProcessPID == 7911)
+    }
+
+    @Test
+    @MainActor
+    func replaceAndStartStopsEveryExistingProjectGroupBeforeLaunching() async throws {
+        let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: isolatedPersistenceRoot) }
+
+        let projectRoot = isolatedPersistenceRoot.appendingPathComponent("project")
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+        let snapshots = [
+            ProjectProcessSnapshot(
+                pid: 1001,
+                processGroupID: 1001,
+                commandLine: "node /opt/pnpm dev:weapp",
+                currentWorkingDirectory: projectRoot.path
+            ),
+            ProjectProcessSnapshot(
+                pid: 2001,
+                processGroupID: 2001,
+                commandLine: "node /opt/pnpm icons:watch",
+                currentWorkingDirectory: projectRoot.path
+            )
+        ]
+        let recorder = TestProcessRuntimeRecorder(
+            aliveProcessIDs: [1001, 2001],
+            processGroupIDs: [1001: 1001, 2001: 2001]
+        )
+        let processService = ProcessService(
+            runtime: .init(
+                processSnapshots: { snapshots },
+                processSnapshotForPID: { _ in nil },
+                processIDsInGroup: { groupID in [groupID] },
+                processGroupID: recorder.processGroupID(for:),
+                sendSignalToProcessGroup: recorder.sendGroupSignal(groupID:signal:),
+                sendSignalToProcess: recorder.sendProcessSignal(pid:signal:),
+                isProcessRunning: { pid in recorder.isRunning(pid: pid) },
+                sleep: { _ in }
+            )
+        )
+        let service = makeProjectService(
+            persistenceRoot: isolatedPersistenceRoot,
+            processService: processService
+        )
+        let project = Project(
+            name: "staff-miniapp",
+            path: projectRoot.path,
+            type: .miniApp,
+            startCommand: "touch restarted"
+        )
+        service.projects = [project]
+
+        let result = await service.replaceAndStartServer(for: project)
+        let restarted = await waitUntil(timeout: .seconds(3)) {
+            FileManager.default.fileExists(atPath: projectRoot.appendingPathComponent("restarted").path)
+        }
+
+        guard case .success = result else {
+            Issue.record("expected replace-and-start to succeed")
+            return
+        }
+        #expect(restarted)
+        #expect(Set(recorder.groupSignals().map(\.target)) == [1001, 2001])
+    }
+
+    @Test
+    @MainActor
+    func replaceAndStartRejectsAProjectAlreadyTransitioning() async {
+        let persistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let service = makeProjectService(persistenceRoot: persistenceRoot)
+        var project = Project(
+            name: "busy-project",
+            path: "/Users/test/busy-project",
+            type: .devServer,
+            startCommand: "pnpm dev"
+        )
+        project.transitionState = .starting
+        service.projects = [project]
+
+        let result = await service.replaceAndStartServer(for: project)
+
+        guard case .failure = result else {
+            Issue.record("expected a transitioning project to reject another start")
+            return
+        }
+    }
+
+    @Test
+    @MainActor
+    func successfulShutdownPreventsLaterProjectStarts() async throws {
+        let isolatedPersistenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: isolatedPersistenceRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: isolatedPersistenceRoot) }
+
+        let projectRoot = isolatedPersistenceRoot.appendingPathComponent("project")
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+        let service = makeProjectService(persistenceRoot: isolatedPersistenceRoot)
+        let project = Project(
+            name: "shutdown-project",
+            path: projectRoot.path,
+            type: .devServer,
+            startCommand: "touch should-not-start"
+        )
+        service.projects = [project]
+
+        let failures = await service.shutdownAllProjects()
+        let result = service.startServer(for: project)
+
+        #expect(failures.isEmpty)
+        #expect(service.isShuttingDown)
+        guard case .failure = result else {
+            Issue.record("expected startup to be blocked after shutdown begins")
+            return
+        }
+        #expect(FileManager.default.fileExists(
+            atPath: projectRoot.appendingPathComponent("should-not-start").path
+        ) == false)
+    }
+
     @MainActor
     private func waitUntil(
         timeout: Duration,

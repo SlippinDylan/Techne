@@ -1,11 +1,11 @@
 import Foundation
 
 enum DevServerProjectMatcher {
-    static func normalize(_ path: String) -> String {
+    nonisolated static func normalize(_ path: String) -> String {
         ProjectPath.canonical(path)
     }
 
-    static func belongs(serverPath: String, toProjectPath projectPath: String) -> Bool {
+    nonisolated static func belongs(serverPath: String, toProjectPath projectPath: String) -> Bool {
         let normalizedServerPath = normalize(serverPath)
         let normalizedProjectPath = normalize(projectPath)
 
@@ -17,7 +17,7 @@ enum DevServerProjectMatcher {
         return normalizedServerPath.hasPrefix(projectPrefix)
     }
 
-    static func bestMatchingProjectPath(
+    nonisolated static func bestMatchingProjectPath(
         for server: DevServer,
         managedProjectPaths: [String]
     ) -> String? {
@@ -27,7 +27,7 @@ enum DevServerProjectMatcher {
         )
     }
 
-    static func bestMatchingProjectPath(
+    nonisolated static func bestMatchingProjectPath(
         forServerPath serverPath: String,
         managedProjectPaths: [String]
     ) -> String? {

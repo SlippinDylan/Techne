@@ -312,7 +312,13 @@ struct ProjectListView: View {
     }
 
     private func startServer(for project: Project) {
-        _ = projectService.startServer(for: project)
+        Task {
+            let result = await projectService.replaceAndStartServer(for: project)
+            if case .failure(let error) = result {
+                errorMessage = error.localizedDescription
+                showingError = true
+            }
+        }
     }
 
     private func stopServer(for project: Project) {
