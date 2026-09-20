@@ -1,6 +1,6 @@
 # Techne 开发与验证
 
-本文记录本地开发、测试、发布自动化和开发产物清理规则。用户安装与使用方式见 [README.md](../README.md)，系统边界见 [architecture.md](architecture.md)。
+本文记录本地开发、测试和发布自动化。用户安装与使用方式见 [README.md](../README.md)，系统边界见 [architecture.md](architecture.md)。
 
 ## 环境
 
@@ -153,26 +153,16 @@ Release workflow 只处理 `main` 分支上已经通过 CI 的 commit。它构�
 
 ## 开发产物清理
 
-仓库内的下列目录可安全重新生成：
+清理请求语义、仓库内外范围、项目归属判断、安全边界和空间报告要求见
+[开发产物清理规则](development-cleanup.md)。
+
+本文中的本地测试和构建命令分别将 DerivedData 写入：
 
 ```text
-.build/
-build/
-DerivedData/
-.deriveddata/
-build-local-*/
+build-local-tests/
+build-local-debug/
+build-local-release/
 ```
-
-只有用户明确要求清理时才删除。执行前先用 `du` 统计目标，确认实际路径属于当前仓库；清理后再次统计并报告每项与总释放空间。
-
-仓库外的 `/tmp`、`/private/tmp` 和 `/private/var/folders` 可能包含其他项目或系统进程的数据。只有目标能通过绝对路径、项目名、构建元数据或当前进程可靠归因于 Techne，且内容可重新生成时才可删除。无法确认归属时保留并报告。
-
-禁止清理：
-
-- `App/`、`Tests/`、`Config/`、`.github/`、`Scripts/` 和 `docs/`
-- `.git/`、Xcode project、scheme、entitlements、Info.plist 和 Package.resolved
-- Application Support、`.techne-browsers` 或用户选择的项目目录
-- 用途不明的系统缓存和其他应用数据
 
 ## 完成检查
 
